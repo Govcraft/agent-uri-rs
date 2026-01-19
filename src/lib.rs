@@ -33,6 +33,23 @@
 //! println!("New agent: {}", id);
 //! ```
 //!
+//! # Builder Pattern
+//!
+//! Use the typestate builder for compile-time enforced construction:
+//!
+//! ```rust
+//! use agent_uri::{AgentUriBuilder, TrustRoot, CapabilityPath, AgentId};
+//!
+//! let uri = AgentUriBuilder::new()
+//!     .trust_root(TrustRoot::parse("anthropic.com").unwrap())
+//!     .capability_path(CapabilityPath::parse("assistant/chat").unwrap())
+//!     .agent_id(AgentId::new("llm_chat"))
+//!     .build()
+//!     .unwrap();
+//!
+//! assert_eq!(uri.trust_root().host_str(), "anthropic.com");
+//! ```
+//!
 //! # Length Constraints
 //!
 //! | Component | Max Length |
@@ -52,6 +69,7 @@
 
 mod agent_id;
 mod agent_prefix;
+mod builder;
 mod capability_path;
 mod constants;
 mod error;
@@ -64,6 +82,7 @@ mod uri;
 
 pub use agent_id::AgentId;
 pub use agent_prefix::AgentPrefix;
+pub use builder::{AgentUriBuilder, Empty, HasCapabilityPath, HasTrustRoot, Ready};
 pub use capability_path::CapabilityPath;
 pub use constants::{
     AGENT_SUFFIX_LENGTH, MAX_AGENT_ID_LENGTH, MAX_AGENT_PREFIX_LENGTH, MAX_CAPABILITY_PATH_LENGTH,
@@ -71,8 +90,8 @@ pub use constants::{
     MAX_TRUST_ROOT_LENGTH, MAX_URI_LENGTH, SCHEME,
 };
 pub use error::{
-    AgentIdError, AgentPrefixError, CapabilityPathError, FragmentError, ParseError, ParseErrorKind,
-    PathSegmentError, QueryError, TrustRootError,
+    AgentIdError, AgentPrefixError, BuilderError, CapabilityPathError, FragmentError, ParseError,
+    ParseErrorKind, PathSegmentError, QueryError, TrustRootError,
 };
 pub use fragment::Fragment;
 pub use path_segment::PathSegment;

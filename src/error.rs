@@ -449,3 +449,31 @@ impl fmt::Display for FragmentError {
 }
 
 impl std::error::Error for FragmentError {}
+
+/// Errors that can occur when building an agent URI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BuilderError {
+    /// The resulting URI would exceed the maximum length.
+    UriTooLong {
+        /// Maximum allowed length
+        max: usize,
+        /// Actual length
+        actual: usize,
+    },
+}
+
+impl fmt::Display for BuilderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UriTooLong { max, actual } => {
+                write!(
+                    f,
+                    "resulting URI length {actual} exceeds maximum {max}; \
+                     consider shorter component values"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for BuilderError {}
