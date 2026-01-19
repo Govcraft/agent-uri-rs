@@ -1,6 +1,8 @@
 //! Agent prefix type for semantic classification.
 
+use std::cmp::Ordering;
 use std::fmt;
+use std::ops::Deref;
 use std::str::FromStr;
 
 use crate::constants::MAX_AGENT_PREFIX_LENGTH;
@@ -144,6 +146,55 @@ impl FromStr for AgentPrefix {
 impl AsRef<str> for AgentPrefix {
     fn as_ref(&self) -> &str {
         &self.normalized
+    }
+}
+
+impl TryFrom<&str> for AgentPrefix {
+    type Error = AgentPrefixError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::parse(s)
+    }
+}
+
+impl Deref for AgentPrefix {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.normalized
+    }
+}
+
+impl PartialOrd for AgentPrefix {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AgentPrefix {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.normalized.cmp(&other.normalized)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for AgentPrefix {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.normalized)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for AgentPrefix {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::parse(&s).map_err(serde::de::Error::custom)
     }
 }
 

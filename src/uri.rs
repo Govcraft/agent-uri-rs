@@ -1,5 +1,6 @@
 //! Main agent URI type.
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::str::FromStr;
 
@@ -149,6 +150,153 @@ impl AgentUri {
     #[must_use]
     pub fn is_localhost(&self) -> bool {
         self.trust_root.is_localhost()
+    }
+
+    /// Returns a new URI with the given query parameters.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if the resulting URI would exceed the maximum length.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::{AgentUri, QueryParams};
+    ///
+    /// let uri = AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
+    /// let query = QueryParams::parse("version=2.0").unwrap();
+    /// let updated = uri.with_query(query).unwrap();
+    /// assert_eq!(updated.query().version(), Some("2.0"));
+    /// ```
+    pub fn with_query(&self, query: QueryParams) -> Result<Self, ParseError> {
+        Self::new(
+            self.trust_root.clone(),
+            self.capability_path.clone(),
+            self.agent_id.clone(),
+            query,
+            self.fragment.clone(),
+        )
+    }
+
+    /// Returns a new URI with query parameters parsed from a string.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if the query string is invalid or the resulting URI
+    /// would exceed the maximum length.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUri;
+    ///
+    /// let uri = AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
+    /// let updated = uri.with_query_str("version=2.0&ttl=300").unwrap();
+    /// assert_eq!(updated.query().version(), Some("2.0"));
+    /// assert_eq!(updated.query().ttl(), Some(300));
+    /// ```
+    pub fn with_query_str(&self, s: &str) -> Result<Self, ParseError> {
+        let query = QueryParams::parse(s).map_err(|e| ParseError {
+            input: s.to_string(),
+            kind: ParseErrorKind::InvalidQuery(e),
+        })?;
+        self.with_query(query)
+    }
+
+    /// Returns a new URI without query parameters.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if the resulting URI would exceed the maximum length.
+    /// (This is unlikely but possible in edge cases.)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUri;
+    ///
+    /// let uri = AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0").unwrap();
+    /// let updated = uri.without_query().unwrap();
+    /// assert!(updated.query().is_empty());
+    /// ```
+    pub fn without_query(&self) -> Result<Self, ParseError> {
+        self.with_query(QueryParams::new())
+    }
+
+    /// Returns a new URI with the given fragment.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if the resulting URI would exceed the maximum length.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::{AgentUri, Fragment};
+    ///
+    /// let uri = AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
+    /// let fragment = Fragment::parse("summarization").unwrap();
+    /// let updated = uri.with_fragment(fragment).unwrap();
+    /// assert_eq!(updated.fragment().map(|f| f.as_str()), Some("summarization"));
+    /// ```
+    pub fn with_fragment(&self, fragment: Fragment) -> Result<Self, ParseError> {
+        Self::new(
+            self.trust_root.clone(),
+            self.capability_path.clone(),
+            self.agent_id.clone(),
+            self.query.clone(),
+            Some(fragment),
+        )
+    }
+
+    /// Returns a new URI with a fragment parsed from a string.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if the fragment is invalid or the resulting URI
+    /// would exceed the maximum length.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUri;
+    ///
+    /// let uri = AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
+    /// let updated = uri.with_fragment_str("summarization").unwrap();
+    /// assert_eq!(updated.fragment().map(|f| f.as_str()), Some("summarization"));
+    /// ```
+    pub fn with_fragment_str(&self, s: &str) -> Result<Self, ParseError> {
+        let fragment = Fragment::parse(s).map_err(|e| ParseError {
+            input: s.to_string(),
+            kind: ParseErrorKind::InvalidFragment(e),
+        })?;
+        self.with_fragment(fragment)
+    }
+
+    /// Returns a new URI without a fragment.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if the resulting URI would exceed the maximum length.
+    /// (This is unlikely but possible in edge cases.)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUri;
+    ///
+    /// let uri = AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q#test").unwrap();
+    /// let updated = uri.without_fragment().unwrap();
+    /// assert!(updated.fragment().is_none());
+    /// ```
+    pub fn without_fragment(&self) -> Result<Self, ParseError> {
+        Self::new(
+            self.trust_root.clone(),
+            self.capability_path.clone(),
+            self.agent_id.clone(),
+            self.query.clone(),
+            None,
+        )
     }
 
     fn parse_inner(input: &str) -> Result<Self, ParseErrorKind> {
@@ -326,6 +474,47 @@ impl FromStr for AgentUri {
 impl AsRef<str> for AgentUri {
     fn as_ref(&self) -> &str {
         &self.normalized
+    }
+}
+
+impl TryFrom<&str> for AgentUri {
+    type Error = ParseError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::parse(s)
+    }
+}
+
+impl PartialOrd for AgentUri {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AgentUri {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.normalized.cmp(&other.normalized)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for AgentUri {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.normalized)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for AgentUri {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::parse(&s).map_err(serde::de::Error::custom)
     }
 }
 

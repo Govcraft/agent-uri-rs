@@ -75,6 +75,7 @@ mod constants;
 mod error;
 mod fragment;
 mod path_segment;
+pub mod prelude;
 mod query;
 mod trust_root;
 mod type_class;

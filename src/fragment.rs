@@ -1,6 +1,8 @@
 //! Fragment type for sub-agent addressing.
 
+use std::cmp::Ordering;
 use std::fmt;
+use std::ops::Deref;
 use std::str::FromStr;
 
 use crate::error::FragmentError;
@@ -65,6 +67,55 @@ impl FromStr for Fragment {
 impl AsRef<str> for Fragment {
     fn as_ref(&self) -> &str {
         &self.0
+    }
+}
+
+impl TryFrom<&str> for Fragment {
+    type Error = FragmentError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::parse(s)
+    }
+}
+
+impl Deref for Fragment {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl PartialOrd for Fragment {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Fragment {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Fragment {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Fragment {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::parse(&s).map_err(serde::de::Error::custom)
     }
 }
 

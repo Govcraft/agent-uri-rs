@@ -1,5 +1,6 @@
 //! Capability path type for agent capabilities.
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::str::FromStr;
 
@@ -123,6 +124,153 @@ impl CapabilityPath {
     pub fn as_str(&self) -> &str {
         &self.normalized
     }
+
+    /// Returns the parent path, or `None` if this is a single-segment path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::CapabilityPath;
+    ///
+    /// let path = CapabilityPath::parse("assistant/chat/streaming").unwrap();
+    /// let parent = path.parent().unwrap();
+    /// assert_eq!(parent.as_str(), "assistant/chat");
+    ///
+    /// let root = CapabilityPath::parse("chat").unwrap();
+    /// assert!(root.parent().is_none());
+    /// ```
+    #[must_use]
+    pub fn parent(&self) -> Option<Self> {
+        if self.segments.len() <= 1 {
+            return None;
+        }
+        let parent_segments: Vec<PathSegment> = self.segments[..self.segments.len() - 1].to_vec();
+        let normalized = parent_segments
+            .iter()
+            .map(PathSegment::as_str)
+            .collect::<Vec<_>>()
+            .join("/");
+        Some(Self {
+            segments: parent_segments,
+            normalized,
+        })
+    }
+
+    /// Returns a new path with the given segment appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns `CapabilityPathError` if the resulting path would be invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::{CapabilityPath, PathSegment};
+    ///
+    /// let path = CapabilityPath::parse("assistant").unwrap();
+    /// let segment = PathSegment::parse("chat").unwrap();
+    /// let joined = path.join(&segment).unwrap();
+    /// assert_eq!(joined.as_str(), "assistant/chat");
+    /// ```
+    pub fn join(&self, segment: &PathSegment) -> Result<Self, CapabilityPathError> {
+        let new_len = self.segments.len() + 1;
+        if new_len > MAX_PATH_SEGMENTS {
+            return Err(CapabilityPathError::TooManySegments {
+                max: MAX_PATH_SEGMENTS,
+                actual: new_len,
+            });
+        }
+
+        let mut segments = self.segments.clone();
+        segments.push(segment.clone());
+
+        let normalized = segments
+            .iter()
+            .map(PathSegment::as_str)
+            .collect::<Vec<_>>()
+            .join("/");
+
+        if normalized.len() > MAX_CAPABILITY_PATH_LENGTH {
+            return Err(CapabilityPathError::TooLong {
+                max: MAX_CAPABILITY_PATH_LENGTH,
+                actual: normalized.len(),
+            });
+        }
+
+        Ok(Self {
+            segments,
+            normalized,
+        })
+    }
+
+    /// Returns a new path with a segment parsed from a string appended.
+    ///
+    /// # Errors
+    ///
+    /// Returns `CapabilityPathError` if the segment or resulting path would be invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::CapabilityPath;
+    ///
+    /// let path = CapabilityPath::parse("assistant").unwrap();
+    /// let joined = path.try_join("chat").unwrap();
+    /// assert_eq!(joined.as_str(), "assistant/chat");
+    /// ```
+    pub fn try_join(&self, s: &str) -> Result<Self, CapabilityPathError> {
+        let segment = PathSegment::parse(s).map_err(|e| CapabilityPathError::InvalidSegment {
+            segment: s.to_string(),
+            index: self.segments.len(),
+            reason: e,
+        })?;
+        self.join(&segment)
+    }
+
+    /// Returns the last segment of the path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::CapabilityPath;
+    ///
+    /// let path = CapabilityPath::parse("assistant/chat").unwrap();
+    /// assert_eq!(path.last().as_str(), "chat");
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// This method will not panic because a `CapabilityPath` always has
+    /// at least one segment (empty paths cannot be created).
+    #[must_use]
+    pub fn last(&self) -> &PathSegment {
+        // Safe: CapabilityPath always has at least one segment
+        self.segments.last().expect("path has at least one segment")
+    }
+
+    /// Returns an iterator over the path segments.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::CapabilityPath;
+    ///
+    /// let path = CapabilityPath::parse("assistant/chat/streaming").unwrap();
+    /// let names: Vec<&str> = path.iter().map(|s| s.as_str()).collect();
+    /// assert_eq!(names, vec!["assistant", "chat", "streaming"]);
+    /// ```
+    pub fn iter(&self) -> std::slice::Iter<'_, PathSegment> {
+        self.segments.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a CapabilityPath {
+    type Item = &'a PathSegment;
+    type IntoIter = std::slice::Iter<'a, PathSegment>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.segments.iter()
+    }
 }
 
 impl fmt::Display for CapabilityPath {
@@ -142,6 +290,47 @@ impl FromStr for CapabilityPath {
 impl AsRef<str> for CapabilityPath {
     fn as_ref(&self) -> &str {
         &self.normalized
+    }
+}
+
+impl TryFrom<&str> for CapabilityPath {
+    type Error = CapabilityPathError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::parse(s)
+    }
+}
+
+impl PartialOrd for CapabilityPath {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CapabilityPath {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.normalized.cmp(&other.normalized)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for CapabilityPath {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.normalized)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for CapabilityPath {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::parse(&s).map_err(serde::de::Error::custom)
     }
 }
 

@@ -1,5 +1,6 @@
 //! Trust root type for agent authorities.
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
@@ -129,6 +130,58 @@ impl TrustRoot {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.normalized
+    }
+
+    /// Returns a new trust root with the given port.
+    ///
+    /// # Errors
+    ///
+    /// Returns `TrustRootError` if the resulting trust root would exceed
+    /// the maximum length.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::TrustRoot;
+    ///
+    /// let root = TrustRoot::parse("localhost").unwrap();
+    /// let with_port = root.with_port(8472).unwrap();
+    /// assert_eq!(with_port.port(), Some(8472));
+    /// ```
+    pub fn with_port(&self, port: u16) -> Result<Self, TrustRootError> {
+        let normalized = Self::normalize(&self.host, Some(port));
+        if normalized.len() > MAX_TRUST_ROOT_LENGTH {
+            return Err(TrustRootError::TooLong {
+                max: MAX_TRUST_ROOT_LENGTH,
+                actual: normalized.len(),
+            });
+        }
+        Ok(Self {
+            host: self.host.clone(),
+            port: Some(port),
+            normalized,
+        })
+    }
+
+    /// Returns a new trust root without a port.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::TrustRoot;
+    ///
+    /// let root = TrustRoot::parse("localhost:8472").unwrap();
+    /// let without_port = root.without_port();
+    /// assert!(without_port.port().is_none());
+    /// ```
+    #[must_use]
+    pub fn without_port(&self) -> Self {
+        let normalized = Self::normalize(&self.host, None);
+        Self {
+            host: self.host.clone(),
+            port: None,
+            normalized,
+        }
     }
 
     fn split_host_port(input: &str) -> Result<(&str, Option<u16>), TrustRootError> {
@@ -272,6 +325,91 @@ impl FromStr for TrustRoot {
 impl AsRef<str> for TrustRoot {
     fn as_ref(&self) -> &str {
         &self.normalized
+    }
+}
+
+impl TryFrom<&str> for TrustRoot {
+    type Error = TrustRootError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::parse(s)
+    }
+}
+
+impl PartialOrd for TrustRoot {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TrustRoot {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.normalized.cmp(&other.normalized)
+    }
+}
+
+impl PartialOrd for Host {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Host {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Self::Domain(a), Self::Domain(b)) => a.cmp(b),
+            (Self::Ipv4(a), Self::Ipv4(b)) => a.cmp(b),
+            (Self::Ipv6(a), Self::Ipv6(b)) => a.cmp(b),
+            (Self::Domain(_), _) | (Self::Ipv4(_), Self::Ipv6(_)) => Ordering::Less,
+            (_, Self::Domain(_)) | (Self::Ipv6(_), Self::Ipv4(_)) => Ordering::Greater,
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for TrustRoot {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.normalized)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for TrustRoot {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::parse(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Host {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Domain(d) => serializer.serialize_str(d),
+            Self::Ipv4(ip) => serializer.serialize_str(&ip.to_string()),
+            Self::Ipv6(ip) => serializer.serialize_str(&format!("[{ip}]")),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Host {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let trust_root = TrustRoot::parse(&s).map_err(serde::de::Error::custom)?;
+        Ok(trust_root.host.clone())
     }
 }
 

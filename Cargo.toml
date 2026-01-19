@@ -7,9 +7,15 @@ description = "Parser and validator for agent:// URI scheme"
 keywords = ["agent", "uri", "multi-agent", "identity", "a2a"]
 categories = ["parsing", "web-programming"]
 
+[features]
+default = []
+serde = ["dep:serde"]
+
 [dependencies]
 mti = "1.1.1"
 uuid = "1.19.0"
+serde = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]
 proptest = "1.9.0"
+serde_json = "1.0"

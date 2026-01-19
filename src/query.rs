@@ -1,5 +1,6 @@
 //! Query parameters type for agent URIs.
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
@@ -108,6 +109,96 @@ impl QueryParams {
         self.get("ttl").and_then(|s| s.parse().ok())
     }
 
+    /// Returns a new query with the given parameter added or updated.
+    ///
+    /// # Errors
+    ///
+    /// Returns `QueryError` if the key or value is invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::QueryParams;
+    ///
+    /// let query = QueryParams::new();
+    /// let updated = query.with_param("version", "2.0").unwrap();
+    /// assert_eq!(updated.get("version"), Some("2.0"));
+    /// ```
+    pub fn with_param(&self, key: &str, value: &str) -> Result<Self, QueryError> {
+        Self::validate_param_name(key)?;
+        // Validate value doesn't contain invalid characters
+        for c in value.chars() {
+            if !c.is_ascii_alphanumeric() && !"-_.".contains(c) {
+                return Err(QueryError::InvalidParamValue {
+                    name: key.to_string(),
+                    value: value.to_string(),
+                    reason: "value contains invalid character",
+                });
+            }
+        }
+
+        let mut params = self.params.clone();
+        params.insert(key.to_string(), value.to_string());
+        Ok(Self { params })
+    }
+
+    /// Returns a new query without the given parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::QueryParams;
+    ///
+    /// let query = QueryParams::parse("version=2.0&ttl=300").unwrap();
+    /// let updated = query.without_param("ttl");
+    /// assert!(updated.get("ttl").is_none());
+    /// assert_eq!(updated.get("version"), Some("2.0"));
+    /// ```
+    #[must_use]
+    pub fn without_param(&self, key: &str) -> Self {
+        let mut params = self.params.clone();
+        params.remove(key);
+        Self { params }
+    }
+
+    /// Returns a new query with the version parameter set.
+    ///
+    /// # Errors
+    ///
+    /// Returns `QueryError` if the version string is invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::QueryParams;
+    ///
+    /// let query = QueryParams::new();
+    /// let updated = query.with_version("2.0").unwrap();
+    /// assert_eq!(updated.version(), Some("2.0"));
+    /// ```
+    pub fn with_version(&self, v: &str) -> Result<Self, QueryError> {
+        self.with_param("version", v)
+    }
+
+    /// Returns a new query with the TTL parameter set.
+    ///
+    /// # Errors
+    ///
+    /// Returns `QueryError` if the resulting query would be invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::QueryParams;
+    ///
+    /// let query = QueryParams::new();
+    /// let updated = query.with_ttl(300).unwrap();
+    /// assert_eq!(updated.ttl(), Some(300));
+    /// ```
+    pub fn with_ttl(&self, ttl: u64) -> Result<Self, QueryError> {
+        self.with_param("ttl", &ttl.to_string())
+    }
+
     fn validate_param_name(name: &str) -> Result<(), QueryError> {
         if name.is_empty() {
             return Err(QueryError::InvalidParamName {
@@ -182,6 +273,47 @@ impl FromStr for QueryParams {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::parse(s)
+    }
+}
+
+impl TryFrom<&str> for QueryParams {
+    type Error = QueryError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Self::parse(s)
+    }
+}
+
+impl PartialOrd for QueryParams {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for QueryParams {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.to_string().cmp(&other.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for QueryParams {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for QueryParams {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::parse(&s).map_err(serde::de::Error::custom)
     }
 }
 

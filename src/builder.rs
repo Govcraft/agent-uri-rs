@@ -8,7 +8,10 @@ use std::marker::PhantomData;
 use crate::agent_id::AgentId;
 use crate::capability_path::CapabilityPath;
 use crate::constants::MAX_URI_LENGTH;
-use crate::error::{BuilderError, ParseErrorKind};
+use crate::error::{
+    AgentIdError, BuilderError, CapabilityPathError, FragmentError, ParseErrorKind, QueryError,
+    TrustRootError,
+};
 use crate::fragment::Fragment;
 use crate::query::QueryParams;
 use crate::trust_root::TrustRoot;
@@ -140,6 +143,28 @@ impl AgentUriBuilder<Empty> {
             _state: PhantomData,
         }
     }
+
+    /// Parses and sets the trust root from a string.
+    ///
+    /// This is a convenience method that combines parsing and setting the trust root.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TrustRootError`] if the string is not a valid trust root.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUriBuilder;
+    ///
+    /// let builder = AgentUriBuilder::new()
+    ///     .try_trust_root("anthropic.com")?;
+    /// # Ok::<(), agent_uri::TrustRootError>(())
+    /// ```
+    pub fn try_trust_root(self, s: &str) -> Result<AgentUriBuilder<HasTrustRoot>, TrustRootError> {
+        let trust_root = TrustRoot::parse(s)?;
+        Ok(self.trust_root(trust_root))
+    }
 }
 
 impl Default for AgentUriBuilder<Empty> {
@@ -180,6 +205,32 @@ impl AgentUriBuilder<HasTrustRoot> {
             _state: PhantomData,
         }
     }
+
+    /// Parses and sets the capability path from a string.
+    ///
+    /// This is a convenience method that combines parsing and setting the capability path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapabilityPathError`] if the string is not a valid capability path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUriBuilder;
+    ///
+    /// let builder = AgentUriBuilder::new()
+    ///     .try_trust_root("anthropic.com")?
+    ///     .try_capability_path("assistant/chat")?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn try_capability_path(
+        self,
+        s: &str,
+    ) -> Result<AgentUriBuilder<HasCapabilityPath>, CapabilityPathError> {
+        let capability_path = CapabilityPath::parse(s)?;
+        Ok(self.capability_path(capability_path))
+    }
 }
 
 impl AgentUriBuilder<HasCapabilityPath> {
@@ -212,6 +263,30 @@ impl AgentUriBuilder<HasCapabilityPath> {
             fragment: self.fragment,
             _state: PhantomData,
         }
+    }
+
+    /// Parses and sets the agent ID from a string.
+    ///
+    /// This is a convenience method that combines parsing and setting the agent ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AgentIdError`] if the string is not a valid agent ID.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUriBuilder;
+    ///
+    /// let builder = AgentUriBuilder::new()
+    ///     .try_trust_root("anthropic.com")?
+    ///     .try_capability_path("assistant/chat")?
+    ///     .try_agent_id("llm_chat_01h455vb4pex5vsknk084sn02q")?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn try_agent_id(self, s: &str) -> Result<AgentUriBuilder<Ready>, AgentIdError> {
+        let agent_id = AgentId::parse(s)?;
+        Ok(self.agent_id(agent_id))
     }
 }
 
@@ -337,6 +412,142 @@ impl<State> AgentUriBuilder<State> {
     pub fn fragment(mut self, fragment: Fragment) -> Self {
         self.fragment = Some(fragment);
         self
+    }
+
+    /// Parses and sets the query parameters from a string.
+    ///
+    /// This is a convenience method that combines parsing and setting query parameters.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`QueryError`] if the string is not a valid query string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUriBuilder;
+    ///
+    /// let builder = AgentUriBuilder::new()
+    ///     .try_query("version=2.0&ttl=300")?;
+    /// # Ok::<(), agent_uri::QueryError>(())
+    /// ```
+    pub fn try_query(self, s: &str) -> Result<Self, QueryError> {
+        let query = QueryParams::parse(s)?;
+        Ok(self.query(query))
+    }
+
+    /// Parses and sets the fragment from a string.
+    ///
+    /// This is a convenience method that combines parsing and setting the fragment.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FragmentError`] if the string is not a valid fragment.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUriBuilder;
+    ///
+    /// let builder = AgentUriBuilder::new()
+    ///     .try_fragment("summarization")?;
+    /// # Ok::<(), agent_uri::FragmentError>(())
+    /// ```
+    pub fn try_fragment(self, s: &str) -> Result<Self, FragmentError> {
+        let fragment = Fragment::parse(s)?;
+        Ok(self.fragment(fragment))
+    }
+
+    /// Sets the query if provided, otherwise leaves it unchanged.
+    ///
+    /// This is useful when the query is optional and may be `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::{AgentUriBuilder, QueryParams};
+    ///
+    /// let query = Some(QueryParams::parse("version=2.0").unwrap());
+    /// let builder = AgentUriBuilder::new()
+    ///     .maybe_query(query);
+    /// ```
+    #[must_use]
+    pub fn maybe_query(self, query: Option<QueryParams>) -> Self {
+        match query {
+            Some(q) => self.query(q),
+            None => self,
+        }
+    }
+
+    /// Sets the fragment if provided, otherwise leaves it unchanged.
+    ///
+    /// This is useful when the fragment is optional and may be `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::{AgentUriBuilder, Fragment};
+    ///
+    /// let fragment = Some(Fragment::parse("test").unwrap());
+    /// let builder = AgentUriBuilder::new()
+    ///     .maybe_fragment(fragment);
+    /// ```
+    #[must_use]
+    pub fn maybe_fragment(self, fragment: Option<Fragment>) -> Self {
+        match fragment {
+            Some(f) => self.fragment(f),
+            None => self,
+        }
+    }
+
+    /// Parses and sets the query from a string if provided.
+    ///
+    /// This is useful when the query string is optional and may be `None`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`QueryError`] if the provided string is not a valid query string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUriBuilder;
+    ///
+    /// let query_str = Some("version=2.0");
+    /// let builder = AgentUriBuilder::new()
+    ///     .maybe_query_str(query_str)?;
+    /// # Ok::<(), agent_uri::QueryError>(())
+    /// ```
+    pub fn maybe_query_str(self, s: Option<&str>) -> Result<Self, QueryError> {
+        match s {
+            Some(s) => self.try_query(s),
+            None => Ok(self),
+        }
+    }
+
+    /// Parses and sets the fragment from a string if provided.
+    ///
+    /// This is useful when the fragment string is optional and may be `None`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FragmentError`] if the provided string is not a valid fragment.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUriBuilder;
+    ///
+    /// let fragment_str = Some("summarization");
+    /// let builder = AgentUriBuilder::new()
+    ///     .maybe_fragment_str(fragment_str)?;
+    /// # Ok::<(), agent_uri::FragmentError>(())
+    /// ```
+    pub fn maybe_fragment_str(self, s: Option<&str>) -> Result<Self, FragmentError> {
+        match s {
+            Some(s) => self.try_fragment(s),
+            None => Ok(self),
+        }
     }
 }
 
