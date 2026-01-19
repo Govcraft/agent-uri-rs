@@ -1,0 +1,15 @@
+[package]
+name = "agent-uri"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Parser and validator for agent:// URI scheme"
+keywords = ["agent", "uri", "multi-agent", "identity", "a2a"]
+categories = ["parsing", "web-programming"]
+
+[dependencies]
+mti = "1.1.1"
+uuid = "1.19.0"
+
+[dev-dependencies]
+proptest = "1.9.0"
