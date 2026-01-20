@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-dht"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Capability-based DHT discovery for agent:// URI scheme"
@@ -24,4 +24,9 @@ features = ["derive"]
 optional = true
 
 [dev-dependencies]
+criterion = "0.8.1"
 proptest = "1.5"
+
+[[bench]]
+name = "dht_bench"
+harness = false
