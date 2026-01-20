@@ -163,7 +163,10 @@ mod tests {
         assert_eq!(stats.unique_keys(), 0);
         assert_eq!(stats.unique_trust_roots(), 0);
         assert_eq!(stats.max_registrations_per_key(), 0);
-        assert_eq!(stats.avg_registrations_per_key(), 0.0);
+        assert!(
+            (stats.avg_registrations_per_key() - 0.0).abs() < f64::EPSILON,
+            "avg_registrations_per_key should be 0.0"
+        );
         assert_eq!(stats.memory_bytes(), 0);
     }
 
