@@ -41,14 +41,12 @@ const OUTPUT_FILE: &str = "eval2_discovery.json";
 
 /// Default number of agents.
 ///
-/// Note: The simulated DHT has a default capacity of 20 registrations per key.
-/// With hierarchical paths, multiple agents may share prefixes. Using a smaller
-/// number of agents (100-200) avoids hitting capacity limits. For larger
-/// evaluations, the DHT capacity would need to be increased in the library.
-const DEFAULT_NUM_AGENTS: usize = 100;
+/// The simulated DHT has a default capacity of 1000 registrations per key,
+/// allowing large-scale evaluations with 10,000+ agents.
+const DEFAULT_NUM_AGENTS: usize = 10_000;
 
 /// Default number of queries.
-const DEFAULT_NUM_QUERIES: usize = 100;
+const DEFAULT_NUM_QUERIES: usize = 1_000;
 
 /// Default random seed.
 const DEFAULT_SEED: u64 = 42;

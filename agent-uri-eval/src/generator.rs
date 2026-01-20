@@ -144,7 +144,7 @@ impl PathGenerator {
         let mut paths = Vec::with_capacity(count);
 
         // Generate some top-level categories
-        let num_categories = (count / 20).clamp(3, 10);
+        let num_categories = (count / 100).clamp(5, 50);
         let categories: Vec<String> = (0..num_categories)
             .map(|_| self.random_segment())
             .collect();

@@ -30,7 +30,3 @@ path = "examples/run_expressiveness.rs"
 [[example]]
 name = "run_discovery"
 path = "examples/run_discovery.rs"
-
-[[example]]
-name = "run_real_corpus"
-path = "examples/run_real_corpus.rs"

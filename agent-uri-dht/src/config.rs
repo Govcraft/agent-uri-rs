@@ -10,7 +10,7 @@ pub struct SimulationConfig {
     /// Maximum registrations per DHT key.
     ///
     /// In Kademlia, this corresponds to the replication factor k.
-    /// Default: 20
+    /// Default: 1000
     pub max_registrations_per_key: usize,
 
     /// Default TTL for registrations.
@@ -39,7 +39,7 @@ pub struct SimulationConfig {
 impl Default for SimulationConfig {
     fn default() -> Self {
         Self {
-            max_registrations_per_key: 20,
+            max_registrations_per_key: 1000,
             default_ttl: Duration::from_secs(3600),
             verify_attestations: false,
             simulated_delay: None,
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn default_config() {
         let config = SimulationConfig::default();
-        assert_eq!(config.max_registrations_per_key, 20);
+        assert_eq!(config.max_registrations_per_key, 1000);
         assert_eq!(config.default_ttl, Duration::from_secs(3600));
         assert!(!config.verify_attestations);
         assert!(config.simulated_delay.is_none());
