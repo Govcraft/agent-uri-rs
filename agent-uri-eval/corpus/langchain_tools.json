@@ -1,0 +1,2043 @@
+{
+  "metadata": {
+    "source": "langchain_community.tools",
+    "extraction_date": "2026-01-20T19:51:41.529358+00:00",
+    "tool_count": 163,
+    "extractor_version": "1.0.0"
+  },
+  "tools": [
+    {
+      "name": "AINAppOps",
+      "description": "Tool for app operations.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.ainetwork.app",
+      "category": "ainetwork",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "ainetwork"
+      ]
+    },
+    {
+      "name": "AINBaseTool",
+      "description": "Base class for the AINetwork tools.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.ainetwork.base",
+      "category": "ainetwork",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "ainetwork"
+      ]
+    },
+    {
+      "name": "AINOwnerOps",
+      "description": "Tool for owner operations.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.ainetwork.owner",
+      "category": "ainetwork",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "ainetwork"
+      ]
+    },
+    {
+      "name": "AINRuleOps",
+      "description": "Tool for owner operations.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.ainetwork.rule",
+      "category": "ainetwork",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "ainetwork"
+      ]
+    },
+    {
+      "name": "AINTransfer",
+      "description": "Tool for transfer operations.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.ainetwork.transfer",
+      "category": "ainetwork",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "ainetwork"
+      ]
+    },
+    {
+      "name": "AINValueOps",
+      "description": "Tool for value operations.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.ainetwork.value",
+      "category": "ainetwork",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "ainetwork"
+      ]
+    },
+    {
+      "name": "AmadeusClosestAirport",
+      "description": "Tool for finding the closest airport to a particular location.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.amadeus.closest_airport",
+      "category": "amadeus",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "amadeus"
+      ]
+    },
+    {
+      "name": "AmadeusFlightSearch",
+      "description": "Tool for searching for a single flight between two airports.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.amadeus.flight_search",
+      "category": "amadeus",
+      "parameters": [],
+      "return_type": "<class 'list'>",
+      "tags": [
+        "amadeus",
+        "search"
+      ]
+    },
+    {
+      "name": "AmadeusBaseTool",
+      "description": "Base Tool for Amadeus.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.amadeus.base",
+      "category": "amadeus",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "amadeus"
+      ]
+    },
+    {
+      "name": "ArxivQueryRun",
+      "description": "Tool that searches the Arxiv API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.arxiv.tool",
+      "category": "arxiv",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "arxiv",
+        "database"
+      ]
+    },
+    {
+      "name": "AskNewsSearch",
+      "description": "Tool that searches the AskNews API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.asknews.tool",
+      "category": "asknews",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "search",
+        "asknews"
+      ]
+    },
+    {
+      "name": "HuggingFaceTextToSpeechModelInference",
+      "description": "HuggingFace Text-to-Speech Model Inference.\n\nRequirements:\n    - Environment variable ``HUGGINGFACE_API_KEY`` must be set,\n      or passed as a named parameter to the constructor.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.audio.huggingface_text_to_speech_inference",
+      "category": "audio",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "audio"
+      ]
+    },
+    {
+      "name": "AzureAiServicesDocumentIntelligenceTool",
+      "description": "Tool that queries the Azure AI Services Document Intelligence API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/quickstarts/get-started-sdks-rest-api?view=doc-intel-4.0.0&pivots=programming-language-python",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_ai_services.document_intelligence",
+      "category": "azure_ai_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_ai_services"
+      ]
+    },
+    {
+      "name": "AzureAiServicesImageAnalysisTool",
+      "description": "Tool that queries the Azure AI Services Image Analysis API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/azure/ai-services/computer-vision/quickstarts-sdk/image-analysis-client-library-40\n\nAttributes:\nazure_ai_services_key (Optional[str]): The API key for Azure AI Services.\nazure_ai_services_endpoint (Optional[str]): The endpoint URL for Azure AI Services.\nvisual_features Any: The visual features to analyze in the image, can be set as\n    either strings or azure.ai.vision.imageanalysis.models.VisualFeatures.\n    (e.g. 'TAGS', VisualFeatures.CAPTION).\nimage_analysis_client (Any): The client for interacting\n    with Azure AI Services Image Analysis.\nname (str): The name of the tool.\ndescription (str): A description of the tool,\n    including its purpose and expected input.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_ai_services.image_analysis",
+      "category": "azure_ai_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_ai_services"
+      ]
+    },
+    {
+      "name": "AzureAiServicesSpeechToTextTool",
+      "description": "Tool that queries the Azure AI Services Speech to Text API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/en-us/azure/ai-services/speech-service/get-started-speech-to-text?pivots=programming-language-python",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_ai_services.speech_to_text",
+      "category": "azure_ai_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_ai_services"
+      ]
+    },
+    {
+      "name": "AzureAiServicesTextAnalyticsForHealthTool",
+      "description": "Tool that queries the Azure AI Services Text Analytics for Health API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/en-us/azure/ai-services/language-service/text-analytics-for-health/quickstart?pivots=programming-language-python",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_ai_services.text_analytics_for_health",
+      "category": "azure_ai_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_ai_services"
+      ]
+    },
+    {
+      "name": "AzureAiServicesTextToSpeechTool",
+      "description": "Tool that queries the Azure AI Services Text to Speech API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/en-us/azure/ai-services/speech-service/get-started-text-to-speech?pivots=programming-language-python",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_ai_services.text_to_speech",
+      "category": "azure_ai_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_ai_services"
+      ]
+    },
+    {
+      "name": "AzureCogsFormRecognizerTool",
+      "description": "Tool that queries the Azure Cognitive Services Form Recognizer API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/en-us/azure/applied-ai-services/form-recognizer/quickstarts/get-started-sdks-rest-api?view=form-recog-3.0.0&pivots=programming-language-python",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_cognitive_services.form_recognizer",
+      "category": "azure_cognitive_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_cognitive_services"
+      ]
+    },
+    {
+      "name": "AzureCogsImageAnalysisTool",
+      "description": "Tool that queries the Azure Cognitive Services Image Analysis API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/en-us/azure/cognitive-services/computer-vision/quickstarts-sdk/image-analysis-client-library-40",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_cognitive_services.image_analysis",
+      "category": "azure_cognitive_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_cognitive_services"
+      ]
+    },
+    {
+      "name": "AzureCogsSpeech2TextTool",
+      "description": "Tool that queries the Azure Cognitive Services Speech2Text API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/en-us/azure/cognitive-services/speech-service/get-started-speech-to-text?pivots=programming-language-python",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_cognitive_services.speech2text",
+      "category": "azure_cognitive_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_cognitive_services"
+      ]
+    },
+    {
+      "name": "AzureCogsText2SpeechTool",
+      "description": "Tool that queries the Azure Cognitive Services Text2Speech API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/en-us/azure/cognitive-services/speech-service/get-started-text-to-speech?pivots=programming-language-python",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_cognitive_services.text2speech",
+      "category": "azure_cognitive_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_cognitive_services"
+      ]
+    },
+    {
+      "name": "AzureCogsTextAnalyticsHealthTool",
+      "description": "Tool that queries the Azure Cognitive Services Text Analytics for Health API.\n\nIn order to set this up, follow instructions at:\nhttps://learn.microsoft.com/en-us/azure/ai-services/language-service/text-analytics-for-health/quickstart?tabs=windows&pivots=programming-language-python",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.azure_cognitive_services.text_analytics_health",
+      "category": "azure_cognitive_services",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "azure_cognitive_services"
+      ]
+    },
+    {
+      "name": "bearly_interpreter",
+      "description": "Tool for evaluating python code in a sandbox environment.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.bearly.tool",
+      "category": "bearly",
+      "parameters": [
+        {
+          "name": "python_code",
+          "type": "<class 'str'>",
+          "required": true,
+          "description": "The pure python script to be evaluated. The contents will be in main.py. It should not be in markdown format."
+        }
+      ],
+      "return_type": "<class 'dict'>",
+      "tags": [
+        "bearly"
+      ]
+    },
+    {
+      "name": "Tool",
+      "description": "Tool that takes in function or coroutine directly.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_core.tools.simple",
+      "category": "simple",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "simple"
+      ]
+    },
+    {
+      "name": "BingSearchResults",
+      "description": "Bing Search tool.\n\nSetup:\n    Install ``langchain-community`` and set environment variable ``BING_SUBSCRIPTION_KEY``.\n\n    .. code-block:: bash\n\n        pip install -U langchain-community\n        export BING_SUBSCRIPTION_KEY=\"your-api-key\"\n\nInstantiation:\n    .. code-block:: python\n\n        from langchain_community.tools.bing_search import BingSearchResults\n        from langchain_community.utilities import BingSearchAPIWrapper\n\n        api_wrapper = BingSearchAPIWrapper()\n        tool = BingSearchResults(api_wrapper=api_wrapper)\n\nInvocation with args:\n    .. code-block:: python\n\n        tool.invoke({\"query\": \"what is the weather in SF?\"})\n\n    .. code-block:: python\n\n        \"[{'snippet': '<b>San Francisco, CA</b> <b>Weather</b> Forecast, with current conditions, wind, air quality, and what to expect for the next 3 days.', 'title': 'San Francisco, CA Weather Forecast | AccuWeather', 'link': 'https://www.accuweather.com/en/us/san-francisco/94103/weather-forecast/347629'}, {'snippet': 'Tropical Storm Ernesto Forms; Fire <b>Weather</b> Concerns in the Great Basin: Hot Temperatures Return to the South-Central U.S. ... <b>San Francisco CA</b> 37.77\u00b0N 122.41\u00b0W (Elev. 131 ft) Last Update: 2:21 pm PDT Aug 12, 2024. Forecast Valid: 6pm PDT Aug 12, 2024-6pm PDT Aug 19, 2024 .', 'title': 'National Weather Service', 'link': 'https://forecast.weather.gov/zipcity.php?inputstring=San+Francisco,CA'}, {'snippet': 'Current <b>weather</b> <b>in San Francisco, CA</b>. Check current conditions <b>in San Francisco, CA</b> with radar, hourly, and more.', 'title': 'San Francisco, CA Current Weather | AccuWeather', 'link': 'https://www.accuweather.com/en/us/san-francisco/94103/current-weather/347629'}, {'snippet': 'Everything you need to know about today&#39;s <b>weather</b> <b>in San Francisco, CA</b>. High/Low, Precipitation Chances, Sunrise/Sunset, and today&#39;s Temperature History.', 'title': 'Weather Today for San Francisco, CA | AccuWeather', 'link': 'https://www.accuweather.com/en/us/san-francisco/94103/weather-today/347629'}]\"\n\nInvocation with ToolCall:\n\n    .. code-block:: python\n\n        tool.invoke({\"args\": {\"query\":\"what is the weather in SF?\"}, \"id\": \"1\", \"name\": tool.name, \"type\": \"tool_call\"})\n\n    .. code-block:: python\n\n        ToolMessage(\n            content=\"[{'snippet': 'Get the latest <b>weather</b> forecast for <b>San Francisco, CA</b>, including temperature, RealFeel, and chance of precipitation. Find out how the <b>weather</b> will affect your plans and activities in the city of ...', 'title': 'San Francisco, CA Weather Forecast | AccuWeather', 'link': 'https://www.accuweather.com/en/us/san-francisco/94103/weather-forecast/347629'}, {'snippet': 'Radar. Be prepared with the most accurate 10-day forecast for <b>San Francisco, CA</b> with highs, lows, chance of precipitation from The <b>Weather</b> Channel and <b>Weather</b>.com.', 'title': '10-Day Weather Forecast for San Francisco, CA - The Weather Channel', 'link': 'https://weather.com/weather/tenday/l/San+Francisco+CA+USCA0987:1:US'}, {'snippet': 'Tropical Storm Ernesto Forms; Fire <b>Weather</b> Concerns in the Great Basin: Hot Temperatures Return to the South-Central U.S. ... <b>San Francisco CA</b> 37.77\u00b0N 122.41\u00b0W (Elev. 131 ft) Last Update: 2:21 pm PDT Aug 12, 2024. Forecast Valid: 6pm PDT Aug 12, 2024-6pm PDT Aug 19, 2024 .', 'title': 'National Weather Service', 'link': 'https://forecast.weather.gov/zipcity.php?inputstring=San+Francisco,CA'}, {'snippet': 'Current <b>weather</b> <b>in San Francisco, CA</b>. Check current conditions <b>in San Francisco, CA</b> with radar, hourly, and more.', 'title': 'San Francisco, CA Current Weather | AccuWeather', 'link': 'https://www.accuweather.com/en/us/san-francisco/94103/current-weather/347629'}]\",\n            artifact=[{'snippet': 'Get the latest <b>weather</b> forecast for <b>San Francisco, CA</b>, including temperature, RealFeel, and chance of precipitation. Find out how the <b>weather</b> will affect your plans and activities in the city of ...', 'title': 'San Francisco, CA Weather Forecast | AccuWeather', 'link': 'https://www.accuweather.com/en/us/san-francisco/94103/weather-forecast/347629'}, {'snippet': 'Radar. Be prepared with the most accurate 10-day forecast for <b>San Francisco, CA</b> with highs, lows, chance of precipitation from The <b>Weather</b> Channel and <b>Weather</b>.com.', 'title': '10-Day Weather Forecast for San Francisco, CA - The Weather Channel', 'link': 'https://weather.com/weather/tenday/l/San+Francisco+CA+USCA0987:1:US'}, {'snippet': 'Tropical Storm Ernesto Forms; Fire <b>Weather</b> Concerns in the Great Basin: Hot Temperatures Return to the South-Central U.S. ... <b>San Francisco CA</b> 37.77\u00b0N 122.41\u00b0W (Elev. 131 ft) Last Update: 2:21 pm PDT Aug 12, 2024. Forecast Valid: 6pm PDT Aug 12, 2024-6pm PDT Aug 19, 2024 .', 'title': 'National Weather Service', 'link': 'https://forecast.weather.gov/zipcity.php?inputstring=San+Francisco,CA'}, {'snippet': 'Current <b>weather</b> <b>in San Francisco, CA</b>. Check current conditions <b>in San Francisco, CA</b> with radar, hourly, and more.', 'title': 'San Francisco, CA Current Weather | AccuWeather', 'link': 'https://www.accuweather.com/en/us/san-francisco/94103/current-weather/347629'}],\n            name='bing_search_results_json',\n            tool_call_id='1'\n        )",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.bing_search.tool",
+      "category": "bing_search",
+      "parameters": [],
+      "return_type": "typing.Tuple[str, typing.List[typing.Dict]]",
+      "tags": [
+        "search",
+        "bing_search"
+      ]
+    },
+    {
+      "name": "BingSearchRun",
+      "description": "Tool that queries the Bing search API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.bing_search.tool",
+      "category": "bing_search",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "search",
+        "bing_search"
+      ]
+    },
+    {
+      "name": "BraveSearch",
+      "description": "Tool that queries the BraveSearch.\n\nApi key can be provided as an environment variable BRAVE_SEARCH_API_KEY\nor as a parameter.\n\n\nExample usages:\n.. code-block:: python\n    # uses BRAVE_SEARCH_API_KEY from environment\n    tool = BraveSearch()\n\n.. code-block:: python\n    # uses the provided api key\n    tool = BraveSearch.from_api_key(\"your-api-key\")\n\n.. code-block:: python\n    # uses the provided api key and search kwargs\n    tool = BraveSearch.from_api_key(\n                            api_key = \"your-api-key\",\n                            search_kwargs={\"max_results\": 5}\n                            )\n\n.. code-block:: python\n    # uses BRAVE_SEARCH_API_KEY from environment\n    tool = BraveSearch.from_search_kwargs({\"max_results\": 5})",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.brave_search.tool",
+      "category": "brave_search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search",
+        "brave_search"
+      ]
+    },
+    {
+      "name": "ClickupAction",
+      "description": "Tool that queries the  Clickup API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.clickup.tool",
+      "category": "clickup",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "clickup"
+      ]
+    },
+    {
+      "name": "CogniswitchKnowledgeRequest",
+      "description": "Tool that uses the Cogniswitch service to answer questions.\n\nname: str = \"cogniswitch_knowledge_request\"\ndescription: str = (\n    \"A wrapper around cogniswitch service to answer the question\n    from the knowledge base.\"\n    \"Input should be a search query.\"\n)",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.cogniswitch.tool",
+      "category": "cogniswitch",
+      "parameters": [],
+      "return_type": "Dict[str, Any]",
+      "tags": [
+        "api",
+        "cogniswitch"
+      ]
+    },
+    {
+      "name": "CogniswitchKnowledgeSourceFile",
+      "description": "Tool that uses the Cogniswitch services to store data from file.\n\nname: str = \"cogniswitch_knowledge_source_file\"\ndescription: str = (\n    \"This calls the CogniSwitch services to analyze & store data from a file.\n    If the input looks like a file path, assign that string value to file key.\n    Assign document name & description only if provided in input.\"\n)",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.cogniswitch.tool",
+      "category": "cogniswitch",
+      "parameters": [],
+      "return_type": "Dict[str, Any]",
+      "tags": [
+        "file_operations",
+        "cogniswitch"
+      ]
+    },
+    {
+      "name": "CogniswitchKnowledgeSourceURL",
+      "description": "Tool that uses the Cogniswitch services to store data from a URL.\n\nname: str = \"cogniswitch_knowledge_source_url\"\ndescription: str = (\n    \"This calls the CogniSwitch services to analyze & store data from a url.\n    the URL is provided in input, assign that value to the url key.\n    Assign document name & description only if provided in input\"\n)",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.cogniswitch.tool",
+      "category": "cogniswitch",
+      "parameters": [],
+      "return_type": "Dict[str, Any]",
+      "tags": [
+        "cogniswitch"
+      ]
+    },
+    {
+      "name": "CogniswitchKnowledgeStatus",
+      "description": "Tool that uses the Cogniswitch services to get the\n status of the document or url uploaded.\n\nname: str = \"cogniswitch_knowledge_status\"\ndescription: str = (\n    \"A wrapper around cogniswitch services to know the status of\n     the document uploaded from a url or a file. \"\n    \"Input should be a file name or the url link\"\n)",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.cogniswitch.tool",
+      "category": "cogniswitch",
+      "parameters": [],
+      "return_type": "Dict[str, Any]",
+      "tags": [
+        "cogniswitch"
+      ]
+    },
+    {
+      "name": "ConneryAction",
+      "description": "Connery Action tool.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.connery.tool",
+      "category": "connery",
+      "parameters": [],
+      "return_type": "typing.Dict[str, str]",
+      "tags": [
+        "connery"
+      ]
+    },
+    {
+      "name": "StructuredTool",
+      "description": "Tool that can operate on any number of inputs.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_core.tools.structured",
+      "category": "structured",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "structured"
+      ]
+    },
+    {
+      "name": "DataForSeoAPISearchResults",
+      "description": "Tool that queries the DataForSeo Google Search API\nand get back json.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.dataforseo_api_search.tool",
+      "category": "dataforseo_api_search",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "api",
+        "dataforseo_api_search",
+        "search"
+      ]
+    },
+    {
+      "name": "DataForSeoAPISearchRun",
+      "description": "Tool that queries the DataForSeo Google search API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.dataforseo_api_search.tool",
+      "category": "dataforseo_api_search",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "api",
+        "dataforseo_api_search",
+        "search"
+      ]
+    },
+    {
+      "name": "DataheraldTextToSQL",
+      "description": "Tool that queries using the Dataherald SDK.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.dataherald.tool",
+      "category": "dataherald",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "dataherald",
+        "database"
+      ]
+    },
+    {
+      "name": "DuckDuckGoSearchRun",
+      "description": "DuckDuckGo tool.\n\nSetup:\n    Install ``duckduckgo-search`` and ``langchain-community``.\n\n    .. code-block:: bash\n\n        pip install -U duckduckgo-search langchain-community\n\nInstantiation:\n    .. code-block:: python\n\n        from langchain_community.tools import DuckDuckGoSearchResults\n\n        tool = DuckDuckGoSearchResults()\n\nInvocation with args:\n    .. code-block:: python\n\n        tool.invoke(\"Obama\")\n\n    .. code-block:: python\n\n        '[snippet: Users on X have been widely comparing the boost of support felt for Kamala Harris' campaign to Barack Obama's in 2008., title: Surging Support For Kamala Harris Compared To Obama-Era Energy, link: https://www.msn.com/en-us/news/politics/surging-support-for-kamala-harris-compared-to-obama-era-energy/ar-BB1qzdC0, date: 2024-07-24T18:27:01+00:00, source: Newsweek on MSN.com], [snippet: Harris tried to emulate Obama's coalition in 2020 and failed. She may have a better shot at reaching young, Black, and Latino voters this time around., title: Harris May Follow Obama's Path to the White House After All, link: https://www.msn.com/en-us/news/politics/harris-may-follow-obama-s-path-to-the-white-house-after-all/ar-BB1qv9d4, date: 2024-07-23T22:42:00+00:00, source: Intelligencer on MSN.com], [snippet: The Republican presidential candidate said in an interview on Fox News that he \"wouldn't be worried\" about Michelle Obama running., title: Donald Trump Responds to Michelle Obama Threat, link: https://www.msn.com/en-us/news/politics/donald-trump-responds-to-michelle-obama-threat/ar-BB1qqtu5, date: 2024-07-22T18:26:00+00:00, source: Newsweek on MSN.com], [snippet: H eading into the weekend at his vacation home in Rehoboth Beach, Del., President Biden was reportedly stewing over Barack Obama's role in the orchestrated campaign to force him, title: Opinion | Barack Obama Strikes Again, link: https://www.msn.com/en-us/news/politics/opinion-barack-obama-strikes-again/ar-BB1qrfiy, date: 2024-07-22T21:28:00+00:00, source: The Wall Street Journal on MSN.com]'\n\nInvocation with ToolCall:\n\n    .. code-block:: python\n\n        tool.invoke({\"args\": {\"query\":\"Obama\"}, \"id\": \"1\", \"name\": tool.name, \"type\": \"tool_call\"})\n\n    .. code-block:: python\n\n        ToolMessage(content=\"[snippet: Biden, Obama and the Clintons Will Speak at the Democratic Convention. The president, two of his predecessors and the party's 2016 nominee are said to be planning speeches at the party's ..., title: Biden, Obama and the Clintons Will Speak at the Democratic Convention ..., link: https://www.nytimes.com/2024/08/12/us/politics/dnc-speakers-biden-obama-clinton.html], [snippet: Barack Obama\u2014with his wife, Michelle\u2014being sworn in as the 44th president of the United States, January 20, 2009. Key events in the life of Barack Obama. Barack Obama (born August 4, 1961, Honolulu, Hawaii, U.S.) is the 44th president of the United States (2009-17) and the first African American to hold the office., title: Barack Obama | Biography, Parents, Education, Presidency, Books ..., link: https://www.britannica.com/biography/Barack-Obama], [snippet: Former President Barack Obama released a letter about President Biden's decision to drop out of the 2024 presidential race. Notably, Obama did not name or endorse Vice President Kamala Harris., title: Read Obama's full statement on Biden dropping out - CBS News, link: https://www.cbsnews.com/news/barack-obama-biden-dropping-out-2024-presidential-race-full-statement/], [snippet: Many of the marquee names in Democratic politics began quickly lining up behind Vice President Kamala Harris on Sunday, but one towering presence in the party held back: Barack Obama. The former ..., title: Why Obama Hasn't Endorsed Harris - The New York Times, link: https://www.nytimes.com/2024/07/21/us/politics/why-obama-hasnt-endorsed-harris.html]\", name='duckduckgo_results_json', tool_call_id='1')",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.ddg_search.tool",
+      "category": "ddg_search",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "ddg_search",
+        "search"
+      ]
+    },
+    {
+      "name": "DuckDuckGoSearchResults",
+      "description": "Tool that queries the DuckDuckGo search API and\nreturns the results in `output_format`.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.ddg_search.tool",
+      "category": "ddg_search",
+      "parameters": [],
+      "return_type": "tuple[typing.List[dict] | str, typing.List[dict]]",
+      "tags": [
+        "ddg_search",
+        "search"
+      ]
+    },
+    {
+      "name": "E2BDataAnalysisTool",
+      "description": "Tool for running python code in a sandboxed environment for data analysis.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.e2b_data_analysis.tool",
+      "category": "e2b_data_analysis",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "e2b_data_analysis"
+      ]
+    },
+    {
+      "name": "EdenAiExplicitImageTool",
+      "description": "Tool that queries the Eden AI Explicit image detection.\n\nfor api reference check edenai documentation:\nhttps://docs.edenai.co/reference/image_explicit_content_create.\n\nTo use, you should have\nthe environment variable ``EDENAI_API_KEY`` set with your API token.\nYou can find your token here: https://app.edenai.run/admin/account/settings",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.edenai.image_explicitcontent",
+      "category": "edenai",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "edenai"
+      ]
+    },
+    {
+      "name": "EdenAiObjectDetectionTool",
+      "description": "Tool that queries the Eden AI Object detection API.\n\nfor api reference check edenai documentation:\nhttps://docs.edenai.co/reference/image_object_detection_create.\n\nTo use, you should have\nthe environment variable ``EDENAI_API_KEY`` set with your API token.\nYou can find your token here: https://app.edenai.run/admin/account/settings",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.edenai.image_objectdetection",
+      "category": "edenai",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "edenai"
+      ]
+    },
+    {
+      "name": "EdenAiParsingIDTool",
+      "description": "Tool that queries the Eden AI  Identity parsing API.\n\nfor api reference check edenai documentation:\nhttps://docs.edenai.co/reference/ocr_identity_parser_create.\n\nTo use, you should have\nthe environment variable ``EDENAI_API_KEY`` set with your API token.\nYou can find your token here: https://app.edenai.run/admin/account/settings",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.edenai.ocr_identityparser",
+      "category": "edenai",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "edenai"
+      ]
+    },
+    {
+      "name": "EdenAiParsingInvoiceTool",
+      "description": "Tool that queries the Eden AI Invoice parsing API.\n\nfor api reference check edenai documentation:\nhttps://docs.edenai.co/reference/ocr_invoice_parser_create.\n\nTo use, you should have\nthe environment variable ``EDENAI_API_KEY`` set with your API token.\nYou can find your token here: https://app.edenai.run/admin/account/settings",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.edenai.ocr_invoiceparser",
+      "category": "edenai",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "edenai"
+      ]
+    },
+    {
+      "name": "EdenAiSpeechToTextTool",
+      "description": "Tool that queries the Eden AI Speech To Text API.\n\nfor api reference check edenai documentation:\nhttps://app.edenai.run/bricks/speech/asynchronous-speech-to-text.\n\nTo use, you should have\nthe environment variable ``EDENAI_API_KEY`` set with your API token.\nYou can find your token here: https://app.edenai.run/admin/account/settings",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.edenai.audio_speech_to_text",
+      "category": "edenai",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "edenai"
+      ]
+    },
+    {
+      "name": "EdenAiTextModerationTool",
+      "description": "Tool that queries the Eden AI Explicit text detection.\n\nfor api reference check edenai documentation:\nhttps://docs.edenai.co/reference/image_explicit_content_create.\n\nTo use, you should have\nthe environment variable ``EDENAI_API_KEY`` set with your API token.\nYou can find your token here: https://app.edenai.run/admin/account/settings",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.edenai.text_moderation",
+      "category": "edenai",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "edenai"
+      ]
+    },
+    {
+      "name": "EdenAiTextToSpeechTool",
+      "description": "Tool that queries the Eden AI Text to speech API.\nfor api reference check edenai documentation:\nhttps://docs.edenai.co/reference/audio_text_to_speech_create.\n\nTo use, you should have\nthe environment variable ``EDENAI_API_KEY`` set with your API token.\nYou can find your token here: https://app.edenai.run/admin/account/settings",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.edenai.audio_text_to_speech",
+      "category": "edenai",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "edenai"
+      ]
+    },
+    {
+      "name": "EdenaiTool",
+      "description": "the base tool for all the EdenAI Tools .\nyou should have\nthe environment variable ``EDENAI_API_KEY`` set with your API token.\nYou can find your token here: https://app.edenai.run/admin/account/settings",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.edenai.edenai_base_tool",
+      "category": "edenai",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "edenai"
+      ]
+    },
+    {
+      "name": "ElevenLabsText2SpeechTool",
+      "description": "Tool that queries the Eleven Labs Text2Speech API.\n\nIn order to set this up, follow instructions at:\nhttps://elevenlabs.io/docs",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.eleven_labs.text2speech",
+      "category": "eleven_labs",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "eleven_labs"
+      ]
+    },
+    {
+      "name": "FewShotSQLTool",
+      "description": "Tool to get example SQL queries related to an input question.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.few_shot.tool",
+      "category": "few_shot",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "few_shot",
+        "database"
+      ]
+    },
+    {
+      "name": "CopyFileTool",
+      "description": "Tool that copies a file.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.file_management.copy",
+      "category": "file_management",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "file_management",
+        "file_operations"
+      ]
+    },
+    {
+      "name": "DeleteFileTool",
+      "description": "Tool that deletes a file.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.file_management.delete",
+      "category": "file_management",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "file_management",
+        "file_operations"
+      ]
+    },
+    {
+      "name": "FileSearchTool",
+      "description": "Tool that searches for files in a subdirectory that match a regex pattern.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.file_management.file_search",
+      "category": "file_management",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "file_management",
+        "search",
+        "file_operations"
+      ]
+    },
+    {
+      "name": "ListDirectoryTool",
+      "description": "Tool that lists files and directories in a specified folder.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.file_management.list_dir",
+      "category": "file_management",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "file_management"
+      ]
+    },
+    {
+      "name": "MoveFileTool",
+      "description": "Tool that moves a file.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.file_management.move",
+      "category": "file_management",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "file_management",
+        "file_operations"
+      ]
+    },
+    {
+      "name": "ReadFileTool",
+      "description": "Tool that reads a file.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.file_management.read",
+      "category": "file_management",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "file_management",
+        "file_operations"
+      ]
+    },
+    {
+      "name": "WriteFileTool",
+      "description": "Tool that writes a file to disk.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.file_management.write",
+      "category": "file_management",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "file_management",
+        "file_operations"
+      ]
+    },
+    {
+      "name": "BalanceSheets",
+      "description": "Tool that gets balance sheets for a given ticker over a given period.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.financial_datasets.balance_sheets",
+      "category": "financial_datasets",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "financial_datasets"
+      ]
+    },
+    {
+      "name": "CashFlowStatements",
+      "description": "Tool that gets cash flow statements for a given ticker over a given period.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.financial_datasets.cash_flow_statements",
+      "category": "financial_datasets",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "financial_datasets"
+      ]
+    },
+    {
+      "name": "IncomeStatements",
+      "description": "Tool that gets income statements for a given ticker over a given period.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.financial_datasets.income_statements",
+      "category": "financial_datasets",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "financial_datasets"
+      ]
+    },
+    {
+      "name": "GitHubAction",
+      "description": "Tool for interacting with the GitHub API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.github.tool",
+      "category": "github",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "GitLabAction",
+      "description": "Tool for interacting with the GitLab API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.gitlab.tool",
+      "category": "gitlab",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "gitlab"
+      ]
+    },
+    {
+      "name": "GmailCreateDraft",
+      "description": "Tool that creates a draft email for Gmail.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.gmail.create_draft",
+      "category": "gmail",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "gmail"
+      ]
+    },
+    {
+      "name": "GmailGetMessage",
+      "description": "Tool that gets a message by ID from Gmail.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.gmail.get_message",
+      "category": "gmail",
+      "parameters": [],
+      "return_type": "typing.Dict",
+      "tags": [
+        "gmail"
+      ]
+    },
+    {
+      "name": "GmailGetThread",
+      "description": "Tool that gets a thread by ID from Gmail.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.gmail.get_thread",
+      "category": "gmail",
+      "parameters": [],
+      "return_type": "typing.Dict",
+      "tags": [
+        "file_operations",
+        "gmail"
+      ]
+    },
+    {
+      "name": "GmailSearch",
+      "description": "Tool that searches for messages or threads in Gmail.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.gmail.search",
+      "category": "gmail",
+      "parameters": [],
+      "return_type": "typing.List[typing.Dict[str, typing.Any]]",
+      "tags": [
+        "search",
+        "gmail"
+      ]
+    },
+    {
+      "name": "GmailSendMessage",
+      "description": "Tool that sends a message to Gmail.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.gmail.send_message",
+      "category": "gmail",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "gmail"
+      ]
+    },
+    {
+      "name": "GmailBaseTool",
+      "description": "Base class for Gmail tools.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.gmail.base",
+      "category": "gmail",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "gmail"
+      ]
+    },
+    {
+      "name": "GoldenQueryRun",
+      "description": "Tool that adds the capability to query using the Golden API and get back JSON.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.golden_query.tool",
+      "category": "golden_query",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "golden_query",
+        "database"
+      ]
+    },
+    {
+      "name": "GoogleBooksQueryRun",
+      "description": "Tool that searches the Google Books API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_books",
+      "category": "google_books",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "google_books",
+        "database"
+      ]
+    },
+    {
+      "name": "GoogleCloudTextToSpeechTool",
+      "description": "!!! deprecated \"0.0.33 Use ``langchain_google_community.TextToSpeechTool`` instead. It will not be removed until langchain-community==1.0.\"\n\nTool that queries the Google Cloud Text to Speech API.\n\nIn order to set this up, follow instructions at:\nhttps://cloud.google.com/text-to-speech/docs/before-you-begin",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_cloud.texttospeech",
+      "category": "google_cloud",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "google_cloud"
+      ]
+    },
+    {
+      "name": "GoogleFinanceQueryRun",
+      "description": "Tool that queries the Google Finance API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_finance.tool",
+      "category": "google_finance",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "google_finance",
+        "database"
+      ]
+    },
+    {
+      "name": "GoogleJobsQueryRun",
+      "description": "Tool that queries the Google Jobs API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_jobs.tool",
+      "category": "google_jobs",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "google_jobs",
+        "database"
+      ]
+    },
+    {
+      "name": "GoogleLensQueryRun",
+      "description": "Tool that queries the Google Lens API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_lens.tool",
+      "category": "google_lens",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "google_lens",
+        "database"
+      ]
+    },
+    {
+      "name": "GooglePlacesTool",
+      "description": "!!! deprecated \"0.0.33 Use ``langchain_google_community.GooglePlacesTool`` instead. It will not be removed until langchain-community==1.0.\"\n\nTool that queries the Google places API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_places.tool",
+      "category": "google_places",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "google_places"
+      ]
+    },
+    {
+      "name": "GoogleScholarQueryRun",
+      "description": "Tool that queries the Google search API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_scholar.tool",
+      "category": "google_scholar",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "google_scholar",
+        "database"
+      ]
+    },
+    {
+      "name": "GoogleSearchResults",
+      "description": "!!! deprecated \"0.0.33 Use ``langchain_google_community.GoogleSearchResults`` instead. It will not be removed until langchain-community==1.0.\"\n\nTool that queries the Google Search API and gets back json.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_search.tool",
+      "category": "google_search",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "search",
+        "google_search"
+      ]
+    },
+    {
+      "name": "GoogleSearchRun",
+      "description": "!!! deprecated \"0.0.33 Use ``langchain_google_community.GoogleSearchRun`` instead. It will not be removed until langchain-community==1.0.\"\n\nTool that queries the Google search API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_search.tool",
+      "category": "google_search",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "search",
+        "google_search"
+      ]
+    },
+    {
+      "name": "GoogleSerperResults",
+      "description": "Tool that queries the Serper.dev Google Search API\nand get back json.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_serper.tool",
+      "category": "google_serper",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "google_serper"
+      ]
+    },
+    {
+      "name": "GoogleSerperRun",
+      "description": "Tool that queries the Serper.dev Google search API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_serper.tool",
+      "category": "google_serper",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "google_serper"
+      ]
+    },
+    {
+      "name": "GoogleTrendsQueryRun",
+      "description": "Tool that queries the Google trends API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.google_trends.tool",
+      "category": "google_trends",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "google_trends",
+        "database"
+      ]
+    },
+    {
+      "name": "BaseGraphQLTool",
+      "description": "Base tool for querying a GraphQL API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.graphql.tool",
+      "category": "graphql",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "graphql"
+      ]
+    },
+    {
+      "name": "HumanInputRun",
+      "description": "Tool that asks user for input.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.human.tool",
+      "category": "human",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "human"
+      ]
+    },
+    {
+      "name": "IFTTTWebhook",
+      "description": "IFTTT Webhook.\n\nArgs:\n    name: name of the tool\n    description: description of the tool\n    url: url to hit with the json event.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.ifttt",
+      "category": "ifttt",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "ifttt"
+      ]
+    },
+    {
+      "name": "JinaSearch",
+      "description": "Tool that queries the JinaSearch.\n\n..versionadded:: 0.2.16",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.jina_search.tool",
+      "category": "jina_search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "jina_search",
+        "search"
+      ]
+    },
+    {
+      "name": "JiraAction",
+      "description": "Tool that queries the Atlassian Jira API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.jira.tool",
+      "category": "jira",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "jira"
+      ]
+    },
+    {
+      "name": "JsonGetValueTool",
+      "description": "Tool for getting a value in a JSON spec.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.json.tool",
+      "category": "json",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "json"
+      ]
+    },
+    {
+      "name": "JsonListKeysTool",
+      "description": "Tool for listing keys in a JSON spec.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.json.tool",
+      "category": "json",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "json"
+      ]
+    },
+    {
+      "name": "Memorize",
+      "description": "Tool that trains a language model.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.memorize.tool",
+      "category": "memorize",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "memorize"
+      ]
+    },
+    {
+      "name": "MerriamWebsterQueryRun",
+      "description": "Tool that searches the Merriam-Webster API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.merriam_webster.tool",
+      "category": "merriam_webster",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "merriam_webster",
+        "database"
+      ]
+    },
+    {
+      "name": "MetaphorSearchResults",
+      "description": "!!! deprecated \"0.0.15 Use `langchain_exa.ExaSearchResults` instead. It will not be removed until langchain-community==1.0.\"\n\nTool that queries the Metaphor Search API and gets back json.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.metaphor_search.tool",
+      "category": "metaphor_search",
+      "parameters": [],
+      "return_type": "typing.List[typing.Dict] | str",
+      "tags": [
+        "search",
+        "metaphor_search"
+      ]
+    },
+    {
+      "name": "MojeekSearch",
+      "description": "",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.mojeek_search.tool",
+      "category": "mojeek_search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search",
+        "mojeek_search"
+      ]
+    },
+    {
+      "name": "MultionCloseSession",
+      "description": "Tool that closes an existing Multion Browser Window with provided fields.\n\nAttributes:\n    name: The name of the tool. Default: \"close_multion_session\"\n    description: The description of the tool.\n    args_schema: The schema for the tool's arguments. Default: UpdateSessionSchema",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.multion.close_session",
+      "category": "multion",
+      "parameters": [],
+      "return_type": "None",
+      "tags": [
+        "multion"
+      ]
+    },
+    {
+      "name": "MultionCreateSession",
+      "description": "Tool that creates a new Multion Browser Window with provided fields.\n\nAttributes:\n    name: The name of the tool. Default: \"create_multion_session\"\n    description: The description of the tool.\n    args_schema: The schema for the tool's arguments.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.multion.create_session",
+      "category": "multion",
+      "parameters": [],
+      "return_type": "<class 'dict'>",
+      "tags": [
+        "multion"
+      ]
+    },
+    {
+      "name": "MultionUpdateSession",
+      "description": "Tool that updates an existing Multion Browser Window with provided fields.\n\nAttributes:\n    name: The name of the tool. Default: \"update_multion_session\"\n    description: The description of the tool.\n    args_schema: The schema for the tool's arguments. Default: UpdateSessionSchema",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.multion.update_session",
+      "category": "multion",
+      "parameters": [],
+      "return_type": "<class 'dict'>",
+      "tags": [
+        "multion"
+      ]
+    },
+    {
+      "name": "NasaAction",
+      "description": "Tool that queries the Atlassian Jira API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.nasa.tool",
+      "category": "nasa",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "nasa"
+      ]
+    },
+    {
+      "name": "NucliaUnderstandingAPI",
+      "description": "Tool to process files with the Nuclia Understanding API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.nuclia.tool",
+      "category": "nuclia",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "api",
+        "nuclia"
+      ]
+    },
+    {
+      "name": "O365CreateDraftMessage",
+      "description": "Tool for creating a draft email in Office 365.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.office365.create_draft_message",
+      "category": "office365",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "office365"
+      ]
+    },
+    {
+      "name": "O365SearchEmails",
+      "description": "Search email messages in Office 365.\n\nFree, but setup is required.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.office365.messages_search",
+      "category": "office365",
+      "parameters": [],
+      "return_type": "typing.List[typing.Dict[str, typing.Any]]",
+      "tags": [
+        "office365",
+        "search"
+      ]
+    },
+    {
+      "name": "O365SearchEvents",
+      "description": "Search calendar events in Office 365.\n\nFree, but setup is required",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.office365.events_search",
+      "category": "office365",
+      "parameters": [],
+      "return_type": "typing.List[typing.Dict[str, typing.Any]]",
+      "tags": [
+        "office365",
+        "search"
+      ]
+    },
+    {
+      "name": "O365SendEvent",
+      "description": "Tool for sending calendar events in Office 365.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.office365.send_event",
+      "category": "office365",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "office365"
+      ]
+    },
+    {
+      "name": "O365SendMessage",
+      "description": "Send an email in Office 365.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.office365.send_message",
+      "category": "office365",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "office365"
+      ]
+    },
+    {
+      "name": "O365BaseTool",
+      "description": "Base class for the Office 365 tools.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.office365.base",
+      "category": "office365",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "office365"
+      ]
+    },
+    {
+      "name": "OpenAIDALLEImageGenerationTool",
+      "description": "Tool that generates an image using OpenAI DALLE.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.openai_dalle_image_generation.tool",
+      "category": "openai_dalle_image_generation",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "openai_dalle_image_generation"
+      ]
+    },
+    {
+      "name": "OpenWeatherMapQueryRun",
+      "description": "Tool that queries the OpenWeatherMap API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.openweathermap.tool",
+      "category": "openweathermap",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "database",
+        "openweathermap"
+      ]
+    },
+    {
+      "name": "NutritionAI",
+      "description": "Tool that queries the Passio Nutrition AI API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.passio_nutrition_ai.tool",
+      "category": "passio_nutrition_ai",
+      "parameters": [],
+      "return_type": "typing.Dict | None",
+      "tags": [
+        "passio_nutrition_ai"
+      ]
+    },
+    {
+      "name": "ClickTool",
+      "description": "Tool for clicking on an element with the given CSS selector.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.playwright.click",
+      "category": "playwright",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "playwright"
+      ]
+    },
+    {
+      "name": "CurrentWebPageTool",
+      "description": "Tool for getting the URL of the current webpage.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.playwright.current_page",
+      "category": "playwright",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "playwright"
+      ]
+    },
+    {
+      "name": "ExtractHyperlinksTool",
+      "description": "Extract all hyperlinks on the page.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.playwright.extract_hyperlinks",
+      "category": "playwright",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "playwright"
+      ]
+    },
+    {
+      "name": "ExtractTextTool",
+      "description": "Tool for extracting all the text on the current webpage.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.playwright.extract_text",
+      "category": "playwright",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "playwright"
+      ]
+    },
+    {
+      "name": "GetElementsTool",
+      "description": "Tool for getting elements in the current web page matching a CSS selector.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.playwright.get_elements",
+      "category": "playwright",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "playwright"
+      ]
+    },
+    {
+      "name": "NavigateBackTool",
+      "description": "Navigate back to the previous page in the browser history.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.playwright.navigate_back",
+      "category": "playwright",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "playwright"
+      ]
+    },
+    {
+      "name": "NavigateTool",
+      "description": "Tool for navigating a browser to a URL.\n\n**Security Note**: This tool provides code to control web-browser navigation.\n\n    This tool can navigate to any URL, including internal network URLs, and\n    URLs exposed on the server itself.\n\n    However, if exposing this tool to end-users, consider limiting network\n    access to the server that hosts the agent.\n\n    By default, the URL scheme has been limited to 'http' and 'https' to\n    prevent navigation to local file system URLs (or other schemes).\n\n    If access to the local file system is required, consider creating a custom\n    tool or providing a custom args_schema that allows the desired URL schemes.\n\n    See https://python.langchain.com/docs/security for more information.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.playwright.navigate",
+      "category": "playwright",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "playwright"
+      ]
+    },
+    {
+      "name": "BaseBrowserTool",
+      "description": "Base class for browser tools.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.playwright.base",
+      "category": "playwright",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "playwright"
+      ]
+    },
+    {
+      "name": "AIPluginTool",
+      "description": "Tool for getting the OpenAPI spec for an AI Plugin.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.plugin",
+      "category": "plugin",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "plugin"
+      ]
+    },
+    {
+      "name": "PolygonAggregates",
+      "description": "Tool that gets aggregate bars (stock prices) over a\ngiven date range for a given ticker from Polygon.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.polygon.aggregates",
+      "category": "polygon",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "polygon"
+      ]
+    },
+    {
+      "name": "PolygonFinancials",
+      "description": "Tool that gets the financials of a ticker from Polygon",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.polygon.financials",
+      "category": "polygon",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "polygon"
+      ]
+    },
+    {
+      "name": "PolygonLastQuote",
+      "description": "Tool that gets the last quote of a ticker from Polygon",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.polygon.last_quote",
+      "category": "polygon",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "polygon"
+      ]
+    },
+    {
+      "name": "PolygonTickerNews",
+      "description": "Tool that gets the latest news for a given ticker from Polygon",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.polygon.ticker_news",
+      "category": "polygon",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "polygon"
+      ]
+    },
+    {
+      "name": "InfoPowerBITool",
+      "description": "Tool for getting metadata about a PowerBI Dataset.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.powerbi.tool",
+      "category": "powerbi",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "powerbi"
+      ]
+    },
+    {
+      "name": "ListPowerBITool",
+      "description": "Tool for getting tables names.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.powerbi.tool",
+      "category": "powerbi",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "powerbi"
+      ]
+    },
+    {
+      "name": "QueryPowerBITool",
+      "description": "Tool for querying a Power BI Dataset.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.powerbi.tool",
+      "category": "powerbi",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "powerbi",
+        "database"
+      ]
+    },
+    {
+      "name": "PubmedQueryRun",
+      "description": "Tool that searches the PubMed API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.pubmed.tool",
+      "category": "pubmed",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "database",
+        "pubmed"
+      ]
+    },
+    {
+      "name": "RequestsDeleteTool",
+      "description": "Tool for making a DELETE request to an API endpoint.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.requests.tool",
+      "category": "requests",
+      "parameters": [],
+      "return_type": "str | typing.Dict[str, typing.Any]",
+      "tags": [
+        "api",
+        "requests"
+      ]
+    },
+    {
+      "name": "RequestsGetTool",
+      "description": "Tool for making a GET request to an API endpoint.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.requests.tool",
+      "category": "requests",
+      "parameters": [],
+      "return_type": "str | typing.Dict[str, typing.Any]",
+      "tags": [
+        "api",
+        "requests"
+      ]
+    },
+    {
+      "name": "RequestsPatchTool",
+      "description": "Tool for making a PATCH request to an API endpoint.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.requests.tool",
+      "category": "requests",
+      "parameters": [],
+      "return_type": "str | typing.Dict[str, typing.Any]",
+      "tags": [
+        "api",
+        "requests"
+      ]
+    },
+    {
+      "name": "RequestsPostTool",
+      "description": "Tool for making a POST request to an API endpoint.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.requests.tool",
+      "category": "requests",
+      "parameters": [],
+      "return_type": "str | typing.Dict[str, typing.Any]",
+      "tags": [
+        "api",
+        "requests"
+      ]
+    },
+    {
+      "name": "RequestsPutTool",
+      "description": "Tool for making a PUT request to an API endpoint.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.requests.tool",
+      "category": "requests",
+      "parameters": [],
+      "return_type": "str | typing.Dict[str, typing.Any]",
+      "tags": [
+        "api",
+        "requests"
+      ]
+    },
+    {
+      "name": "ExecJavaScript",
+      "description": "A tool implementation to execute JavaScript via Riza's Code Interpreter API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.riza.command",
+      "category": "riza",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "riza"
+      ]
+    },
+    {
+      "name": "ExecPython",
+      "description": "Riza Code tool.\n\nSetup:\n    Install ``langchain-community`` and ``rizaio`` and set environment variable ``RIZA_API_KEY``.\n\n    .. code-block:: bash\n\n        pip install -U langchain-community rizaio\n        export RIZA_API_KEY=\"your-api-key\"\n\nInstantiation:\n    .. code-block:: python\n\n        from langchain_community.tools.riza.command import ExecPython\n\n        tool = ExecPython()\n\nInvocation with args:\n    .. code-block:: python\n\n        tool.invoke(\"x = 5; print(x)\")\n\n    .. code-block:: python\n\n        '5\\n'\n\nInvocation with ToolCall:\n\n    .. code-block:: python\n\n        tool.invoke({\"args\": {\"code\":\"x = 5; print(x)\"}, \"id\": \"1\", \"name\": tool.name, \"type\": \"tool_call\"})\n\n    .. code-block:: python\n\n        tool.invoke({\"args\": {\"code\":\"x = 5; print(x)\"}, \"id\": \"1\", \"name\": tool.name, \"type\": \"tool_call\"})",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.riza.command",
+      "category": "riza",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "riza"
+      ]
+    },
+    {
+      "name": "SceneXplainTool",
+      "description": "Tool that explains images.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.scenexplain.tool",
+      "category": "scenexplain",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "scenexplain"
+      ]
+    },
+    {
+      "name": "SearchAPIResults",
+      "description": "Tool that queries the SearchApi.io search API and returns JSON.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.searchapi.tool",
+      "category": "searchapi",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "api",
+        "search",
+        "searchapi"
+      ]
+    },
+    {
+      "name": "SearchAPIRun",
+      "description": "Tool that queries the SearchApi.io search API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.searchapi.tool",
+      "category": "searchapi",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "api",
+        "search",
+        "searchapi"
+      ]
+    },
+    {
+      "name": "SearxSearchResults",
+      "description": "Tool that queries a Searx instance and gets back json.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.searx_search.tool",
+      "category": "searx_search",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "search",
+        "searx_search"
+      ]
+    },
+    {
+      "name": "SearxSearchRun",
+      "description": "Tool that queries a Searx instance.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.searx_search.tool",
+      "category": "searx_search",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "search",
+        "searx_search"
+      ]
+    },
+    {
+      "name": "SemanticScholarQueryRun",
+      "description": "Tool that searches the semanticscholar API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.semanticscholar.tool",
+      "category": "semanticscholar",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "semanticscholar",
+        "database"
+      ]
+    },
+    {
+      "name": "ShellTool",
+      "description": "Tool to run shell commands.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.shell.tool",
+      "category": "shell",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "shell"
+      ]
+    },
+    {
+      "name": "SlackGetChannel",
+      "description": "Tool that gets Slack channel information.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.slack.get_channel",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "SlackGetMessage",
+      "description": "Tool that gets Slack messages.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.slack.get_message",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "SlackScheduleMessage",
+      "description": "Tool for scheduling a message in Slack.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.slack.schedule_message",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "SlackSendMessage",
+      "description": "Tool for sending a message in Slack.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.slack.send_message",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "SlackBaseTool",
+      "description": "Base class for Slack tools.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.slack.base",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "SleepTool",
+      "description": "Tool that adds the capability to sleep.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.sleep.tool",
+      "category": "sleep",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "sleep"
+      ]
+    },
+    {
+      "name": "InfoSparkSQLTool",
+      "description": "Tool for getting metadata about a Spark SQL.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.spark_sql.tool",
+      "category": "spark_sql",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "spark_sql",
+        "database"
+      ]
+    },
+    {
+      "name": "ListSparkSQLTool",
+      "description": "Tool for getting tables names.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.spark_sql.tool",
+      "category": "spark_sql",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "spark_sql",
+        "database"
+      ]
+    },
+    {
+      "name": "QueryCheckerTool",
+      "description": "Use an LLM to check if a query is correct.\nAdapted from https://www.patterns.app/blog/2023/01/18/crunchbot-sql-analyst-gpt/",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.spark_sql.tool",
+      "category": "spark_sql",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "spark_sql",
+        "database"
+      ]
+    },
+    {
+      "name": "QuerySparkSQLTool",
+      "description": "Tool for querying a Spark SQL.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.spark_sql.tool",
+      "category": "spark_sql",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "spark_sql",
+        "database"
+      ]
+    },
+    {
+      "name": "StackExchangeTool",
+      "description": "Tool that uses StackExchange",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.stackexchange.tool",
+      "category": "stackexchange",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "stackexchange"
+      ]
+    },
+    {
+      "name": "SteamWebAPIQueryRun",
+      "description": "Tool that searches the Steam Web API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.steam.tool",
+      "category": "steam",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "api",
+        "steam",
+        "database"
+      ]
+    },
+    {
+      "name": "SteamshipImageGenerationTool",
+      "description": "Tool used to generate images from a text-prompt.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.steamship_image_generation.tool",
+      "category": "steamship_image_generation",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "steamship_image_generation"
+      ]
+    },
+    {
+      "name": "TavilyAnswer",
+      "description": "!!! deprecated \"0.3.25 Use ``langchain_tavily.TavilySearch`` instead. It will not be removed until langchain-community==1.0.\"\n\nTool that queries the Tavily Search API and gets back an answer.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.tavily_search.tool",
+      "category": "tavily_search",
+      "parameters": [],
+      "return_type": "typing.List[typing.Dict] | str",
+      "tags": [
+        "tavily_search"
+      ]
+    },
+    {
+      "name": "TavilySearchResults",
+      "description": "!!! deprecated \"0.3.25 Use ``langchain_tavily.TavilySearch`` instead. It will not be removed until langchain-community==1.0.\"\n\nTool that queries the Tavily Search API and gets back json.\n\n    Setup:\n        Install ``langchain-openai`` and ``tavily-python``, and set environment variable ``TAVILY_API_KEY``.\n\n        .. code-block:: bash\n\n            pip install -U langchain-community tavily-python\n            export TAVILY_API_KEY=\"your-api-key\"\n\n    Instantiate:\n\n        .. code-block:: python\n\n            from langchain_community.tools import TavilySearchResults\n\n            tool = TavilySearchResults(\n                max_results=5,\n                include_answer=True,\n                include_raw_content=True,\n                include_images=True,\n                # search_depth=\"advanced\",\n                # include_domains = []\n                # exclude_domains = []\n            )\n\n    Invoke directly with args:\n\n        .. code-block:: python\n\n            tool.invoke({'query': 'who won the last french open'})\n\n        .. code-block:: json\n\n            {\n                \"url\": \"https://www.nytimes.com...\",\n                \"content\": \"Novak Djokovic won the last French Open by beating Casper Ruud ...\"\n            }\n\n    Invoke with tool call:\n\n        .. code-block:: python\n\n            tool.invoke({\"args\": {'query': 'who won the last french open'}, \"type\": \"tool_call\", \"id\": \"foo\", \"name\": \"tavily\"})\n\n        .. code-block:: python\n\n            ToolMessage(\n                content='{ \"url\": \"https://www.nytimes.com...\", \"content\": \"Novak Djokovic won the last French Open by beating Casper Ruud ...\" }',\n                artifact={\n                    'query': 'who won the last french open',\n                    'follow_up_questions': None,\n                    'answer': 'Novak ...',\n                    'images': [\n                        'https://www.amny.com/wp-content/uploads/2023/06/AP23162622181176-1200x800.jpg',\n                        ...\n                        ],\n                    'results': [\n                        {\n                            'title': 'Djokovic ...',\n                            'url': 'https://www.nytimes.com...',\n                            'content': \"Novak...\",\n                            'score': 0.99505633,\n                            'raw_content': 'Tennis\nNovak ...'\n                        },\n                        ...\n                    ],\n                    'response_time': 2.92\n                },\n                tool_call_id='1',\n                name='tavily_search_results_json',\n            )",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.tavily_search.tool",
+      "category": "tavily_search",
+      "parameters": [],
+      "return_type": "typing.Tuple[typing.List[typing.Dict[str, str]] | str, typing.Dict]",
+      "tags": [
+        "search",
+        "tavily_search"
+      ]
+    },
+    {
+      "name": "VectorStoreQATool",
+      "description": "Tool for the VectorDBQA chain. To be initialized with name and chain.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.vectorstore.tool",
+      "category": "vectorstore",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "vectorstore"
+      ]
+    },
+    {
+      "name": "VectorStoreQAWithSourcesTool",
+      "description": "Tool for the VectorDBQAWithSources chain.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.vectorstore.tool",
+      "category": "vectorstore",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "vectorstore"
+      ]
+    },
+    {
+      "name": "WikidataQueryRun",
+      "description": "Tool that searches the Wikidata API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.wikidata.tool",
+      "category": "wikidata",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "wikidata",
+        "database"
+      ]
+    },
+    {
+      "name": "WikipediaQueryRun",
+      "description": "Tool that searches the Wikipedia API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.wikipedia.tool",
+      "category": "wikipedia",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "wikipedia",
+        "database"
+      ]
+    },
+    {
+      "name": "WolframAlphaQueryRun",
+      "description": "Tool that queries using the Wolfram Alpha SDK.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.wolfram_alpha.tool",
+      "category": "wolfram_alpha",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "wolfram_alpha",
+        "database"
+      ]
+    },
+    {
+      "name": "YahooFinanceNewsTool",
+      "description": "Tool that searches financial news on Yahoo Finance.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.yahoo_finance_news",
+      "category": "yahoo_finance_news",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "yahoo_finance_news"
+      ]
+    },
+    {
+      "name": "YouSearchTool",
+      "description": "Tool that searches the you.com API.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.you.tool",
+      "category": "you",
+      "parameters": [],
+      "return_type": "typing.List[langchain_core.documents.base.Document]",
+      "tags": [
+        "search",
+        "you"
+      ]
+    },
+    {
+      "name": "YouTubeSearchTool",
+      "description": "Tool that queries YouTube.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.youtube.search",
+      "category": "youtube",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "search",
+        "youtube"
+      ]
+    },
+    {
+      "name": "ZapierNLAListActions",
+      "description": "Returns a list of all exposed (enabled) actions associated with\ncurrent user (associated with the set api_key). Change your exposed\nactions here: https://nla.zapier.com/demo/start/\n\nThe return list can be empty if no actions exposed. Else will contain\na list of action objects:\n\n[{\n    \"id\": str,\n    \"description\": str,\n    \"params\": Dict[str, str]\n}]\n\n`params` will always contain an `instructions` key, the only required\nparam. All others optional and if provided will override any AI guesses\n(see \"understanding the AI guessing flow\" here:\nhttps://nla.zapier.com/docs/using-the-api#ai-guessing)\nTool to list all exposed actions for the user.",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.zapier.tool",
+      "category": "zapier",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "api",
+        "zapier"
+      ]
+    },
+    {
+      "name": "ZapierNLARunAction",
+      "description": "Executes an action that is identified by action_id, must be exposed\n(enabled) by the current user (associated with the set api_key). Change\nyour exposed actions here: https://nla.zapier.com/demo/start/\n\nThe return JSON is guaranteed to be less than ~500 words (350\ntokens) making it safe to inject into the prompt of another LLM\ncall.\nTool to run a specific action from the user's exposed actions.\n\nParams:\n    action_id: a specific action ID (from list actions) of the action to execute\n        (the set api_key must be associated with the action owner)\n    instructions: a natural language instruction string for using the action\n        (eg. \"get the latest email from Mike Knoop\" for \"Gmail: find email\" action)\n    params: a dict, optional. Any params provided will *override* AI guesses\n        from `instructions` (see \"understanding the AI guessing flow\" here:\n        https://nla.zapier.com/docs/using-the-api#ai-guessing)",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.zapier.tool",
+      "category": "zapier",
+      "parameters": [],
+      "return_type": "<class 'str'>",
+      "tags": [
+        "api",
+        "zapier"
+      ]
+    },
+    {
+      "name": "ZenGuardTool",
+      "description": "",
+      "source": "langchain_community.tools",
+      "module_path": "langchain_community.tools.zenguard.tool",
+      "category": "zenguard",
+      "parameters": [],
+      "return_type": "typing.Dict[str, typing.Any]",
+      "tags": [
+        "zenguard"
+      ]
+    }
+  ]
+}

@@ -23,8 +23,8 @@ use agent_uri_eval::{
     ExpressivenessResults, MappingConfig,
 };
 
-/// Default corpus directory (relative to workspace root).
-const DEFAULT_CORPUS_DIR: &str = "../evals/corpus-extraction/data/raw";
+/// Default corpus directory (relative to crate root).
+const DEFAULT_CORPUS_DIR: &str = "corpus";
 
 /// Output directory for results.
 const RESULTS_DIR: &str = "results";
