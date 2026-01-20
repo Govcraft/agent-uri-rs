@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn signing_key_debug_shows_public_key() {
         let key = SigningKey::generate();
-        let debug_output = format!("{:?}", key);
+        let debug_output = format!("{key:?}");
 
         assert!(debug_output.contains("SigningKey"));
         assert!(debug_output.contains("VerifyingKey"));
@@ -214,7 +214,7 @@ mod tests {
     fn verifying_key_debug_shows_partial_bytes() {
         let signing_key = SigningKey::generate();
         let verifying_key = signing_key.verifying_key();
-        let debug_output = format!("{:?}", verifying_key);
+        let debug_output = format!("{verifying_key:?}");
 
         assert!(debug_output.contains("VerifyingKey("));
         assert!(debug_output.contains("..."));

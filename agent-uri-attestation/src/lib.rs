@@ -56,6 +56,29 @@
 //! | Trust root binding | `iss` must match trusted roots |
 //! | URI binding | `agent_uri` claim verified against expected |
 //! | Tamper detection | Ed25519 signature verification |
+//!
+//! # Grammar Specification
+//!
+//! This crate includes a formal ABNF grammar specification in `grammar.abnf`
+//! that defines:
+//!
+//! - PASETO v4.public token format (`v4.public.<payload>[.<footer>]`)
+//! - [`AttestationClaims`] JSON structure
+//! - Field formats and constraints
+//!
+//! The grammar follows RFC 5234 and references the agent-uri ABNF for
+//! the `agent_uri` field format.
+//!
+//! ## Length Constraints
+//!
+//! | Component | Max Length |
+//! |-----------|------------|
+//! | Total token | 8192 chars |
+//! | agent_uri | 512 chars |
+//! | capabilities | 64 items |
+//! | Each capability | 128 chars |
+//! | issuer | 128 chars |
+//! | audience | 128 chars |
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]

@@ -1,0 +1,274 @@
+; Agent URI Attestation - ABNF Grammar Specification
+; RFC 5234 compliant (core rules imported)
+;
+; This grammar defines the syntax for PASETO v4.public attestation tokens
+; that cryptographically bind agent URIs to capabilities.
+;
+; Example token:
+;   v4.public.eyJhZ2VudF91cmkiOiJhZ2VudDovL2FjbWUuY29tL3dvcmtmbG93L2Fwcm...
+;
+; ============================================================================
+; LENGTH CONSTRAINTS SUMMARY
+; ============================================================================
+;
+; Component              Max Length    Notes
+; --------------------   ----------    -----
+; Total token            8192 chars    PASETO practical limit
+; Payload (decoded)      4096 bytes    After base64url decode
+; agent_uri              512 chars     Per agent-uri specification
+; capabilities array     64 items      Practical limit
+; Each capability        128 chars     Dotted/namespaced string
+; issuer (iss)           128 chars     Matches trust-root limit
+; audience (aud)         128 chars     Optional field
+; Timestamp              30 chars      ISO 8601 with milliseconds
+;
+; ============================================================================
+; PASETO v4.public TOKEN FORMAT
+; ============================================================================
+;
+; PASETO tokens have the structure:
+;   version.purpose.payload[.footer]
+;
+; For v4.public:
+;   - Version: v4
+;   - Purpose: public (asymmetric signature)
+;   - Payload: base64url-encoded (claims JSON || signature)
+;   - Footer: optional, base64url-encoded
+;
+; The Ed25519 signature (64 bytes) is appended to the claims JSON before
+; base64url encoding, making the payload self-contained.
+
+attestation-token   = paseto-header "." payload [ "." footer ]
+                      ; Total token length MUST NOT exceed 8192 characters
+
+paseto-header       = "v4.public"
+                      ; Fixed header for PASETO v4 public tokens
+
+payload             = 1*base64url-char
+                      ; Base64url-encoded (claims-json || ed25519-signature)
+                      ; Decoded payload MUST NOT exceed 4096 bytes
+
+footer              = 1*base64url-char
+                      ; Optional footer, typically contains key-id hints
+
+base64url-char      = ALPHA / DIGIT / "-" / "_"
+                      ; Base64url alphabet without padding
+
+; ============================================================================
+; CLAIMS JSON STRUCTURE
+; ============================================================================
+;
+; The claims JSON contains both standard PASETO claims (iss, iat, exp, aud)
+; and custom claims (agent_uri, capabilities).
+;
+; Field ordering in serialized JSON is not significant for parsing,
+; but this grammar shows the logical structure.
+
+claims-json         = "{" ws claims-members ws "}"
+
+claims-members      = agent-uri-claim sep
+                      capabilities-claim sep
+                      iss-claim sep
+                      iat-claim sep
+                      exp-claim
+                      [ sep aud-claim ]
+
+sep                 = ws "," ws
+ws                  = *( %x20 / %x09 / %x0A / %x0D )
+
+; ============================================================================
+; REQUIRED CLAIMS
+; ============================================================================
+
+; agent_uri: The full agent URI being attested
+; Format: Must conform to agent-uri ABNF grammar
+agent-uri-claim     = %x22 "agent_uri" %x22 ":" ws %x22 agent-uri %x22
+agent-uri           = <defined in agent-uri-abnf.txt>
+                      ; agent://trust-root/capability-path/agent-id[?query][#fragment]
+                      ; Max 512 characters
+
+; capabilities: Array of granted capability strings
+capabilities-claim  = %x22 "capabilities" %x22 ":" ws capabilities-array
+capabilities-array  = "[" ws [ capability-list ] ws "]"
+capability-list     = capability *( ws "," ws capability )
+capability          = %x22 capability-string %x22
+capability-string   = cap-start *126cap-char [ cap-end ]
+                      ; 1-128 characters total
+cap-start           = LOWER
+cap-end             = LOWER / DIGIT
+cap-char            = LOWER / DIGIT / "." / "-" / "_" / ":"
+                      ; Examples:
+                      ;   "read"
+                      ;   "workflow.approval.read"
+                      ;   "admin:users:write"
+                      ;   "file.upload.size-limit"
+
+; iss: Issuer (trust root) that created this attestation
+; Format: Must match the trust-root in the agent_uri
+iss-claim           = %x22 "iss" %x22 ":" ws %x22 issuer %x22
+issuer              = trust-root
+                      ; From agent-uri ABNF: host [ ":" port ]
+                      ; Max 128 characters
+
+; iat: Issued-at timestamp
+iat-claim           = %x22 "iat" %x22 ":" ws %x22 iso8601-timestamp %x22
+
+; exp: Expiration timestamp
+exp-claim           = %x22 "exp" %x22 ":" ws %x22 iso8601-timestamp %x22
+
+; ============================================================================
+; OPTIONAL CLAIMS
+; ============================================================================
+
+; aud: Audience restriction (optional)
+; Specifies the intended recipient of the token
+aud-claim           = %x22 "aud" %x22 ":" ws %x22 audience %x22
+audience            = 1*128( ALPHA / DIGIT / "." / "-" / "_" )
+                      ; Examples: "api.acme.com", "internal-service"
+
+; ============================================================================
+; TIMESTAMP FORMAT
+; ============================================================================
+;
+; Timestamps use ISO 8601 format with timezone.
+; PASETO requires RFC 3339 compatible format.
+;
+; Examples:
+;   2024-01-15T14:30:00Z
+;   2024-01-15T14:30:00.123Z
+;   2024-01-15T14:30:00+00:00
+
+iso8601-timestamp   = full-date "T" full-time
+
+full-date           = date-year "-" date-month "-" date-day
+date-year           = 4DIGIT
+date-month          = 2DIGIT                ; 01-12
+date-day            = 2DIGIT                ; 01-31
+
+full-time           = time-hour ":" time-minute ":" time-second
+                      [ time-fraction ] time-offset
+
+time-hour           = 2DIGIT                ; 00-23
+time-minute         = 2DIGIT                ; 00-59
+time-second         = 2DIGIT                ; 00-60 (leap second)
+time-fraction       = "." 1*3DIGIT          ; Millisecond precision
+time-offset         = "Z" / time-numoffset
+time-numoffset      = ("+" / "-") time-hour ":" time-minute
+
+; ============================================================================
+; IMPORTED RULES FROM AGENT-URI ABNF
+; ============================================================================
+;
+; The following rules are imported from agent-uri-abnf.txt:
+;
+;   agent-uri     - Full agent URI structure
+;   trust-root    - Authority (host[:port])
+;   host          - Domain name or IP literal
+;
+; See agent-uri-abnf.txt for complete definitions.
+
+; ============================================================================
+; CORE RULES (RFC 5234 Appendix B)
+; ============================================================================
+
+ALPHA               = %x41-5A / %x61-7A    ; A-Z / a-z
+DIGIT               = %x30-39              ; 0-9
+LOWER               = %x61-7A              ; a-z
+
+; ============================================================================
+; NORMALIZATION RULES (Prose)
+; ============================================================================
+;
+; 1. Token header is always lowercase: "v4.public" not "V4.PUBLIC"
+;
+; 2. Claims JSON uses lowercase keys: "agent_uri" not "Agent_URI"
+;
+; 3. Timestamps are normalized to UTC where possible, though offset
+;    formats are accepted per RFC 3339
+;
+; 4. Capability strings are case-sensitive and should use lowercase
+;    by convention
+;
+; 5. The issuer (iss) must match the trust-root portion of the agent_uri
+;    after normalization
+;
+; 6. Empty capabilities array is valid: {"capabilities": []}
+;
+; 7. Whitespace in JSON is optional and not semantically significant
+
+; ============================================================================
+; SECURITY CONSIDERATIONS (Prose)
+; ============================================================================
+;
+; 1. Token forgery protection: Ed25519 signatures prevent token modification.
+;    Never accept tokens without verifying the signature.
+;
+; 2. Replay attacks: The `exp` claim provides expiration. Implementations
+;    MUST reject expired tokens. Consider short TTLs (hours, not days).
+;
+; 3. Issuer verification: The `iss` claim must match a trusted root's public
+;    key. Do not accept tokens from unknown issuers.
+;
+; 4. Trust root binding: The `iss` claim SHOULD match the trust-root in
+;    `agent_uri`. Mismatches indicate potential spoofing.
+;
+; 5. Capability minimization: Tokens SHOULD grant minimum necessary
+;    capabilities. Avoid wildcard or overly broad capability strings.
+;
+; 6. Clock skew: Implementations MAY allow small clock skew (e.g., 60 seconds)
+;    when validating `iat` and `exp`. Document any tolerance.
+;
+; 7. Token storage: Attestation tokens are bearer credentials. Store them
+;    securely (encrypted at rest, TLS in transit).
+;
+; 8. Key rotation: Trust roots SHOULD support multiple active keys to enable
+;    rotation without invalidating all outstanding tokens.
+
+; ============================================================================
+; EXAMPLES
+; ============================================================================
+;
+; Example 1: Basic attestation token
+;
+;   Token:
+;     v4.public.eyJhZ2VudF91cmkiOiJhZ2VudDovL2FjbWUuY29tL3dvcmtmbG93L2Fwcm...
+;
+;   Decoded claims:
+;     {
+;       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+;       "capabilities": ["workflow.approval.read"],
+;       "iss": "acme.com",
+;       "iat": "2024-01-15T10:30:00.000Z",
+;       "exp": "2024-01-16T10:30:00.000Z"
+;     }
+;
+; Example 2: Token with multiple capabilities and audience
+;
+;   Decoded claims:
+;     {
+;       "agent_uri": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
+;       "capabilities": [
+;         "assistant.chat.respond",
+;         "assistant.chat.stream",
+;         "context.read"
+;       ],
+;       "iss": "anthropic.com",
+;       "iat": "2024-01-15T10:30:00.000Z",
+;       "exp": "2024-01-15T11:30:00.000Z",
+;       "aud": "api.anthropic.com"
+;     }
+;
+; Example 3: Token with localhost trust root (development)
+;
+;   Decoded claims:
+;     {
+;       "agent_uri": "agent://localhost:8472/debug/test/llm_01h455vb4pex5vsknk084sn02q",
+;       "capabilities": [],
+;       "iss": "localhost:8472",
+;       "iat": "2024-01-15T10:30:00.000Z",
+;       "exp": "2024-01-15T10:35:00.000Z"
+;     }
+;
+; Example 4: Maximum length capability string (128 chars)
+;
+;   "organization.department.team.project.module.submodule.component.action.qualifier.variant.version"

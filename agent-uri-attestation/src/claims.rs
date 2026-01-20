@@ -1,4 +1,6 @@
 //! Attestation claims types.
+//!
+//! See `grammar.abnf` for the formal ABNF specification of claims structure.
 
 use std::time::Duration;
 
@@ -11,6 +13,20 @@ use crate::error::AttestationError;
 ///
 /// These claims cryptographically bind an agent URI to a set of capabilities,
 /// with issuer information and validity period.
+///
+/// # Grammar Reference
+///
+/// See `grammar.abnf` for the formal ABNF specification of the claims
+/// JSON structure. Key constraints:
+///
+/// | Field | Format | Max Length |
+/// |-------|--------|------------|
+/// | `agent_uri` | agent-uri ABNF | 512 chars |
+/// | `capabilities` | JSON array | 64 items |
+/// | `iss` | trust-root | 128 chars |
+/// | `iat` | ISO 8601 | 30 chars |
+/// | `exp` | ISO 8601 | 30 chars |
+/// | `aud` | alphanumeric | 128 chars |
 ///
 /// # Example
 ///

@@ -361,11 +361,12 @@ mod tests {
         assert!(
             matches!(
                 result,
-                Err(AttestationError::InvalidSignature)
-                    | Err(AttestationError::InvalidTokenFormat { .. })
+                Err(
+                    AttestationError::InvalidSignature
+                        | AttestationError::InvalidTokenFormat { .. }
+                )
             ),
-            "Expected InvalidSignature or InvalidTokenFormat, got {:?}",
-            result
+            "Expected InvalidSignature or InvalidTokenFormat, got {result:?}",
         );
     }
 
