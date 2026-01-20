@@ -1,0 +1,526 @@
+; Agent URI Scheme - ABNF Grammar Specification
+; RFC 5234 compliant (core rules imported)
+; 
+; This grammar defines the syntax for agent identifiers that provide
+; topology-independent identity with capability-based discovery.
+;
+; Example URIs:
+;   agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q
+;   agent://openai.com/tool/code-interpreter/llm_01h455vb4pex5vsknk084sn02q
+;   agent://acme.corp/workflow/approval/invoice/rule_fsm_01h5fskfsk4fpeqwnsyz5hj55t
+;   agent://localhost/debug/test/llm_01h455vb4pex5vsknk084sn02q
+;
+; ============================================================================
+; LENGTH CONSTRAINTS SUMMARY
+; ============================================================================
+;
+; Component            Max Length    Notes
+; -----------------    ----------    -----
+; Total URI            512 chars     Hard limit for practicality
+; Trust root           128 chars     Including port
+; Capability path      256 chars     All segments combined
+; Path segments        32 max        Count limit
+; Each path segment    64 chars      Individual segment
+; Agent-id prefix      63 chars      TypeID spec limit
+; Agent-id suffix      26 chars      Fixed (UUIDv7 in base32)
+; Agent-id total       90 chars      63 + 1 + 26
+;
+; Minimum valid URI example (45 chars):
+;   agent://a.co/x/llm_01h455vb4pex5vsknk084sn02q
+;
+; Maximum practical URI uses most of the 512 char budget across
+; trust-root, capability-path, and agent-id prefix.
+;
+; ============================================================================
+; TOP-LEVEL RULE
+; ============================================================================
+;
+; Maximum URI length: 512 characters
+; This balances practicality (URLs in logs, databases, HTTP headers) with
+; expressiveness (deep capability hierarchies).
+
+agent-uri       = scheme "://" trust-root "/" capability-path "/" agent-id
+                  [ "?" query ] [ "#" fragment ]
+
+                  ; Total length MUST NOT exceed 512 characters
+                  ; Implementations SHOULD reject URIs exceeding this limit
+
+scheme          = "agent"
+
+; ============================================================================
+; URI STRUCTURE
+; ============================================================================
+;
+; The capability-path is everything between trust-root and agent-id:
+;
+;   agent://trust-root/capability-path/agent-id
+;                      └─────────────┘
+;                      all segments between
+;                      trust-root and agent-id
+;
+; The parser identifies the boundary because agent-id is always the final
+; path segment and is recognizable by its TypeID structure:
+;   - Lowercase prefix ending with underscore
+;   - 26-character base32 suffix starting with 0-7
+;
+; Example parse:
+;   agent://acme.corp/workflow/approval/invoice/rule_fsm_01h5fskfsk4fpeqwnsyz5hj55t
+;           └───────┘ └─────────────────────┘ └────────────────────────────────────┘
+;           trust     capability-path         agent-id
+;           root      (3 segments)            (TypeID)
+
+; ============================================================================
+; TRUST ROOT
+; ============================================================================
+;
+; The trust root is the authority that vouches for the agent's identity
+; and capabilities. Typically a domain name, but supports IP literals
+; for development/testing scenarios.
+;
+; LENGTH CONSTRAINTS:
+;   - Maximum 128 characters (including port if present)
+;   - This accommodates long subdomains while leaving room for capability path
+;
+; Examples:
+;   anthropic.com
+;   agents.us-west-2.prod.acme.corp
+;   localhost:8472
+;   [::1]:8472
+
+trust-root      = host [ ":" port ]
+                  ; Total trust-root length MUST NOT exceed 128 characters
+
+host            = domain / ip-literal / ipv4-address
+
+domain          = label *( "." label )
+                  ; Total domain length MUST NOT exceed 253 characters (DNS limit)
+                  
+label           = 1*63( ALPHA / DIGIT / "-" )
+                  ; Labels: 1-63 characters per DNS specification
+                  ; Cannot start or end with hyphen per DNS rules
+                  ; (constraint not encoded in ABNF but MUST be enforced)
+
+ip-literal      = "[" ipv6-address "]"
+
+ipv4-address    = dec-octet "." dec-octet "." dec-octet "." dec-octet
+dec-octet       = DIGIT                 ; 0-9
+                / %x31-39 DIGIT         ; 10-99
+                / "1" 2DIGIT            ; 100-199
+                / "2" %x30-34 DIGIT     ; 200-249
+                / "25" %x30-35          ; 250-255
+
+ipv6-address    = 6( h16 ":" ) ls32
+                / "::" 5( h16 ":" ) ls32
+                / [ h16 ] "::" 4( h16 ":" ) ls32
+                / [ *1( h16 ":" ) h16 ] "::" 3( h16 ":" ) ls32
+                / [ *2( h16 ":" ) h16 ] "::" 2( h16 ":" ) ls32
+                / [ *3( h16 ":" ) h16 ] "::" h16 ":" ls32
+                / [ *4( h16 ":" ) h16 ] "::" ls32
+                / [ *5( h16 ":" ) h16 ] "::" h16
+                / [ *6( h16 ":" ) h16 ] "::"
+
+h16             = 1*4HEXDIG
+ls32            = ( h16 ":" h16 ) / ipv4-address
+
+port            = *DIGIT
+
+; ============================================================================
+; CAPABILITY PATH
+; ============================================================================
+;
+; Hierarchical path describing what the agent DOES. Used for:
+;   1. Human-readable categorization
+;   2. DHT key derivation for capability-based discovery
+;   3. Prefix matching (find all agents under "workflow/approval/*")
+;
+; The capability-path consists of all path segments EXCEPT the final one,
+; which is always the agent-id (a TypeID).
+;
+; LENGTH CONSTRAINTS:
+;   - Maximum 256 characters for the entire capability-path
+;   - Maximum 32 segments
+;   - Each segment: 1-64 characters
+;   - Whichever limit is hit first applies
+;
+; At typical segment lengths of 8-12 characters, this allows hierarchies
+; 20+ levels deep, which exceeds any practical taxonomy need.
+;
+; Path segments are lowercase alphanumeric with hyphens.
+; Minimum one segment required.
+
+capability-path = path-segment *31( "/" path-segment )
+                  ; 1 required + up to 31 more = max 32 segments
+                  ; Total capability-path length MUST NOT exceed 256 characters
+
+path-segment    = 1*64( LOWER / DIGIT / "-" )
+                  ; 1-64 characters per segment
+                  ; Lowercase letters, digits, and hyphens
+                  ; Convention: no leading/trailing hyphens (not enforced)
+
+LOWER           = %x61-7A  ; a-z
+
+; ============================================================================
+; AGENT IDENTIFIER
+; ============================================================================
+;
+; TypeID format per https://github.com/jetify-com/typeid (v0.3.0)
+;
+; Structure: prefix_suffix where:
+;   - prefix: semantic type classification of the agent
+;   - separator: underscore (omitted if prefix empty)
+;   - suffix: base32-encoded UUIDv7 (26 characters)
+;
+; The TypeID encodes three distinct pieces of information:
+;   1. UNIQUE IDENTIFICATION — the UUIDv7 suffix
+;   2. SEMANTIC CLASSIFICATION — the prefix (what the agent IS)
+;   3. TEMPORAL ORDERING — millisecond timestamp in UUIDv7
+;
+; This is orthogonal to the capability path, which encodes what the agent DOES.
+;
+; Examples:
+;   llm_01h455vb4pex5vsknk084sn02q           ; LLM-based agent
+;   llm_chat_01h455vb4pex5vsknk084sn02q      ; LLM-based chat agent
+;   rule_01h455vb4pex5vsknk084sn02q          ; Rule-based agent
+;   human_01h455vb4pex5vsknk084sn02q         ; Human-in-the-loop agent
+;   composite_01h455vb4pex5vsknk084sn02q     ; Meta-agent composed of others
+;
+; Combined with URI path:
+;   agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q
+;   agent://acme.corp/workflow/approval/rule_01h455vb4pex5vsknk084sn02q
+;   agent://legal.co/review/contract/human_01h455vb4pex5vsknk084sn02q
+
+agent-id        = agent-prefix "_" type-suffix
+
+; ============================================================================
+; AGENT PREFIX (Semantic Type Classification)
+; ============================================================================
+;
+; The prefix encodes WHAT THE AGENT IS (its implementation type), not what
+; it does (that's the capability path). This enables queries like:
+;   - "Find all LLM-based agents" → prefix match
+;   - "Find all agents that do chat" → path match  
+;   - "Find all LLM-based chat agents" → both
+;
+; Structure: type-class [ "_" type-subclass [ "_" type-variant ] ]
+;
+; Examples:
+;   llm                 ; Any LLM-based agent
+;   llm_chat            ; LLM specialized for chat
+;   llm_chat_streaming  ; LLM chat with streaming capability
+;   rule                ; Rule/logic-based agent
+;   rule_fsm            ; Finite state machine agent
+;   human               ; Human-in-the-loop
+;   human_async         ; Async human review (email-based, etc.)
+;   composite           ; Orchestrates other agents
+;   composite_pipeline  ; Sequential pipeline orchestrator
+;   composite_router    ; Dynamic routing orchestrator
+
+agent-prefix    = type-class *( "_" type-modifier )
+
+; Primary type classes (extensible, but these are the core set)
+;
+; llm        — Large language model based agent
+; rule       — Deterministic rule/logic based agent  
+; human      — Human-in-the-loop agent
+; composite  — Meta-agent that orchestrates other agents
+; sensor     — Agent that observes/monitors (read-only)
+; actuator   — Agent that effects changes (write-only)
+; hybrid     — Mixed LLM + rule-based reasoning
+;
+type-class      = "llm" / "rule" / "human" / "composite" 
+                / "sensor" / "actuator" / "hybrid"
+                / extension-class
+
+; Allow future extension with any valid TypeID prefix segment
+extension-class = LOWER 1*( LOWER )
+
+; Type modifiers refine the class (optional, may be chained)
+; No digits allowed per TypeID spec
+type-modifier   = 1*( LOWER )
+
+; Prefix constraints (inherited from TypeID spec):
+;   - Max 63 characters total
+;   - Only lowercase letters [a-z] and underscores
+;   - Must start with letter (type-class requirement satisfies this)
+;   - Must end with letter (type-modifier ends with LOWER)
+;   - No digits allowed
+;
+; Valid:   llm, llm_chat, llm_chat_streaming, composite_pipeline_async
+; Invalid: llm_v2 (digit), LLM (uppercase), _llm (leading underscore)
+
+; ============================================================================
+; TYPE SUFFIX (UUIDv7 in Base32)
+; ============================================================================
+;
+; The suffix encodes:
+;   - Bits 0-47: Millisecond Unix timestamp (temporal ordering)
+;   - Bits 48-51: Version (0111 for UUIDv7)
+;   - Bits 52-63: Random or counter (sub-millisecond uniqueness)
+;   - Bits 64-65: Variant (10 for RFC 4122)
+;   - Bits 66-127: Random (global uniqueness)
+;
+; This enables:
+;   - Sorting agents by creation time without metadata lookup
+;   - Identifying deployment cohorts (agents created together)
+;   - Detecting stale registrations (old TypeID still active?)
+;   - Database-friendly K-sortable identifiers
+
+type-suffix     = suffix-first 25( BASE32-TYPEID )
+
+; First character MUST be 0-7 to prevent 130-bit overflow
+; (26 base32 chars = 130 bits, but UUIDv7 is only 128 bits)
+suffix-first    = %x30-37  ; "0" through "7"
+
+; TypeID base32 alphabet (Crockford-derived, strict lowercase)
+; Excludes: i, l, o, u (visually ambiguous characters)
+; Full alphabet: 0123456789abcdefghjkmnpqrstvwxyz
+BASE32-TYPEID   = DIGIT / "a" / "b" / "c" / "d" / "e" / "f" / "g" 
+                / "h" / "j" / "k" / "m" / "n" / "p" / "q" / "r" 
+                / "s" / "t" / "v" / "w" / "x" / "y" / "z"
+
+; ============================================================================
+; OPTIONAL COMPONENTS
+; ============================================================================
+;
+; Query parameters for resolution hints or capability constraints.
+; Fragment for sub-agent or capability subset addressing.
+
+query           = *( query-param [ "&" ] )
+query-param     = param-name "=" param-value
+
+param-name      = 1*( ALPHA / DIGIT / "-" / "_" )
+param-value     = *( ALPHA / DIGIT / "-" / "_" / "." / pct-encoded )
+
+pct-encoded     = "%" HEXDIG HEXDIG
+
+fragment        = *( ALPHA / DIGIT / "-" / "_" / "." / "/" )
+
+; ============================================================================
+; RESERVED QUERY PARAMETERS
+; ============================================================================
+;
+; These are not part of the grammar but are reserved for protocol use:
+;
+;   ?version=<semver>      Capability version constraint
+;   ?attestation=<token>   Inline PASETO attestation
+;   ?resolver=<uri>        Hint for resolution endpoint
+;   ?ttl=<seconds>         Cache TTL hint for resolved endpoint
+;
+; Example with query:
+;   agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q?version=2.1
+
+; ============================================================================
+; HTTP HEADER MAPPING (Resolution Protocol)
+; ============================================================================
+;
+; When resolving agent URIs over HTTP, query parameters MAY be transmitted
+; as headers instead. This provides:
+;   - Cleaner canonical URIs (identifier stays stable)
+;   - Idiomatic HTTP semantics
+;   - Better cache behavior (URI constant, headers vary)
+;   - Sensitive data (tokens) excluded from logs/referer
+;
+; MAPPING TABLE:
+;
+;   Query Parameter          HTTP Header                 Notes
+;   ---------------          -----------                 -----
+;   ?version=2.0             Agent-Version: 2.0         Semver constraint
+;   ?attestation=<token>     Authorization: Bearer <t>  PASETO token
+;   ?resolver=<uri>          Agent-Resolver: <uri>      Resolution hint
+;   ?ttl=300                 Cache-Control: max-age=300 Standard HTTP caching
+;
+; PRECEDENCE RULES:
+;
+;   1. If parameter appears in BOTH query string and header, header wins
+;   2. Query params are the canonical form for non-HTTP contexts (DHT, local)
+;   3. Resolvers MUST support query params; header support is RECOMMENDED
+;
+; EXAMPLES:
+;
+;   Pure URI (self-contained, copy-pasteable):
+;     GET agent://anthropic.com/assistant/chat/llm_01h455vb...?version=2.0
+;
+;   Header equivalent (cleaner, cacheable):
+;     GET agent://anthropic.com/assistant/chat/llm_01h455vb...
+;     Agent-Version: 2.0
+;
+;   Mixed (header overrides):
+;     GET agent://anthropic.com/assistant/chat/llm_01h455vb...?version=1.0
+;     Agent-Version: 2.0
+;     → Resolves as version 2.0 (header precedence)
+;
+;   Sensitive attestation via header (recommended):
+;     GET agent://anthropic.com/assistant/chat/llm_01h455vb...
+;     Authorization: Bearer v4.public.eyJhZ2VudCI6...
+;     → Token not logged in access logs, not leaked via Referer
+;
+; CUSTOM HEADERS:
+;
+;   All agent-specific headers use the "Agent-" prefix:
+;     Agent-Version        Capability version constraint
+;     Agent-Resolver       Resolution endpoint hint
+;     Agent-Request-Id     Correlation ID for tracing
+;     Agent-Trust-Root     Override trust root for federation
+;
+;   Standard HTTP headers are used where semantics align:
+;     Authorization        Bearer token for attestation
+;     Cache-Control        TTL and caching directives
+;     Accept               Response format preferences
+;
+; NON-HTTP RESOLUTION:
+;
+;   For DHT or local resolution where HTTP headers aren't available,
+;   query parameters are the only mechanism. Implementations MUST
+;   support the query parameter form regardless of transport.
+
+; ============================================================================
+; CORE RULES (RFC 5234 Appendix B)
+; ============================================================================
+
+ALPHA           = %x41-5A / %x61-7A    ; A-Z / a-z
+DIGIT           = %x30-39              ; 0-9
+HEXDIG          = DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
+                        / "a" / "b" / "c" / "d" / "e" / "f"
+
+; ============================================================================
+; NORMALIZATION RULES (Prose)
+; ============================================================================
+;
+; For URI comparison and DHT key derivation, the following normalization
+; applies:
+;
+; 1. Scheme is always lowercase: "agent" not "AGENT" or "Agent"
+;
+; 2. Trust root domain is case-insensitive, normalized to lowercase:
+;    "Anthropic.COM" → "anthropic.com"
+;
+; 3. Port is omitted if default (no default port defined for agent scheme,
+;    but implementations may define one, e.g., 8472)
+;
+; 4. Capability path segments are always lowercase (enforced by grammar)
+;
+; 5. Agent ID prefix is always "agent" lowercase
+;
+; 6. Agent ID suffix uses lowercase Crockford Base32
+;
+; 7. Query parameters are sorted lexicographically by name for comparison
+;
+; 8. Empty query ("?") and empty fragment ("#") are stripped
+;
+; 9. Percent-encoding is normalized: uppercase hex digits, decode unreserved
+;    characters
+
+; ============================================================================
+; DHT KEY DERIVATION (Prose)
+; ============================================================================
+;
+; For capability-based discovery, DHT keys are derived as follows:
+;
+; 1. Full agent key:
+;    SHA-256( normalized-uri without query/fragment )
+;
+; 2. Capability prefix key (for "find all agents with capability X"):
+;    SHA-256( "agent://" trust-root "/" capability-path )
+;
+; 3. Trust root key (for "find all agents under trust root X"):
+;    SHA-256( "agent://" trust-root )
+;
+; This enables:
+;   - Exact agent lookup by full URI
+;   - Capability-based discovery by prefix
+;   - Trust root enumeration (with appropriate access controls)
+;
+; The DHT stores:
+;   key → { agent-uri, endpoint-url, attestation-token, ttl, timestamp }
+
+; ============================================================================
+; EXAMPLES
+; ============================================================================
+;
+; The URI structure separates:
+;   - Trust root (who vouches): the authority domain
+;   - Capability (what it does): the path
+;   - Type (what it is): the TypeID prefix
+;   - Identity (which one): the TypeID suffix
+;   - Temporal (when created): encoded in UUIDv7
+;
+; Basic LLM agent doing chat:
+;   agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q
+;
+; LLM agent with chat subtype doing chat:
+;   agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q
+;
+; Rule-based agent doing workflow approval:
+;   agent://acme.corp/workflow/approval/invoice/rule_fsm_01h5fskfsk4fpeqwnsyz5hj55t
+;
+; Human-in-the-loop for legal review:
+;   agent://legal.co/review/contract/human_async_01h455vb4pex5vsknk084sn02q
+;
+; Composite agent orchestrating a pipeline:
+;   agent://platform.io/orchestration/etl/composite_pipeline_01h455vb4pex5vsknk084sn02q
+;
+; Sensor agent monitoring metrics:
+;   agent://ops.internal/monitoring/cpu/sensor_01h455vb4pex5vsknk084sn02q
+;
+; Hybrid agent (LLM + rules) for code review:
+;   agent://dev.tools/review/code/hybrid_01h455vb4pex5vsknk084sn02q
+;
+; With version constraint query param:
+;   agent://openai.com/tool/code-interpreter/llm_01h455vb4pex5vsknk084sn02q?version=2.0
+;
+; Development/local agent:
+;   agent://localhost:8472/debug/test/llm_chat_01h455vb4pex5vsknk084sn02q
+;
+; With fragment for sub-capability:
+;   agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q#summarization
+;
+; Query dimensions enabled by this structure:
+;
+;   "Find all LLM agents"
+;     → match prefix: llm_*
+;
+;   "Find all chat agents"  
+;     → match path: */chat/*
+;
+;   "Find all LLM chat agents under anthropic.com"
+;     → match trust-root: anthropic.com AND prefix: llm* AND path: */chat/*
+;
+;   "Find agents created in last hour"
+;     → decode UUIDv7 timestamp, filter by time range
+;
+;   "Find the oldest agent with capability X"
+;     → capability match + sort by UUIDv7 timestamp ascending
+
+; ============================================================================
+; SECURITY CONSIDERATIONS (Prose)
+; ============================================================================
+;
+; 1. Trust root spoofing: The trust root domain implies authority. Agents
+;    MUST verify attestation tokens are signed by the claimed trust root's
+;    key, not just accept the URI at face value.
+;
+; 2. Capability squatting: Early registrants could claim broad capability
+;    paths. Trust roots SHOULD implement governance for their namespace.
+;
+; 3. DHT poisoning: Malicious nodes could advertise false agent endpoints.
+;    Attestation verification MUST occur after resolution, before use.
+;
+; 4. Privacy: Capability paths reveal agent function. Agents requiring
+;    anonymity should use opaque capability paths or encrypted lookup.
+;
+; 5. Enumeration: Prefix-based discovery enables capability enumeration.
+;    Trust roots may restrict prefix queries to authorized requesters.
+
+; ============================================================================
+; IANA CONSIDERATIONS (Prose)
+; ============================================================================
+;
+; This specification requests registration of the "agent" URI scheme
+; in the "Uniform Resource Identifier (URI) Schemes" registry.
+;
+; Scheme name: agent
+; Status: Permanent
+; Applications/protocols: Multi-agent systems, A2A protocol
+; Contact: [paper authors]
+; Change controller: [standards body or authors]
+; Reference: [this specification]

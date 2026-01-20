@@ -1,4 +1,20 @@
 //! Agent identifier type using `TypeID` format.
+//!
+//! # Grammar Reference
+//!
+//! The agent ID grammar is defined in `grammar.abnf`:
+//!
+//! ```abnf
+//! agent-id     = agent-prefix "_" type-suffix
+//! agent-prefix = type-class *( "_" type-modifier )
+//! type-class   = "llm" / "rule" / "human" / "composite"
+//!              / "sensor" / "actuator" / "hybrid"
+//!              / extension-class
+//! type-suffix  = suffix-first 25( BASE32-TYPEID )
+//! suffix-first = %x30-37  ; "0" through "7"
+//! ```
+//!
+//! Maximum agent ID length: 90 characters (63 prefix + 1 underscore + 26 suffix).
 
 use std::cmp::Ordering;
 use std::fmt;

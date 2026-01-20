@@ -1,4 +1,16 @@
 //! Main agent URI type.
+//!
+//! # Grammar Reference
+//!
+//! The URI grammar is defined in `grammar.abnf` at the crate root:
+//!
+//! ```abnf
+//! agent-uri = scheme "://" trust-root "/" capability-path "/" agent-id
+//!             [ "?" query ] [ "#" fragment ]
+//! scheme    = "agent"
+//! ```
+//!
+//! Maximum URI length: 512 characters.
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -586,7 +598,10 @@ mod tests {
         let input = "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q#summarization";
         let uri = AgentUri::parse(input).unwrap();
 
-        assert_eq!(uri.fragment().map(|f| f.as_str()), Some("summarization"));
+        assert_eq!(
+            uri.fragment().map(crate::Fragment::as_str),
+            Some("summarization")
+        );
     }
 
     #[test]

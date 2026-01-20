@@ -61,6 +61,18 @@
 //! | Each segment | 64 chars |
 //! | Agent ID prefix | 63 chars |
 //! | Agent ID suffix | 26 chars (fixed) |
+//!
+//! # Grammar Specification
+//!
+//! This crate implements the ABNF grammar defined in `grammar.abnf` at the crate root.
+//! The grammar follows RFC 5234 (ABNF) and specifies:
+//!
+//! - **URI structure**: `agent://<trust-root>/<capability-path>/<agent-id>[?query][#fragment]`
+//! - **Trust root**: Domain names, IPv4, and IPv6 addresses with optional ports
+//! - **Capability path**: Hierarchical path with 1-32 segments
+//! - **Agent ID**: `TypeID` format with semantic prefix and `UUIDv7` suffix
+//!
+//! See `grammar.abnf` for the complete formal specification.
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]

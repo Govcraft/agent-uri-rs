@@ -1,4 +1,17 @@
 //! Trust root type for agent authorities.
+//!
+//! # Grammar Reference
+//!
+//! The trust root grammar is defined in `grammar.abnf`:
+//!
+//! ```abnf
+//! trust-root = host [ ":" port ]
+//! host       = domain / ip-literal / ipv4-address
+//! domain     = label *( "." label )
+//! label      = 1*63( ALPHA / DIGIT / "-" )
+//! ```
+//!
+//! Maximum trust root length: 128 characters (including port).
 
 use std::cmp::Ordering;
 use std::fmt;

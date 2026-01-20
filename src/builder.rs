@@ -645,7 +645,10 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(uri.fragment().map(|f| f.as_str()), Some("summarization"));
+        assert_eq!(
+            uri.fragment().map(Fragment::as_str),
+            Some("summarization")
+        );
     }
 
     #[test]
@@ -663,7 +666,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(uri.query().version(), Some("2.0"));
-        assert_eq!(uri.fragment().map(|f| f.as_str()), Some("test"));
+        assert_eq!(uri.fragment().map(Fragment::as_str), Some("test"));
     }
 
     #[test]

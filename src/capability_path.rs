@@ -1,4 +1,19 @@
 //! Capability path type for agent capabilities.
+//!
+//! # Grammar Reference
+//!
+//! The capability path grammar is defined in `grammar.abnf`:
+//!
+//! ```abnf
+//! capability-path = path-segment *31( "/" path-segment )
+//! path-segment    = 1*64( LOWER / DIGIT / "-" )
+//! LOWER           = %x61-7A  ; a-z
+//! ```
+//!
+//! Constraints:
+//! - Maximum 256 characters total
+//! - Maximum 32 segments
+//! - Each segment: 1-64 characters
 
 use std::cmp::Ordering;
 use std::fmt;
