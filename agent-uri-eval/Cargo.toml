@@ -21,3 +21,11 @@ proptest = "1"
 
 [lints]
 workspace = true
+
+[[example]]
+name = "run_expressiveness"
+path = "examples/run_expressiveness.rs"
+
+[[example]]
+name = "run_discovery"
+path = "examples/run_discovery.rs"

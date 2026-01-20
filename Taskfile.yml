@@ -1,0 +1,95 @@
+# Taskfile for agent-uri repository
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  RESULTS_DIR: results
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # Evaluation tasks
+  eval-expressiveness:
+    desc: Run capability expressiveness evaluation (Eval 1)
+    cmds:
+      - mkdir -p {{.RESULTS_DIR}}
+      - cargo run --release --package agent-uri-eval --example run_expressiveness
+
+  eval-discovery:
+    desc: Run discovery precision evaluation (Eval 2)
+    cmds:
+      - mkdir -p {{.RESULTS_DIR}}
+      - cargo run --release --package agent-uri-eval --example run_discovery
+
+  eval-all:
+    desc: Run all evaluations
+    cmds:
+      - task: eval-expressiveness
+      - task: eval-discovery
+
+  # Benchmark tasks
+  bench:
+    desc: Run all Criterion benchmarks
+    cmds:
+      - cargo bench --workspace
+
+  # Formal verification
+  kani:
+    desc: Run Kani formal proofs
+    cmds:
+      - cargo kani --workspace
+
+  # Memory safety checks
+  miri:
+    desc: Run Miri memory safety checks
+    cmds:
+      - cargo +nightly miri test --workspace
+
+  # Development tasks
+  check:
+    desc: Run cargo check on all packages
+    cmds:
+      - cargo check --workspace --all-targets
+
+  test:
+    desc: Run all tests
+    cmds:
+      - cargo nextest run --workspace
+
+  clippy:
+    desc: Run clippy with warnings as errors
+    cmds:
+      - cargo clippy --workspace --all-targets -- -D warnings
+
+  fmt:
+    desc: Format all code
+    cmds:
+      - cargo fmt --all
+
+  fmt-check:
+    desc: Check formatting without making changes
+    cmds:
+      - cargo fmt --all -- --check
+
+  # CI tasks
+  ci:
+    desc: Run all CI checks (fmt, clippy, test)
+    cmds:
+      - task: fmt-check
+      - task: clippy
+      - task: test
+
+  # Clean tasks
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - cargo clean
+
+  clean-results:
+    desc: Clean evaluation results
+    cmds:
+      - rm -rf {{.RESULTS_DIR}}
