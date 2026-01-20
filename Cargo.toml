@@ -4,6 +4,7 @@ members = [
     "agent-uri",
     "agent-uri-attestation",
     "agent-uri-dht",
+    "agent-uri-eval",
 ]
 
 [workspace.package]
