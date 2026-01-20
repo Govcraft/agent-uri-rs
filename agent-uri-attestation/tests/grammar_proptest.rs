@@ -3,11 +3,20 @@
 //! These tests generate random valid claims and verify they round-trip
 //! through issue/verify, ensuring the grammar accurately describes
 //! all valid tokens.
+//!
+//! # Integration Roundtrip Tests
+//!
+//! This module also includes integration tests that verify the full
+//! issue/verify roundtrip with randomly generated valid agent URIs
+//! and capabilities. These tests ensure the proven verification logic
+//! composes correctly with real PASETO crypto.
 
 use std::time::Duration;
 
 use agent_uri::AgentUri;
-use agent_uri_attestation::{AttestationClaimsBuilder, Issuer, SigningKey, Verifier};
+use agent_uri_attestation::{
+    AttestationClaimsBuilder, AttestationError, Issuer, SigningKey, Verifier,
+};
 use proptest::prelude::*;
 
 // ============================================================================
@@ -46,6 +55,82 @@ fn path_segment_strategy() -> impl Strategy<Value = String> {
 /// Generate valid audience strings per grammar.abnf
 fn audience_strategy() -> impl Strategy<Value = String> {
     prop::string::string_regex("[a-z]{2,10}\\.[a-z]{2,10}").expect("valid regex")
+}
+
+// ============================================================================
+// INTEGRATION TEST STRATEGIES
+// ============================================================================
+
+/// Generate a valid parsed AgentUri instance.
+///
+/// Uses simpler strategies than the exhaustive grammar tests to:
+/// 1. Reduce test case rejection rate
+/// 2. Focus on integration testing, not grammar edge cases
+/// 3. Keep test execution time reasonable
+fn valid_agent_uri_strategy() -> impl Strategy<Value = AgentUri> {
+    // Simple domain: 2-8 lowercase letters + TLD
+    let domain = prop::string::string_regex("[a-z]{2,8}\\.[a-z]{2,4}").expect("valid regex");
+
+    // Capability path: 1-4 segments, each 2-8 chars
+    let segment = prop::string::string_regex("[a-z][a-z0-9-]{1,7}").expect("valid regex");
+    let path = prop::collection::vec(segment, 1..=4).prop_map(|segs| segs.join("/"));
+
+    // Agent ID: valid type class + TypeID suffix
+    // TypeID suffix: first char 0-7, rest are base32 (excludes i, l, o, u)
+    let type_class = prop::sample::select(vec![
+        "llm", "rule", "human", "composite", "sensor", "actuator",
+    ]);
+    let suffix =
+        prop::string::string_regex("[0-7][0-9a-hjkmnp-tv-z]{25}").expect("valid base32 suffix");
+    let agent_id = (type_class, suffix).prop_map(|(cls, suf)| format!("{cls}_{suf}"));
+
+    (domain, path, agent_id).prop_filter_map("URI must parse", |(d, p, id)| {
+        let uri_str = format!("agent://{d}/{p}/{id}");
+        AgentUri::parse(&uri_str).ok()
+    })
+}
+
+/// Generate optional additional (non-covering) capabilities.
+///
+/// These capabilities use a distinctive prefix ("zzz") that will not
+/// accidentally match typical test URIs, ensuring they don't affect
+/// capability coverage tests.
+fn noise_capabilities() -> impl Strategy<Value = Vec<String>> {
+    prop::collection::vec(
+        prop::string::string_regex("zzz[a-z]{2,5}[0-9]{1,2}").expect("valid noise capability"),
+        0..3,
+    )
+}
+
+/// Build a capability list that covers the path at the given prefix depth.
+///
+/// Given a URI with capability path "a/b/c" and prefix_depth=2,
+/// this returns ["a/b"] plus any noise capabilities.
+///
+/// # Arguments
+///
+/// * `uri` - The agent URI whose capability path should be covered
+/// * `prefix_depth` - How many segments of the path to include (1 = root only)
+/// * `noise` - Additional non-covering capabilities to include
+fn build_covering_capabilities(
+    uri: &AgentUri,
+    prefix_depth: usize,
+    noise: Vec<String>,
+) -> Vec<String> {
+    let segments: Vec<&str> = uri
+        .capability_path()
+        .segments()
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
+
+    // Clamp prefix_depth to valid range
+    let depth = prefix_depth.min(segments.len()).max(1);
+    let prefix = segments[..depth].join("/");
+
+    let mut caps = vec![prefix];
+    caps.extend(noise);
+    caps
 }
 
 // ============================================================================
@@ -388,4 +473,228 @@ fn localhost_with_port_trust_root() {
 
     assert_eq!(claims.iss, "localhost:8472");
     assert_eq!(claims.trust_root(), Some("localhost:8472"));
+}
+
+// ============================================================================
+// INTEGRATION ROUNDTRIP TESTS
+// ============================================================================
+//
+// These tests verify the full issue/verify roundtrip with randomly generated
+// valid agent URIs and capabilities. They test that the proven verification
+// logic composes correctly with real PASETO crypto.
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(200))]
+
+    /// Full integration roundtrip with real PASETO crypto.
+    ///
+    /// Properties verified:
+    /// 1. Token issuance succeeds for valid URIs
+    /// 2. Token starts with correct PASETO header
+    /// 3. Verification succeeds with correct key
+    /// 4. Claims match issued data
+    #[test]
+    fn integration_roundtrip(uri in valid_agent_uri_strategy()) {
+        // Setup: generate fresh keypair
+        let signing_key = SigningKey::generate();
+        let trust_root = uri.trust_root().as_str().to_string();
+
+        // Issuer bound to URI's trust root
+        let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
+
+        // Issue token with URI's capability path as capability
+        let capability = uri.capability_path().as_str().to_string();
+        let token = issuer.issue(&uri, vec![capability.clone()]).unwrap();
+
+        // Token format check
+        prop_assert!(token.starts_with("v4.public."));
+
+        // Verifier with matching trust root
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
+
+        // Verify succeeds
+        let claims = verifier.verify(&token).unwrap();
+
+        // Claims match
+        prop_assert_eq!(claims.agent_uri, uri.to_string());
+        prop_assert_eq!(claims.iss, trust_root);
+        prop_assert_eq!(claims.capabilities, vec![capability]);
+    }
+
+    /// Integration roundtrip with capability coverage verification.
+    ///
+    /// Tests verify_for_capability with randomly generated covering capabilities.
+    /// Capability coverage uses prefix semantics: a capability C covers path P if
+    /// C == P or P.starts_with(C + "/").
+    #[test]
+    fn integration_roundtrip_with_coverage(
+        uri in valid_agent_uri_strategy(),
+        prefix_depth in 1usize..=4,
+        noise in noise_capabilities(),
+    ) {
+        let signing_key = SigningKey::generate();
+        let trust_root = uri.trust_root().as_str().to_string();
+        let depth = uri.capability_path().depth();
+
+        // Clamp prefix_depth to valid range for this URI
+        let actual_depth = prefix_depth.min(depth);
+        let capabilities = build_covering_capabilities(&uri, actual_depth, noise);
+
+        let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
+        let token = issuer.issue(&uri, capabilities.clone()).unwrap();
+
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
+
+        // Basic verify succeeds
+        let claims = verifier.verify(&token).unwrap();
+        prop_assert_eq!(claims.capabilities, capabilities);
+
+        // verify_for_uri succeeds
+        let uri_claims = verifier.verify_for_uri(&token, &uri).unwrap();
+        prop_assert_eq!(uri_claims.agent_uri, uri.to_string());
+
+        // verify_for_capability succeeds (capabilities cover the path)
+        let required = uri.capability_path().clone();
+        let cap_claims = verifier.verify_for_capability(&token, &uri, &required).unwrap();
+        prop_assert_eq!(cap_claims.iss, trust_root);
+    }
+
+    /// Verifies capability coverage at each prefix depth.
+    ///
+    /// For a path like "a/b/c", tests coverage with:
+    /// - depth 1: "a" covers "a/b/c"
+    /// - depth 2: "a/b" covers "a/b/c"
+    /// - depth 3: "a/b/c" covers "a/b/c" (exact match)
+    #[test]
+    fn prefix_coverage_all_depths(uri in valid_agent_uri_strategy()) {
+        let signing_key = SigningKey::generate();
+        let trust_root = uri.trust_root().as_str().to_string();
+
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
+
+        let segments: Vec<&str> = uri
+            .capability_path()
+            .segments()
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+
+        // Test each prefix depth
+        for prefix_depth in 1..=segments.len() {
+            let prefix = segments[..prefix_depth].join("/");
+            let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
+            let token = issuer.issue(&uri, vec![prefix]).unwrap();
+
+            // Must succeed - prefix always covers path
+            let required = uri.capability_path().clone();
+            let result = verifier.verify_for_capability(&token, &uri, &required);
+            prop_assert!(
+                result.is_ok(),
+                "Prefix depth {} should cover path: {:?}",
+                prefix_depth,
+                result
+            );
+        }
+    }
+
+    /// Verifies that non-covering capabilities are rejected.
+    ///
+    /// Properties:
+    /// - Token issuance and basic verify succeed
+    /// - verify_for_capability fails with InsufficientCapabilities
+    #[test]
+    fn non_covering_capabilities_rejected(uri in valid_agent_uri_strategy()) {
+        let signing_key = SigningKey::generate();
+        let trust_root = uri.trust_root().as_str().to_string();
+
+        // Issue with unrelated capability
+        let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
+        let token = issuer.issue(&uri, vec!["zzz-unrelated".to_string()]).unwrap();
+
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
+
+        // Basic verify succeeds
+        prop_assert!(verifier.verify(&token).is_ok());
+
+        // But capability check fails
+        let required = uri.capability_path().clone();
+        let result = verifier.verify_for_capability(&token, &uri, &required);
+        prop_assert!(
+            matches!(result, Err(AttestationError::InsufficientCapabilities { .. })),
+            "Expected InsufficientCapabilities, got: {:?}",
+            result
+        );
+    }
+
+    /// Verifies that URI mismatch is detected.
+    ///
+    /// Issue token for URI A, verify against URI B -> should fail.
+    #[test]
+    fn uri_mismatch_detected(
+        uri_a in valid_agent_uri_strategy(),
+        uri_b in valid_agent_uri_strategy(),
+    ) {
+        // Skip if URIs happen to be identical
+        prop_assume!(uri_a.to_string() != uri_b.to_string());
+
+        let signing_key = SigningKey::generate();
+        // Use uri_a's trust root for issuer
+        let trust_root_a = uri_a.trust_root().as_str().to_string();
+        let trust_root_b = uri_b.trust_root().as_str().to_string();
+
+        // Both trust roots must be registered for fair test
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root(&trust_root_a, signing_key.verifying_key());
+        if trust_root_a != trust_root_b {
+            verifier.add_trusted_root(&trust_root_b, signing_key.verifying_key());
+        }
+
+        let issuer = Issuer::new(&trust_root_a, signing_key.clone(), Duration::from_secs(3600));
+        let token = issuer.issue(&uri_a, vec![]).unwrap();
+
+        // Verify against different URI should fail
+        let result = verifier.verify_for_uri(&token, &uri_b);
+
+        // Either UriMismatch or TrustRootMismatch if trust roots differ
+        prop_assert!(
+            matches!(
+                result,
+                Err(AttestationError::UriMismatch { .. })
+                    | Err(AttestationError::TrustRootMismatch { .. })
+            ),
+            "Expected mismatch error, got: {:?}",
+            result
+        );
+    }
+
+    /// Verifies that wrong signing key is rejected.
+    #[test]
+    fn wrong_key_rejected(uri in valid_agent_uri_strategy()) {
+        let signing_key_1 = SigningKey::generate();
+        let signing_key_2 = SigningKey::generate();
+        let trust_root = uri.trust_root().as_str().to_string();
+
+        // Issue with key 1
+        let issuer = Issuer::new(&trust_root, signing_key_1, Duration::from_secs(3600));
+        let token = issuer.issue(&uri, vec![]).unwrap();
+
+        // Verify with key 2
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root(&trust_root, signing_key_2.verifying_key());
+
+        let result = verifier.verify(&token);
+        prop_assert!(
+            matches!(
+                result,
+                Err(AttestationError::InvalidSignature)
+                    | Err(AttestationError::InvalidTokenFormat { .. })
+            ),
+            "Expected signature error, got: {:?}",
+            result
+        );
+    }
 }
