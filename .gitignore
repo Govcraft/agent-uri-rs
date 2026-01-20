@@ -9,3 +9,6 @@
 
 # Rust
 target/
+
+# Evaluation results (regenerated via task eval-*)
+results/

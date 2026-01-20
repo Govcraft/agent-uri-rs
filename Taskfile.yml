@@ -14,16 +14,10 @@ tasks:
 
   # Evaluation tasks
   eval-expressiveness:
-    desc: Run capability expressiveness evaluation (Eval 1) with synthetic data
+    desc: Run capability expressiveness evaluation (Eval 1)
     cmds:
       - mkdir -p {{.RESULTS_DIR}}
       - cargo run --release --package agent-uri-eval --example run_expressiveness
-
-  eval-real-corpus:
-    desc: Run capability expressiveness evaluation (Eval 1) with real corpus
-    cmds:
-      - mkdir -p {{.RESULTS_DIR}}
-      - cargo run --release --package agent-uri-eval --example run_real_corpus
 
   eval-discovery:
     desc: Run discovery precision evaluation (Eval 2)
@@ -35,7 +29,6 @@ tasks:
     desc: Run all evaluations
     cmds:
       - task: eval-expressiveness
-      - task: eval-real-corpus
       - task: eval-discovery
 
   # Benchmark tasks
