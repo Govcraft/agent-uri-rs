@@ -25,11 +25,18 @@ tasks:
       - mkdir -p {{.RESULTS_DIR}}
       - cargo run --release --package agent-uri-eval --example run_discovery
 
+  eval-scalability:
+    desc: Run scalability microbenchmarks (Eval 5)
+    cmds:
+      - mkdir -p {{.RESULTS_DIR}}
+      - cargo bench --workspace 2>&1 | tee {{.RESULTS_DIR}}/eval5_scalability.txt
+
   eval-all:
     desc: Run all evaluations
     cmds:
       - task: eval-expressiveness
       - task: eval-discovery
+      - task: eval-scalability
 
   # Benchmark tasks
   bench:
