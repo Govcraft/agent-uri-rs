@@ -30,13 +30,13 @@ pub(crate) fn index_as_f64(index: usize) -> f64 {
 
 /// Converts a non-negative f64 to usize for bin indexing.
 ///
-/// Returns `fallback` if the value is negative, infinite, NaN, or too large.
+/// Returns 0 if the value is negative, infinite, NaN, or too large.
 ///
 /// This function intentionally truncates the f64 to get a bin index.
 /// The value is first validated to be in a safe range.
 #[inline]
 fn f64_to_bin_index(value: f64, max_bin: usize) -> usize {
-    // Handle special cases
+    // Handle special cases: non-finite or negative values get bin 0
     if !value.is_finite() || value < 0.0 {
         return 0;
     }
@@ -44,14 +44,19 @@ fn f64_to_bin_index(value: f64, max_bin: usize) -> usize {
     // Convert max_bin to f64 for comparison (safe since max_bin is typically small)
     let max_f64 = count_as_f64(max_bin);
 
-    // Clamp to valid range and convert
+    // Clamp to valid range [0, max_bin]
     let clamped = value.min(max_f64);
 
-    // Safe integer conversion: we know clamped is in [0, max_bin] which fits in usize
-    // Using to_bits and back would be overkill; instead we rely on the bounds check
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let result = clamped as usize;
-    result.min(max_bin)
+    // Safe conversion using saturating conversion from f64 to usize
+    // We iterate through possible u32 values to find the floor
+    // This is simple and obviously correct, though not optimized
+    for candidate in 0..=max_bin {
+        let candidate_f64 = count_as_f64(candidate);
+        if candidate_f64 > clamped {
+            return if candidate > 0 { candidate - 1 } else { 0 };
+        }
+    }
+    max_bin
 }
 
 use crate::error::MappingError;

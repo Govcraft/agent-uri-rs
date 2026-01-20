@@ -13,6 +13,8 @@ pub enum ToolSource {
     OpenAi,
     /// `HuggingFace` Transformers Agents.
     HuggingFace,
+    /// Smolagents (`HuggingFace` successor to `transformers.agents`).
+    Smolagents,
     /// Synthetic/test data.
     Synthetic,
 }
@@ -24,6 +26,7 @@ impl std::fmt::Display for ToolSource {
             Self::Mcp => write!(f, "mcp"),
             Self::OpenAi => write!(f, "openai"),
             Self::HuggingFace => write!(f, "huggingface"),
+            Self::Smolagents => write!(f, "smolagents"),
             Self::Synthetic => write!(f, "synthetic"),
         }
     }
@@ -168,6 +171,7 @@ mod tests {
         assert_eq!(ToolSource::Mcp.to_string(), "mcp");
         assert_eq!(ToolSource::OpenAi.to_string(), "openai");
         assert_eq!(ToolSource::HuggingFace.to_string(), "huggingface");
+        assert_eq!(ToolSource::Smolagents.to_string(), "smolagents");
         assert_eq!(ToolSource::Synthetic.to_string(), "synthetic");
     }
 }

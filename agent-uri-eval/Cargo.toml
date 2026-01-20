@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-eval"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 description = "Evaluation infrastructure for the Agent Identity URI Scheme paper"
@@ -18,6 +18,7 @@ rand_chacha = "0.3"
 
 [dev-dependencies]
 proptest = "1"
+tempfile = "3.24.0"
 
 [lints]
 workspace = true
@@ -29,3 +30,7 @@ path = "examples/run_expressiveness.rs"
 [[example]]
 name = "run_discovery"
 path = "examples/run_discovery.rs"
+
+[[example]]
+name = "run_real_corpus"
+path = "examples/run_real_corpus.rs"

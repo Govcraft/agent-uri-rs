@@ -1,0 +1,1238 @@
+{
+  "metadata": {
+    "source": "mcp",
+    "extraction_date": "2026-01-20T20:04:57.398079+00:00",
+    "tool_count": 79,
+    "extractor_version": "1.0.0",
+    "github_repo": "modelcontextprotocol/servers",
+    "notes": "Extracted from official MCP reference servers via TypeScript parsing"
+  },
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "read",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "read_text_file",
+      "description": "Read the complete contents of a file from the file system as text.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "tail",
+          "type": "number",
+          "required": false,
+          "description": "If provided, returns only the last N lines of the file"
+        },
+        {
+          "name": "head",
+          "type": "number",
+          "required": false,
+          "description": "If provided, returns only the first N lines of the file"
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "read",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "read_media_file",
+      "description": "Read an image or audio file. Returns the base64 encoded data and MIME type.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "read",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "read_multiple_files",
+      "description": "Read the contents of multiple files simultaneously. This is more",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "paths",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "read",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "write_file",
+      "description": "Create a new file or completely overwrite an existing file with new content.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "write",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "edit_file",
+      "description": "Make line-based edits to a text file. Each edit replaces exact line sequences",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "edits",
+          "type": "array",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "newText",
+          "type": "string",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "filesystem"
+      ]
+    },
+    {
+      "name": "create_directory",
+      "description": "Create a new directory or ensure a directory exists. Can create multiple",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "create",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "list_directory",
+      "description": "Get a detailed listing of all files and directories in a specified path.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "list",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "list_directory_with_sizes",
+      "description": "Get a detailed listing of all files and directories in a specified path, including sizes.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "sortBy",
+          "type": "enum",
+          "required": false,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "list",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "directory_tree",
+      "description": "Get a recursive tree view of files and directories as a JSON structure.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "excludePatterns",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "filesystem"
+      ]
+    },
+    {
+      "name": "move_file",
+      "description": "Move or rename files and directories. Can move files between directories",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "source",
+          "type": "string",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "destination",
+          "type": "string",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "filesystem"
+      ]
+    },
+    {
+      "name": "search_files",
+      "description": "Recursively search for files and directories matching a pattern.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "pattern",
+          "type": "string",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "excludePatterns",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "search",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "get_file_info",
+      "description": "Retrieve detailed metadata about a file or directory. Returns comprehensive",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "filesystem"
+      ]
+    },
+    {
+      "name": "list_allowed_directories",
+      "description": "Returns the list of directories that this server is allowed to access.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-filesystem",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "list",
+        "filesystem"
+      ]
+    },
+    {
+      "name": "create_entities",
+      "description": "Create multiple new entities in the knowledge graph",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-memory",
+      "category": "memory",
+      "parameters": [
+        {
+          "name": "entities",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "create",
+        "memory"
+      ]
+    },
+    {
+      "name": "create_relations",
+      "description": "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-memory",
+      "category": "memory",
+      "parameters": [
+        {
+          "name": "relations",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "create",
+        "memory"
+      ]
+    },
+    {
+      "name": "add_observations",
+      "description": "Add new observations to existing entities in the knowledge graph",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-memory",
+      "category": "memory",
+      "parameters": [
+        {
+          "name": "observations",
+          "type": "array",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "contents",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "memory"
+      ]
+    },
+    {
+      "name": "delete_entities",
+      "description": "Delete multiple entities and their associated relations from the knowledge graph",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-memory",
+      "category": "memory",
+      "parameters": [
+        {
+          "name": "entityNames",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "delete",
+        "memory"
+      ]
+    },
+    {
+      "name": "delete_observations",
+      "description": "Delete specific observations from entities in the knowledge graph",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-memory",
+      "category": "memory",
+      "parameters": [
+        {
+          "name": "deletions",
+          "type": "array",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "observations",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "delete",
+        "memory"
+      ]
+    },
+    {
+      "name": "delete_relations",
+      "description": "Delete multiple relations from the knowledge graph",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-memory",
+      "category": "memory",
+      "parameters": [
+        {
+          "name": "relations",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "delete",
+        "memory"
+      ]
+    },
+    {
+      "name": "read_graph",
+      "description": "Read the entire knowledge graph",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-memory",
+      "category": "memory",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "read",
+        "memory"
+      ]
+    },
+    {
+      "name": "search_nodes",
+      "description": "Search for nodes in the knowledge graph based on a query",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-memory",
+      "category": "memory",
+      "parameters": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "search",
+        "memory"
+      ]
+    },
+    {
+      "name": "open_nodes",
+      "description": "Open specific nodes in the knowledge graph by their names",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-memory",
+      "category": "memory",
+      "parameters": [
+        {
+          "name": "names",
+          "type": "array",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "memory"
+      ]
+    },
+    {
+      "name": "sequentialthinking",
+      "description": "`A detailed tool for dynamic and reflective problem-solving through thoughts. This tool helps analyze problems through a flexible thinking process that can adapt and evolve. Each thought can build on",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-sequentialthinking",
+      "category": "sequentialthinking",
+      "parameters": [
+        {
+          "name": "thought",
+          "type": "string",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "nextThoughtNeeded",
+          "type": "boolean",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "thoughtNumber",
+          "type": "number",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "totalThoughts",
+          "type": "number",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "isRevision",
+          "type": "boolean",
+          "required": false,
+          "description": "Whether this revises previous thinking"
+        },
+        {
+          "name": "revisesThought",
+          "type": "number",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "branchFromThought",
+          "type": "number",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "branchId",
+          "type": "string",
+          "required": false,
+          "description": "Branch identifier"
+        },
+        {
+          "name": "needsMoreThoughts",
+          "type": "boolean",
+          "required": false,
+          "description": "If more thoughts are needed"
+        }
+      ],
+      "return_type": "object",
+      "tags": [
+        "sequentialthinking"
+      ]
+    },
+    {
+      "name": "create_or_update_file",
+      "description": "Create or update a single file in a GitHub repository",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "search_repositories",
+      "description": "Search for GitHub repositories",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "create_repository",
+      "description": "Create a new GitHub repository in your account",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "get_file_contents",
+      "description": "Get the contents of a file or directory from a GitHub repository",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "push_files",
+      "description": "Push multiple files to a GitHub repository in a single commit",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "create_issue",
+      "description": "Create a new issue in a GitHub repository",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "create_pull_request",
+      "description": "Create a new pull request in a GitHub repository",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "fork_repository",
+      "description": "Fork a GitHub repository to your account or specified organization",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "create_branch",
+      "description": "Create a new branch in a GitHub repository",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "list_commits",
+      "description": "Get list of commits of a branch in a GitHub repository",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "list_issues",
+      "description": "List issues in a GitHub repository with filtering options",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "update_issue",
+      "description": "Update an existing issue in a GitHub repository",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "add_issue_comment",
+      "description": "Add a comment to an existing issue",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "search_code",
+      "description": "Search for code across GitHub repositories",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "search_issues",
+      "description": "Search for issues and pull requests across GitHub repositories",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "search_users",
+      "description": "Search for users on GitHub",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "get_issue",
+      "description": "Get details of a specific issue in a GitHub repository.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "get_pull_request",
+      "description": "Get details of a specific pull request",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "list_pull_requests",
+      "description": "List and filter repository pull requests",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "create_pull_request_review",
+      "description": "Create a review on a pull request",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "merge_pull_request",
+      "description": "Merge a pull request",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "get_pull_request_files",
+      "description": "Get the list of files changed in a pull request",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "get_pull_request_status",
+      "description": "Get the combined status of all status checks for a pull request",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "update_pull_request_branch",
+      "description": "Update a pull request branch with the latest changes from the base branch",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "get_pull_request_comments",
+      "description": "Get the review comments on a pull request",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "get_pull_request_reviews",
+      "description": "Get the reviews on a pull request",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-github",
+      "category": "github",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "github"
+      ]
+    },
+    {
+      "name": "create_merge_request",
+      "description": "Create a new merge request in a GitLab project",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-gitlab",
+      "category": "gitlab",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "gitlab"
+      ]
+    },
+    {
+      "name": "slack_list_channels",
+      "description": "List public or pre-defined channels in the workspace with pagination",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-slack",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "slack_post_message",
+      "description": "Post a new message to a Slack channel",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-slack",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "slack_reply_to_thread",
+      "description": "Reply to a specific message thread in Slack",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-slack",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "slack_add_reaction",
+      "description": "Add a reaction emoji to a message",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-slack",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "slack_get_channel_history",
+      "description": "Get recent messages from a channel",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-slack",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "slack_get_thread_replies",
+      "description": "Get all replies in a message thread",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-slack",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "slack_get_users",
+      "description": "Get a list of all users in the workspace with their basic profile information",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-slack",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "slack_get_user_profile",
+      "description": "Get detailed profile information for a specific user",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-slack",
+      "category": "slack",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "slack"
+      ]
+    },
+    {
+      "name": "query",
+      "description": "Run a read-only SQL query",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-postgres",
+      "category": "postgres",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "postgres"
+      ]
+    },
+    {
+      "name": "search",
+      "description": "Search for files in Google Drive",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-gdrive",
+      "category": "gdrive",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "gdrive"
+      ]
+    },
+    {
+      "name": "brave_web_search",
+      "description": "Performs a web search using the Brave Search API, ideal for general queries, news, articles, and online content. ",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-brave-search",
+      "category": "brave-search",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "brave-search"
+      ]
+    },
+    {
+      "name": "brave_local_search",
+      "description": "Searches for local businesses and places using Brave",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-brave-search",
+      "category": "brave-search",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "brave-search"
+      ]
+    },
+    {
+      "name": "puppeteer_navigate",
+      "description": "Navigate to a URL",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-puppeteer",
+      "category": "puppeteer",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "puppeteer"
+      ]
+    },
+    {
+      "name": "puppeteer_screenshot",
+      "description": "Take a screenshot of the current page or a specific element",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-puppeteer",
+      "category": "puppeteer",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "puppeteer"
+      ]
+    },
+    {
+      "name": "puppeteer_click",
+      "description": "Click an element on the page",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-puppeteer",
+      "category": "puppeteer",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "puppeteer"
+      ]
+    },
+    {
+      "name": "puppeteer_fill",
+      "description": "Fill out an input field",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-puppeteer",
+      "category": "puppeteer",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "puppeteer"
+      ]
+    },
+    {
+      "name": "puppeteer_select",
+      "description": "Select an element on the page with Select tag",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-puppeteer",
+      "category": "puppeteer",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "puppeteer"
+      ]
+    },
+    {
+      "name": "puppeteer_hover",
+      "description": "Hover an element on the page",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-puppeteer",
+      "category": "puppeteer",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "puppeteer"
+      ]
+    },
+    {
+      "name": "puppeteer_evaluate",
+      "description": "Execute JavaScript in the browser console",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-puppeteer",
+      "category": "puppeteer",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "puppeteer"
+      ]
+    },
+    {
+      "name": "maps_geocode",
+      "description": "Convert an address into geographic coordinates",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-google-maps",
+      "category": "google-maps",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "google-maps"
+      ]
+    },
+    {
+      "name": "maps_reverse_geocode",
+      "description": "Convert coordinates into an address",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-google-maps",
+      "category": "google-maps",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "google-maps"
+      ]
+    },
+    {
+      "name": "maps_search_places",
+      "description": "Search for places using Google Places API",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-google-maps",
+      "category": "google-maps",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "google-maps"
+      ]
+    },
+    {
+      "name": "maps_place_details",
+      "description": "Get detailed information about a specific place",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-google-maps",
+      "category": "google-maps",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "google-maps"
+      ]
+    },
+    {
+      "name": "maps_distance_matrix",
+      "description": "Calculate travel distance and time for multiple origins and destinations",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-google-maps",
+      "category": "google-maps",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "google-maps"
+      ]
+    },
+    {
+      "name": "maps_elevation",
+      "description": "Get elevation data for locations on the earth",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-google-maps",
+      "category": "google-maps",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "google-maps"
+      ]
+    },
+    {
+      "name": "maps_directions",
+      "description": "Get directions between two points",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-google-maps",
+      "category": "google-maps",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "google-maps"
+      ]
+    },
+    {
+      "name": "generate_image",
+      "description": "Generate images using EverArt Models and returns a clickable link to view the generated image. ",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-everart",
+      "category": "everart",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "everart"
+      ]
+    },
+    {
+      "name": "retrieve_from_aws_kb",
+      "description": "Performs retrieval from the AWS Knowledge Base using the provided query and Knowledge Base ID.",
+      "source": "mcp",
+      "module_path": "@modelcontextprotocol/server-aws-kb-retrieval-server",
+      "category": "aws-kb-retrieval-server",
+      "parameters": [],
+      "return_type": "object",
+      "tags": [
+        "aws-kb-retrieval-server"
+      ]
+    }
+  ]
+}

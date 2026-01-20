@@ -101,6 +101,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub mod collision;
+pub mod corpus;
 pub mod discovery;
 pub mod error;
 pub mod expressiveness;
@@ -112,6 +113,10 @@ pub mod tool_def;
 
 // Re-exports
 pub use collision::{Collision, CollisionEntry, CollisionReport};
+pub use corpus::{
+    load_corpus_directory, load_corpus_file, parse_tool_source, CorpusFile, CorpusMetadata,
+    LoadedCorpus, RawToolDef, RawToolParameter,
+};
 pub use discovery::{
     aggregate_results, DiscoveryConfig, DiscoveryEvaluator, DiscoveryResults, MatchMode,
     QueryResult,

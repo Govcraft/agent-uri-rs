@@ -1,0 +1,157 @@
+{
+  "metadata": {
+    "source": "smolagents",
+    "extraction_date": "2026-01-20T19:59:21.321337+00:00",
+    "tool_count": 8,
+    "extractor_version": "1.0.0",
+    "notes": "smolagents is the successor to transformers.agents (deprecated in transformers v4.52)"
+  },
+  "tools": [
+    {
+      "name": "final_answer",
+      "description": "Provides a final answer to the given problem.",
+      "source": "smolagents",
+      "module_path": "smolagents.default_tools",
+      "category": "response",
+      "parameters": [
+        {
+          "name": "answer",
+          "type": "any",
+          "required": true,
+          "description": "The final answer to the problem"
+        }
+      ],
+      "return_type": "any",
+      "tags": [
+        "response"
+      ]
+    },
+    {
+      "name": "web_search",
+      "description": "Performs a web search for a query and returns a string of the top search results formatted as markdown with titles, URLs, and descriptions.",
+      "source": "smolagents",
+      "module_path": "smolagents.default_tools",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "The search query to perform."
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "search"
+      ]
+    },
+    {
+      "name": "python_interpreter",
+      "description": "This is a tool that evaluates python code. It can be used to perform calculations.",
+      "source": "smolagents",
+      "module_path": "smolagents.default_tools",
+      "category": "code_execution",
+      "parameters": [
+        {
+          "name": "code",
+          "type": "string",
+          "required": true,
+          "description": "The code snippet to evaluate. All variables used in this snippet must be defined in this same snippet, else you will get an error. This code can only import the following python libraries: ['datetime', 'time', 'collections', 'unicodedata', 'queue', 'math', 'itertools', 're', 'random', 'stat', 'statistics']."
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "code_execution"
+      ]
+    },
+    {
+      "name": "transcriber",
+      "description": "This is a tool that transcribes an audio into text. It returns the transcribed text.",
+      "source": "smolagents",
+      "module_path": "smolagents.default_tools",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "audio",
+          "type": "audio",
+          "required": true,
+          "description": "The audio to transcribe. Can be a local path, an url, or a tensor."
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "user_input",
+      "description": "Asks for user's input on a specific question",
+      "source": "smolagents",
+      "module_path": "smolagents.default_tools",
+      "category": "interaction",
+      "parameters": [
+        {
+          "name": "question",
+          "type": "string",
+          "required": true,
+          "description": "The question to ask the user"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "interaction"
+      ]
+    },
+    {
+      "name": "visit_webpage",
+      "description": "Visits a webpage at the given url and reads its content as a markdown string. Use this to browse webpages.",
+      "source": "smolagents",
+      "module_path": "smolagents.default_tools",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "required": true,
+          "description": "The url of the webpage to visit."
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "wikipedia_search",
+      "description": "Searches Wikipedia and returns a summary or full text of the given topic, along with the page URL.",
+      "source": "smolagents",
+      "module_path": "smolagents.default_tools",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "The topic to search on Wikipedia."
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "ChatMessageToolCallFunction",
+      "description": "",
+      "source": "smolagents",
+      "module_path": "smolagents.models",
+      "category": "general",
+      "parameters": [],
+      "return_type": null,
+      "tags": [
+        "general"
+      ]
+    }
+  ]
+}
