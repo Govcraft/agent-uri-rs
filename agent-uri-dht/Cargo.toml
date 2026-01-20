@@ -1,0 +1,27 @@
+[package]
+name = "agent-uri-dht"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Capability-based DHT discovery for agent:// URI scheme"
+keywords = ["agent", "dht", "discovery", "kademlia", "capability"]
+categories = ["network-programming", "data-structures"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
+[features]
+default = []
+serde = ["dep:serde", "agent-uri/serde"]
+
+[dependencies]
+agent-uri = { path = "../" }
+sha2 = "0.10"
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+optional = true
+
+[dev-dependencies]
+proptest = "1.5"
