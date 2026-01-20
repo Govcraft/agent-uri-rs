@@ -11,7 +11,7 @@ categories = ["authentication", "cryptography"]
 default = []
 
 [dependencies]
-agent-uri = { path = "..", features = ["serde"] }
+agent-uri = { path = "../agent-uri", features = ["serde"] }
 rusty_paseto = { version = "0.9", default-features = false, features = ["v4_public", "batteries_included"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 serde = { version = "1.0", features = ["derive"] }

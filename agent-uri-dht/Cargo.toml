@@ -15,7 +15,7 @@ default = []
 serde = ["dep:serde", "agent-uri/serde"]
 
 [dependencies]
-agent-uri = { path = "../" }
+agent-uri = { path = "../agent-uri" }
 sha2 = "0.10"
 
 [dependencies.serde]
