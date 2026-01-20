@@ -89,6 +89,8 @@ mod claims;
 mod error;
 mod issuer;
 mod keys;
+#[cfg(kani)]
+mod proofs;
 mod verification;
 mod verifier;
 

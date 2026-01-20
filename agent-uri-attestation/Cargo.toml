@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-attestation"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "PASETO v4.public attestation for agent-uri"
@@ -20,4 +20,8 @@ chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 
 [dev-dependencies]
+kani-verifier = "0.67.0"
 proptest = "1.5"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
