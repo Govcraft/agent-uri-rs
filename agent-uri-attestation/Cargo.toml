@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-attestation"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "PASETO v4.public attestation for agent-uri"

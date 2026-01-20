@@ -6,9 +6,12 @@ use agent_uri::AgentUri;
 use chrono::Utc;
 use rusty_paseto::prelude::*;
 
+use agent_uri::CapabilityPath;
+
 use crate::claims::AttestationClaims;
 use crate::error::AttestationError;
 use crate::keys::VerifyingKey;
+use crate::verification;
 
 /// Verifies attestation tokens for agent URIs.
 ///
@@ -146,6 +149,76 @@ impl Verifier {
                 });
             }
         }
+
+        Ok(claims)
+    }
+
+    /// Verifies a token, checks URI match, AND validates capability coverage.
+    ///
+    /// This is the most comprehensive verification method, performing:
+    /// 1. Signature verification using trusted keys
+    /// 2. Expiration check
+    /// 3. Issuer validation against trusted roots
+    /// 4. URI match verification
+    /// 5. Trust root consistency check
+    /// 6. Capability coverage verification
+    ///
+    /// # Arguments
+    ///
+    /// * `token` - The PASETO token to verify
+    /// * `uri` - The agent URI that should be attested
+    /// * `required_capability` - The capability path required for the operation
+    ///
+    /// # Returns
+    ///
+    /// The verified `AttestationClaims` if all checks pass
+    ///
+    /// # Errors
+    ///
+    /// Returns `AttestationError` if any verification step fails:
+    /// - `InvalidSignature` - Signature doesn't match any trusted key
+    /// - `TokenExpired` - Token has passed its expiration time
+    /// - `UntrustedIssuer` - Issuer is not in the trusted roots set
+    /// - `UriMismatch` - Token's `agent_uri` doesn't match expected URI
+    /// - `TrustRootMismatch` - Trust root in token doesn't match URI's trust root
+    /// - `InsufficientCapabilities` - Token capabilities don't cover required path
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentUri;
+    /// use agent_uri::CapabilityPath;
+    /// use agent_uri_attestation::{Issuer, Verifier, SigningKey};
+    /// use std::time::Duration;
+    ///
+    /// let signing_key = SigningKey::generate();
+    /// let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
+    ///
+    /// let uri = AgentUri::parse(
+    ///     "agent://acme.com/workflow/approval/agent_01h455vb4pex5vsknk084sn02q"
+    /// ).unwrap();
+    /// let token = issuer.issue(&uri, vec!["workflow".into()]).unwrap();
+    ///
+    /// let mut verifier = Verifier::new();
+    /// verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+    ///
+    /// // "workflow" capability covers "workflow/approval"
+    /// let required = CapabilityPath::parse("workflow/approval").unwrap();
+    /// let claims = verifier.verify_for_capability(&token, &uri, &required).unwrap();
+    ///
+    /// assert_eq!(claims.iss, "acme.com");
+    /// ```
+    pub fn verify_for_capability(
+        &self,
+        token: &str,
+        uri: &AgentUri,
+        required_capability: &CapabilityPath,
+    ) -> Result<AttestationClaims, AttestationError> {
+        // First verify the token and URI match
+        let claims = self.verify_for_uri(token, uri)?;
+
+        // Then check capability coverage using pure function
+        verification::check_capability_coverage(&claims.capabilities, required_capability)?;
 
         Ok(claims)
     }

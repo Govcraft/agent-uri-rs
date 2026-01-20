@@ -63,6 +63,13 @@ pub enum AttestationError {
         /// Description of the key error
         reason: String,
     },
+    /// Token capabilities do not cover the required capability path.
+    InsufficientCapabilities {
+        /// The capability path that was required
+        required: String,
+        /// The capabilities that were attested in the token
+        attested: Vec<String>,
+    },
 }
 
 impl fmt::Display for AttestationError {
@@ -127,6 +134,13 @@ impl fmt::Display for AttestationError {
             }
             Self::InvalidKeyFormat { reason } => {
                 write!(f, "invalid key format: {reason}")
+            }
+            Self::InsufficientCapabilities { required, attested } => {
+                write!(
+                    f,
+                    "token capabilities {attested:?} do not cover required capability '{required}'; \
+                     add a capability that is a prefix of or equals the required path"
+                )
             }
         }
     }

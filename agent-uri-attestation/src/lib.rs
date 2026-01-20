@@ -89,12 +89,17 @@ mod claims;
 mod error;
 mod issuer;
 mod keys;
+mod verification;
 mod verifier;
 
 pub use claims::{AttestationClaims, AttestationClaimsBuilder};
 pub use error::AttestationError;
 pub use issuer::Issuer;
 pub use keys::{SigningKey, VerifyingKey};
+pub use verification::{
+    capability_covers, check_capability_coverage, check_expiration, validate_issuer,
+    validate_subject,
+};
 pub use verifier::Verifier;
 
 /// A prelude module for convenient imports.
@@ -106,7 +111,8 @@ pub use verifier::Verifier;
 /// ```
 pub mod prelude {
     pub use crate::{
-        AttestationClaims, AttestationClaimsBuilder, AttestationError, Issuer, SigningKey,
-        VerifyingKey, Verifier,
+        capability_covers, check_capability_coverage, check_expiration, validate_issuer,
+        validate_subject, AttestationClaims, AttestationClaimsBuilder, AttestationError, Issuer,
+        SigningKey, Verifier, VerifyingKey,
     };
 }

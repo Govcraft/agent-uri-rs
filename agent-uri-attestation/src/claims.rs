@@ -122,6 +122,44 @@ impl AttestationClaims {
     pub fn is_not_yet_valid(&self) -> bool {
         Utc::now() < self.iat
     }
+
+    /// Checks if the claims have expired at a specific time.
+    ///
+    /// This method allows testing expiration logic without depending on
+    /// the system clock, making edge cases testable.
+    ///
+    /// # Arguments
+    ///
+    /// * `now` - The time to check expiration against
+    ///
+    /// # Returns
+    ///
+    /// `true` if the claims have expired (now >= exp), `false` otherwise
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri_attestation::AttestationClaims;
+    /// use chrono::{Utc, Duration};
+    /// use std::time::Duration as StdDuration;
+    ///
+    /// let claims = AttestationClaims::builder()
+    ///     .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+    ///     .issuer("acme.com")
+    ///     .ttl(StdDuration::from_secs(3600))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let now = Utc::now();
+    /// let future = now + Duration::hours(2);
+    ///
+    /// assert!(!claims.is_expired_at(now));
+    /// assert!(claims.is_expired_at(future));
+    /// ```
+    #[must_use]
+    pub fn is_expired_at(&self, now: DateTime<Utc>) -> bool {
+        now >= self.exp
+    }
 }
 
 /// Builder for constructing `AttestationClaims`.
