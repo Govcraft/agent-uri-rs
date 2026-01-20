@@ -129,6 +129,42 @@ pub enum CorpusError {
         /// Error message.
         message: String,
     },
+    /// File not found.
+    FileNotFound {
+        /// Path that was not found.
+        path: String,
+    },
+    /// Failed to read file.
+    ReadFailed {
+        /// Path to the file.
+        path: String,
+        /// Error message.
+        message: String,
+    },
+    /// JSON deserialization failed.
+    JsonDeserialize {
+        /// Path to the file.
+        path: String,
+        /// Error message from `serde_json`.
+        message: String,
+    },
+    /// Unknown source string in corpus file.
+    UnknownSource {
+        /// The unknown source string.
+        source: String,
+        /// Valid source strings.
+        valid_sources: Vec<String>,
+    },
+    /// Directory not found or not a directory.
+    InvalidDirectory {
+        /// Path that was invalid.
+        path: String,
+    },
+    /// No JSON files found in directory.
+    NoFilesFound {
+        /// Directory that was searched.
+        directory: String,
+    },
 }
 
 impl fmt::Display for CorpusError {
@@ -144,6 +180,31 @@ impl fmt::Display for CorpusError {
                 message,
             } => {
                 write!(f, "parse error in {file} line {line}: {message}")
+            }
+            Self::FileNotFound { path } => {
+                write!(f, "corpus file not found: '{path}'")
+            }
+            Self::ReadFailed { path, message } => {
+                write!(f, "failed to read corpus file '{path}': {message}")
+            }
+            Self::JsonDeserialize { path, message } => {
+                write!(f, "failed to parse JSON in '{path}': {message}")
+            }
+            Self::UnknownSource {
+                source,
+                valid_sources,
+            } => {
+                write!(
+                    f,
+                    "unknown tool source '{source}'; valid sources are: {}",
+                    valid_sources.join(", ")
+                )
+            }
+            Self::InvalidDirectory { path } => {
+                write!(f, "invalid directory: '{path}' is not a directory or does not exist")
+            }
+            Self::NoFilesFound { directory } => {
+                write!(f, "no JSON files found in directory '{directory}'")
             }
         }
     }
