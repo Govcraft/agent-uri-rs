@@ -1,15 +1,19 @@
 [package]
 name = "agent-uri"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Parser and validator for agent:// URI scheme"
 keywords = ["agent", "uri", "multi-agent", "identity", "a2a"]
 categories = ["parsing", "web-programming"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
 [features]
 default = []
 serde = ["dep:serde"]
+kani = []
 
 [dependencies]
 mti = "1.1.1"
@@ -19,3 +23,8 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 [dev-dependencies]
 proptest = "1.9.0"
 serde_json = "1.0"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "parsing"
+harness = false

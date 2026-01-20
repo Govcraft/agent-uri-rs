@@ -86,6 +86,8 @@ mod capability_path;
 mod constants;
 mod error;
 mod fragment;
+#[cfg(kani)]
+mod kani_impls;
 mod path_segment;
 pub mod prelude;
 mod query;
