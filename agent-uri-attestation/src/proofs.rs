@@ -26,9 +26,9 @@
 //! | Capability | Exact match works | `exact_match_is_covered` |
 //! | Capability | Deterministic | `capability_covers_deterministic` |
 //! | Capability | Prefix coverage | `prefix_covers_child` |
-//! | Claims | Valid inputs work | `builder_valid_inputs_no_panic` |
 //! | Claims | Missing URI errors | `builder_missing_uri_errors` |
 //! | Claims | Missing issuer errors | `builder_missing_issuer_errors` |
+//! | Claims | Construction safe | `builder_construction_never_panics` |
 
 // Proofs module is conditionally compiled only when running Kani
 #![cfg(kani)]
@@ -42,7 +42,7 @@ mod issuer_proofs {
 
     /// Prove `validate_issuer` never panics.
     #[kani::proof]
-    #[kani::unwind(2)]
+    #[kani::unwind(20)]
     fn validate_issuer_never_panics() {
         // Use bounded string representation
         let uri_root: [u8; 16] = kani::any();
@@ -58,7 +58,7 @@ mod issuer_proofs {
 
     /// Prove matching issuers always succeed.
     #[kani::proof]
-    #[kani::unwind(2)]
+    #[kani::unwind(12)]
     fn matching_issuers_succeed() {
         let data: [u8; 8] = kani::any();
 
@@ -70,7 +70,7 @@ mod issuer_proofs {
 
     /// Prove validation is symmetric in its error case.
     #[kani::proof]
-    #[kani::unwind(2)]
+    #[kani::unwind(12)]
     fn issuer_validation_symmetry() {
         let a: [u8; 8] = kani::any();
         let b: [u8; 8] = kani::any();
@@ -91,7 +91,7 @@ mod subject_proofs {
 
     /// Prove `validate_subject` never panics.
     #[kani::proof]
-    #[kani::unwind(2)]
+    #[kani::unwind(20)]
     fn validate_subject_never_panics() {
         let presented: [u8; 16] = kani::any();
         let token_sub: [u8; 16] = kani::any();
@@ -105,7 +105,7 @@ mod subject_proofs {
 
     /// Prove matching subjects always succeed.
     #[kani::proof]
-    #[kani::unwind(2)]
+    #[kani::unwind(20)]
     fn matching_subjects_succeed() {
         let data: [u8; 16] = kani::any();
 
@@ -117,7 +117,7 @@ mod subject_proofs {
 
     /// Prove validation is deterministic.
     #[kani::proof]
-    #[kani::unwind(2)]
+    #[kani::unwind(12)]
     fn subject_validation_deterministic() {
         let a: [u8; 8] = kani::any();
         let b: [u8; 8] = kani::any();
@@ -138,7 +138,7 @@ mod capability_proofs {
 
     /// Prove `capability_covers` never panics with empty capabilities.
     #[kani::proof]
-    #[kani::unwind(2)]
+    #[kani::unwind(12)]
     fn empty_capabilities_never_panic() {
         let attested: Vec<String> = vec![];
 
@@ -152,7 +152,7 @@ mod capability_proofs {
 
     /// Prove exact match always returns true.
     #[kani::proof]
-    #[kani::unwind(3)]
+    #[kani::unwind(12)]
     fn exact_match_is_covered() {
         // Use a fixed valid capability for exact match test
         let cap = "workflow";
@@ -166,7 +166,7 @@ mod capability_proofs {
 
     /// Prove `capability_covers` is deterministic.
     #[kani::proof]
-    #[kani::unwind(3)]
+    #[kani::unwind(20)]
     fn capability_covers_deterministic() {
         // Use fixed valid capabilities to test determinism
         let cap = "workflow";
@@ -184,7 +184,7 @@ mod capability_proofs {
 
     /// Prove prefix coverage works correctly.
     #[kani::proof]
-    #[kani::unwind(3)]
+    #[kani::unwind(20)]
     fn prefix_covers_child() {
         let parent = "workflow";
         let child = "workflow/approval";
@@ -200,46 +200,43 @@ mod capability_proofs {
 }
 
 /// Proof harnesses for claims builder validation.
+///
+/// Note: Full builder verification is limited by Kani's handling of time-based
+/// code (`Utc::now()`). We verify field requirement logic here; time-related
+/// behavior is covered by unit tests.
 mod claims_proofs {
     use super::*;
-    use std::time::Duration;
 
-    /// Prove builder with valid inputs never panics.
+    /// Prove missing `agent_uri` returns error (not panic).
     #[kani::proof]
-    #[kani::unwind(2)]
-    fn builder_valid_inputs_no_panic() {
-        let ttl_secs: u64 = kani::any();
-
-        // Constrain TTL to reasonable range (avoid overflow)
-        kani::assume(ttl_secs > 0 && ttl_secs < 86400 * 365 * 10);
-
-        let result = AttestationClaimsBuilder::new()
-            .agent_uri("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q")
-            .issuer("test.com")
-            .ttl(Duration::from_secs(ttl_secs))
-            .build();
-
-        // Should succeed with valid inputs
-        assert!(result.is_ok());
-    }
-
-    /// Prove missing `agent_uri` returns error.
-    #[kani::proof]
-    #[kani::unwind(2)]
+    #[kani::unwind(12)]
     fn builder_missing_uri_errors() {
         let result = AttestationClaimsBuilder::new().issuer("test.com").build();
 
         assert!(result.is_err());
     }
 
-    /// Prove missing issuer returns error.
+    /// Prove missing issuer returns error (not panic).
     #[kani::proof]
-    #[kani::unwind(2)]
+    #[kani::unwind(12)]
     fn builder_missing_issuer_errors() {
         let result = AttestationClaimsBuilder::new()
             .agent_uri("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q")
             .build();
 
         assert!(result.is_err());
+    }
+
+    /// Prove builder methods are composable (never panic during construction).
+    #[kani::proof]
+    #[kani::unwind(12)]
+    fn builder_construction_never_panics() {
+        // This verifies the builder pattern itself doesn't panic during setup
+        let _builder = AttestationClaimsBuilder::new()
+            .agent_uri("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q")
+            .issuer("test.com")
+            .add_capability("workflow")
+            .audience("api.test.com");
+        // Kani verifies no panics occur during construction
     }
 }

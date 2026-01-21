@@ -1,0 +1,1307 @@
+{
+  "metadata": {
+    "source": "crewai_tools",
+    "extraction_date": "2026-01-20T21:43:58.245021+00:00",
+    "tool_count": 107,
+    "extractor_version": "1.0.0",
+    "notes": "Extracted from crewai-tools package via Python introspection"
+  },
+  "tools": [
+    {
+      "name": "a_i_mind_tool",
+      "description": "CrewAI AIMindTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.ai_mind_tool.ai_mind_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "apify_actors_tool",
+      "description": "CrewAI ApifyActorsTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.apify_actors_tool.apify_actors_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "arxiv_paper_tool",
+      "description": "CrewAI ArxivPaperTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.arxiv_paper_tool.arxiv_paper_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "bedrock_invoke_agent_tool",
+      "description": "CrewAI BedrockInvokeAgentTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.agents.invoke_agent_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "bedrock_k_b_retriever_tool",
+      "description": "CrewAI BedrockKBRetrieverTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.knowledge_base.retriever_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "brave_search_tool",
+      "description": "BraveSearchTool - A tool for performing web searches using the Brave Search API.\n\nThis module provides functionality to search the internet using Brave's Search API,\nsupporting customizable result counts and country-specific searches.\n\nDependencies:\n    - requests\n    - pydantic\n    - python-dotenv (for API key management)",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.brave_search_tool.brave_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "bright_data_dataset_tool",
+      "description": "CrewAI-compatible tool for scraping structured data using Bright Data Datasets.\n\nAttributes:\n    name (str): Tool name displayed in the CrewAI environment.\n    description (str): Tool description shown to agents or users.\n    args_schema (Type[BaseModel]): Pydantic schema for validating input arguments.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.brightdata_tool.brightdata_dataset",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "bright_data_search_tool",
+      "description": "A web search tool that utilizes Bright Data's SERP API to perform queries and return either structured results\nor raw page content from search engines like Google or Bing.\n\nAttributes:\n    name (str): Tool name used by the agent.\n    description (str): A brief explanation of what the tool does.\n    args_schema (Type[BaseModel]): Schema class for validating tool arguments.\n    base_url (str): The Bright Data API endpoint used for making the POST request.\n    api_key (str): Bright Data API key loa",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.brightdata_tool.brightdata_serp",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "bright_data_web_unlocker_tool",
+      "description": "A tool for performing web scraping using the Bright Data Web Unlocker API.\n\nThis tool allows automated and programmatic access to web pages by routing requests\nthrough Bright Data's unlocking and proxy infrastructure, which can bypass bot\nprotection mechanisms like CAPTCHA, geo-restrictions, and anti-bot detection.\n\nAttributes:\n    name (str): Name of the tool.\n    description (str): Description of what the tool does.\n    args_schema (Type[BaseModel]): Pydantic model schema for expected input ar",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.brightdata_tool.brightdata_unlocker",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "browserbase_load_tool",
+      "description": "CrewAI BrowserbaseLoadTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.browserbase_load_tool.browserbase_load_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "c_s_v_search_tool",
+      "description": "CrewAI CSVSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.csv_search_tool.csv_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "code_docs_search_tool",
+      "description": "CrewAI CodeDocsSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.code_docs_search_tool.code_docs_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "code_interpreter_tool",
+      "description": "A tool for executing Python code in isolated environments.\n\nThis tool provides functionality to run Python code either in a Docker container\nfor safe isolation or directly in a restricted sandbox. It can handle installing\nPython packages and executing arbitrary Python code.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.code_interpreter_tool.code_interpreter_tool",
+      "category": "code_execution",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "code_execution"
+      ]
+    },
+    {
+      "name": "composio_tool",
+      "description": "Wrapper for composio tools.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.composio_tool.composio_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "contextual_a_i_create_agent_tool",
+      "description": "Tool to create Contextual AI RAG agents with documents.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.contextualai_create_agent_tool.contextual_create_agent_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "create",
+        "general"
+      ]
+    },
+    {
+      "name": "contextual_a_i_parse_tool",
+      "description": "Tool to parse documents using Contextual AI's parser.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.contextualai_parse_tool.contextual_parse_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "contextual_a_i_query_tool",
+      "description": "Tool to query Contextual AI RAG agents.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.contextualai_query_tool.contextual_query_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "contextual_a_i_rerank_tool",
+      "description": "Tool to rerank documents using Contextual AI's instruction-following reranker.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.contextualai_rerank_tool.contextual_rerank_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "couchbase_f_t_s_vector_search_tool",
+      "description": "Tool to search the Couchbase database.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.couchbase_tool.couchbase_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "d_o_c_x_search_tool",
+      "description": "CrewAI DOCXSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.docx_search_tool.docx_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "dall_e_tool",
+      "description": "CrewAI DallETool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.dalle_tool.dalle_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "databricks_query_tool",
+      "description": "A tool for querying Databricks workspace tables using SQL.\n\nThis tool executes SQL queries against Databricks tables and returns the results.\nIt requires Databricks authentication credentials to be set as environment variables.\n\nAuthentication can be provided via:\n- Databricks CLI profile: Set DATABRICKS_CONFIG_PROFILE environment variable\n- Direct credentials: Set DATABRICKS_HOST and DATABRICKS_TOKEN environment variables\n\nExample:\n    >>> tool = DatabricksQueryTool()\n    >>> results = tool.run",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.databricks_query_tool.databricks_query_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "directory_read_tool",
+      "description": "CrewAI DirectoryReadTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.directory_read_tool.directory_read_tool",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem",
+        "read"
+      ]
+    },
+    {
+      "name": "directory_search_tool",
+      "description": "CrewAI DirectorySearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.directory_search_tool.directory_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "e_x_a_search_tool",
+      "description": "CrewAI EXASearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.exa_tools.exa_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "enterprise_action_tool",
+      "description": "A tool that executes a specific enterprise action.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.adapters.enterprise_adapter",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "file_compressor_tool",
+      "description": "CrewAI FileCompressorTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.files_compressor_tool.files_compressor_tool",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem"
+      ]
+    },
+    {
+      "name": "file_read_tool",
+      "description": "A tool for reading file contents.\n\nThis tool inherits its schema handling from BaseTool to avoid recursive schema\ndefinition issues. The args_schema is set to FileReadToolSchema which defines\nthe required file_path parameter. The schema should not be overridden in the\nconstructor as it would break the inheritance chain and cause infinite loops.\n\nThe tool supports two ways of specifying the file path:\n1. At construction time via the file_path parameter\n2. At runtime via the file_path parameter in",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.file_read_tool.file_read_tool",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem",
+        "read"
+      ]
+    },
+    {
+      "name": "file_writer_tool",
+      "description": "CrewAI FileWriterTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.file_writer_tool.file_writer_tool",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem",
+        "write"
+      ]
+    },
+    {
+      "name": "firecrawl_crawl_website_tool",
+      "description": "Tool for crawling websites using Firecrawl v2 API. To run this tool, you need to have a Firecrawl API key.\n\nArgs:\n    api_key (str): Your Firecrawl API key.\n    config (dict): Optional. It contains Firecrawl v2 API parameters.\n\nDefault configuration options (Firecrawl v2 API):\n    max_discovery_depth (int): Maximum depth for discovering pages. Default: 2\n    ignore_sitemap (bool): Whether to ignore sitemap. Default: True\n    limit (int): Maximum number of pages to crawl. Default: 10\n    allow_ex",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.firecrawl_crawl_website_tool.firecrawl_crawl_website_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "firecrawl_scrape_website_tool",
+      "description": "Tool for scraping webpages using Firecrawl v2 API. To run this tool, you need to have a Firecrawl API key.\n\nArgs:\n    api_key (str): Your Firecrawl API key.\n    config (dict): Optional. It contains Firecrawl v2 API parameters.\n\nDefault configuration options (Firecrawl v2 API):\n    formats (list[str]): Content formats to return. Default: [\"markdown\"]\n    only_main_content (bool): Only return main content excluding headers, navs, footers, etc. Default: True\n    include_tags (list[str]): Tags to in",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.firecrawl_scrape_website_tool.firecrawl_scrape_website_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "firecrawl_search_tool",
+      "description": "Tool for searching webpages using Firecrawl v2 API. To run this tool, you need to have a Firecrawl API key.\n\nArgs:\n    api_key (str): Your Firecrawl API key.\n    config (dict): Optional. It contains Firecrawl v2 API parameters.\n\nDefault configuration options (Firecrawl v2 API):\n    limit (int): Maximum number of search results to return. Default: 5\n    tbs (str): Time-based search filter (e.g., \"qdr:d\" for past day). Default: None\n    location (str): Location for search results. Default: None\n  ",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.firecrawl_search_tool.firecrawl_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "generate_crewai_automation_tool",
+      "description": "CrewAI GenerateCrewaiAutomationTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.generate_crewai_automation_tool.generate_crewai_automation_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "github_search_tool",
+      "description": "CrewAI GithubSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.github_search_tool.github_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "hyperbrowser_load_tool",
+      "description": "HyperbrowserLoadTool.\n\nScrape or crawl web pages and load the contents with optional parameters for configuring content extraction.\nRequires the `hyperbrowser` package.\nGet your API Key from https://app.hyperbrowser.ai/\n\nArgs:\n    api_key: The Hyperbrowser API key, can be set as an environment variable `HYPERBROWSER_API_KEY` or passed directly",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.hyperbrowser_load_tool.hyperbrowser_load_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "invoke_crew_a_i_automation_tool",
+      "description": "A CrewAI tool for invoking external crew/flows APIs.\n\nThis tool provides CrewAI Platform API integration with external crew services, supporting:\n- Dynamic input schema configuration\n- Automatic polling for task completion\n- Bearer token authentication\n- Comprehensive error handling\n\nExample:\n    Basic usage:\n    >>> tool = InvokeCrewAIAutomationTool(\n    ...     crew_api_url=\"https://api.example.com\",\n    ...     crew_bearer_token=\"your_token\",\n    ...     crew_name=\"My Crew\",\n    ...     crew_",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.invoke_crewai_automation_tool.invoke_crewai_automation_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "j_s_o_n_search_tool",
+      "description": "CrewAI JSONSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.json_search_tool.json_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "jina_scrape_website_tool",
+      "description": "CrewAI JinaScrapeWebsiteTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.jina_scrape_website_tool.jina_scrape_website_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "linkup_search_tool",
+      "description": "CrewAI LinkupSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.linkup.linkup_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "llama_index_tool",
+      "description": "Tool to wrap LlamaIndex tools/query engines.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.llamaindex_tool.llamaindex_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "m_d_x_search_tool",
+      "description": "CrewAI MDXSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.mdx_search_tool.mdx_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "merge_agent_handler_tool",
+      "description": "Wrapper for Merge Agent Handler tools.\n\nThis tool allows CrewAI agents to execute tools from Merge Agent Handler,\nwhich provides secure access to third-party integrations via the Model Context Protocol (MCP).\n\nAgent Handler manages authentication, permissions, and monitoring of all tool interactions.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.merge_agent_handler_tool.merge_agent_handler_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "mongo_d_b_vector_search_tool",
+      "description": "Tool to perfrom a vector search the MongoDB database.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.mongodb_vector_search_tool.vector_search",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "multi_on_tool",
+      "description": "Tool to wrap MultiOn Browse Capabilities.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.multion_tool.multion_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "my_s_q_l_search_tool",
+      "description": "CrewAI MySQLSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.mysql_search_tool.mysql_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "n_l2_s_q_l_tool",
+      "description": "CrewAI NL2SQLTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.nl2sql.nl2sql_tool",
+      "category": "database",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "database"
+      ]
+    },
+    {
+      "name": "o_c_r_tool",
+      "description": "A tool for performing Optical Character Recognition on images.\n\nThis tool leverages LLMs to extract text from images. It can process\nboth local image files and images available via URLs.\n\nAttributes:\n    name (str): Name of the tool.\n    description (str): Description of the tool's functionality.\n    args_schema (Type[BaseModel]): Pydantic schema for input validation.\n\nPrivate Attributes:\n    _llm (Optional[LLM]): Language model instance for making API calls.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.ocr_tool.ocr_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "oxylabs_amazon_product_scraper_tool",
+      "description": "Scrape Amazon product pages with OxylabsAmazonProductScraperTool.\n\nGet Oxylabs account:\nhttps://dashboard.oxylabs.io/en\n\nArgs:\n    username (str): Oxylabs username.\n    password (str): Oxylabs password.\n    config: Configuration options. See ``OxylabsAmazonProductScraperConfig``",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.oxylabs_amazon_product_scraper_tool.oxylabs_amazon_product_scraper_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "oxylabs_amazon_search_scraper_tool",
+      "description": "Scrape Amazon search results with OxylabsAmazonSearchScraperTool.\n\nGet Oxylabs account:\nhttps://dashboard.oxylabs.io/en\n\nArgs:\n    username (str): Oxylabs username.\n    password (str): Oxylabs password.\n    config: Configuration options. See ``OxylabsAmazonSearchScraperConfig``",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.oxylabs_amazon_search_scraper_tool.oxylabs_amazon_search_scraper_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "oxylabs_google_search_scraper_tool",
+      "description": "Scrape Google Search results with OxylabsGoogleSearchScraperTool.\n\nGet Oxylabs account:\nhttps://dashboard.oxylabs.io/en\n\nArgs:\n    username (str): Oxylabs username.\n    password (str): Oxylabs password.\n    config: Configuration options. See ``OxylabsGoogleSearchScraperConfig``",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.oxylabs_google_search_scraper_tool.oxylabs_google_search_scraper_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "oxylabs_universal_scraper_tool",
+      "description": "Scrape any website with OxylabsUniversalScraperTool.\n\nGet Oxylabs account:\nhttps://dashboard.oxylabs.io/en\n\nArgs:\n    username (str): Oxylabs username.\n    password (str): Oxylabs password.\n    config: Configuration options. See ``OxylabsUniversalScraperConfig``",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.oxylabs_universal_scraper_tool.oxylabs_universal_scraper_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "p_d_f_search_tool",
+      "description": "CrewAI PDFSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.pdf_search_tool.pdf_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "parallel_search_tool",
+      "description": "CrewAI ParallelSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.parallel_tools.parallel_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "patronus_eval_tool",
+      "description": "CrewAI PatronusEvalTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.patronus_eval_tool.patronus_eval_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "patronus_local_evaluator_tool",
+      "description": "CrewAI PatronusLocalEvaluatorTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.patronus_eval_tool.patronus_local_evaluator_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "patronus_predefined_criteria_eval_tool",
+      "description": "PatronusEvalTool is a tool to automatically evaluate and score agent interactions.\n\nResults are logged to the Patronus platform at app.patronus.ai",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.patronus_eval_tool.patronus_predefined_criteria_eval_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "qdrant_vector_search_tool",
+      "description": "Vector search tool for Qdrant.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.qdrant_vector_search_tool.qdrant_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "rag_tool",
+      "description": "CrewAI RagTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.rag.rag_tool",
+      "category": "retrieval",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "retrieval"
+      ]
+    },
+    {
+      "name": "s3_reader_tool",
+      "description": "CrewAI S3ReaderTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.s3.reader_tool",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem",
+        "read"
+      ]
+    },
+    {
+      "name": "s3_writer_tool",
+      "description": "CrewAI S3WriterTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.s3.writer_tool",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem",
+        "write"
+      ]
+    },
+    {
+      "name": "scrape_element_from_website_tool",
+      "description": "CrewAI ScrapeElementFromWebsiteTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.scrape_element_from_website.scrape_element_from_website",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "scrape_website_tool",
+      "description": "CrewAI ScrapeWebsiteTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.scrape_website_tool.scrape_website_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "scrapegraph_scrape_tool",
+      "description": "A tool that uses Scrapegraph AI to intelligently scrape website content.\n\nRaises:\n    ValueError: If API key is missing or URL format is invalid\n    RateLimitError: If API rate limits are exceeded\n    RuntimeError: If scraping operation fails",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.scrapegraph_scrape_tool.scrapegraph_scrape_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "scrapfly_scrape_website_tool",
+      "description": "CrewAI ScrapflyScrapeWebsiteTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.scrapfly_scrape_website_tool.scrapfly_scrape_website_tool",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "selenium_scraping_tool",
+      "description": "CrewAI SeleniumScrapingTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.selenium_scraping_tool.selenium_scraping_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "serp_api_google_search_tool",
+      "description": "CrewAI SerpApiGoogleSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serpapi_tool.serpapi_google_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "serp_api_google_shopping_tool",
+      "description": "CrewAI SerpApiGoogleShoppingTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serpapi_tool.serpapi_google_shopping_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "serper_dev_tool",
+      "description": "CrewAI SerperDevTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serper_dev_tool.serper_dev_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "serper_scrape_website_tool",
+      "description": "CrewAI SerperScrapeWebsiteTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serper_scrape_website_tool.serper_scrape_website_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "serply_job_search_tool",
+      "description": "CrewAI SerplyJobSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serply_api_tool.serply_job_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "serply_news_search_tool",
+      "description": "CrewAI SerplyNewsSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serply_api_tool.serply_news_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "serply_scholar_search_tool",
+      "description": "CrewAI SerplyScholarSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serply_api_tool.serply_scholar_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "serply_web_search_tool",
+      "description": "CrewAI SerplyWebSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serply_api_tool.serply_web_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "serply_webpage_to_markdown_tool",
+      "description": "CrewAI SerplyWebpageToMarkdownTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serply_api_tool.serply_webpage_to_markdown_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "single_store_search_tool",
+      "description": "A tool for performing semantic searches on SingleStore database tables.\n\nThis tool provides a safe interface for executing SELECT and SHOW queries\nagainst a SingleStore database with connection pooling for optimal performance.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.singlestore_search_tool.singlestore_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "snowflake_search_tool",
+      "description": "Tool for executing queries and semantic search on Snowflake.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.snowflake_search_tool.snowflake_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "spider_tool",
+      "description": "Tool for scraping and crawling websites.\nThis tool provides functionality to either scrape a single webpage or crawl multiple\npages, returning content in a format suitable for LLM processing.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.spider_tool.spider_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "stagehand_tool",
+      "description": "A tool that uses Stagehand to automate web browser interactions using natural language with atomic action handling.\n\nStagehand allows AI agents to interact with websites through a browser,\nperforming actions like clicking buttons, filling forms, and extracting data.\n\nThe tool supports four main command types:\n1. act - Perform actions like clicking, typing, scrolling, or navigating\n2. navigate - Specifically navigate to a URL (shorthand for act with navigation)\n3. extract - Extract structured dat",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.stagehand_tool.stagehand_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "t_x_t_search_tool",
+      "description": "CrewAI TXTSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.txt_search_tool.txt_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "tavily_extractor_tool",
+      "description": "CrewAI TavilyExtractorTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.tavily_extractor_tool.tavily_extractor_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "tavily_search_tool",
+      "description": "Tool that uses the Tavily Search API to perform web searches.\n\nAttributes:\n    client: An instance of TavilyClient.\n    async_client: An instance of AsyncTavilyClient.\n    name: The name of the tool.\n    description: A description of the tool's purpose.\n    args_schema: The schema for the tool's arguments.\n    api_key: The Tavily API key.\n    proxies: Optional proxies for the API requests.\n    search_depth: The depth of the search.\n    topic: The topic to focus the search on.\n    time_range: The",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.tavily_search_tool.tavily_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "vision_tool",
+      "description": "Tool for analyzing images using vision models.\n\nArgs:\n    llm: Optional LLM instance to use\n    model: Model identifier to use if no LLM is provided",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.vision_tool.vision_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "weaviate_vector_search_tool",
+      "description": "Tool to search the Weaviate database.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.weaviate_tool.vector_search",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "website_search_tool",
+      "description": "CrewAI WebsiteSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.website_search.website_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "x_m_l_search_tool",
+      "description": "CrewAI XMLSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.xml_search_tool.xml_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "youtube_channel_search_tool",
+      "description": "CrewAI YoutubeChannelSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.youtube_channel_search_tool.youtube_channel_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "youtube_video_search_tool",
+      "description": "CrewAI YoutubeVideoSearchTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.youtube_video_search_tool.youtube_video_search_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    },
+    {
+      "name": "zapier_action_tool",
+      "description": "A tool that wraps a Zapier action.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.adapters.zapier_adapter",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "browser_base_tool",
+      "description": "Base class for browser tools.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.browser.browser_toolkit",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "click_tool",
+      "description": "Tool for clicking on an element with the given CSS selector.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.browser.browser_toolkit",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "current_web_page_tool",
+      "description": "Tool for getting information about the current webpage.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.browser.browser_toolkit",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "extract_hyperlinks_tool",
+      "description": "Tool for extracting hyperlinks from a webpage.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.browser.browser_toolkit",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "extract_text_tool",
+      "description": "Tool for extracting text from a webpage.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.browser.browser_toolkit",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "get_elements_tool",
+      "description": "Tool for getting elements from a webpage.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.browser.browser_toolkit",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web",
+        "get"
+      ]
+    },
+    {
+      "name": "navigate_back_tool",
+      "description": "Tool for navigating back in browser history.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.browser.browser_toolkit",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "navigate_tool",
+      "description": "Tool for navigating a browser to a URL.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.browser.browser_toolkit",
+      "category": "web",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "web"
+      ]
+    },
+    {
+      "name": "delete_files_tool",
+      "description": "Tool for removing files from the environment.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.code_interpreter.code_interpreter_toolkit",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem",
+        "delete"
+      ]
+    },
+    {
+      "name": "execute_code_tool",
+      "description": "Tool for executing code in various languages.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.code_interpreter.code_interpreter_toolkit",
+      "category": "code_execution",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "code_execution"
+      ]
+    },
+    {
+      "name": "execute_command_tool",
+      "description": "Tool for running shell commands in the code interpreter environment.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.code_interpreter.code_interpreter_toolkit",
+      "category": "code_execution",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "code_execution"
+      ]
+    },
+    {
+      "name": "get_task_tool",
+      "description": "Tool for checking status of async tasks.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.code_interpreter.code_interpreter_toolkit",
+      "category": "code_execution",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "code_execution",
+        "get"
+      ]
+    },
+    {
+      "name": "list_files_tool",
+      "description": "Tool for listing files in directories in the environment.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.code_interpreter.code_interpreter_toolkit",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem",
+        "list"
+      ]
+    },
+    {
+      "name": "read_files_tool",
+      "description": "Tool for reading content of files in the environment.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.code_interpreter.code_interpreter_toolkit",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem",
+        "read"
+      ]
+    },
+    {
+      "name": "start_command_tool",
+      "description": "Tool for starting long-running commands asynchronously.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.code_interpreter.code_interpreter_toolkit",
+      "category": "code_execution",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "code_execution"
+      ]
+    },
+    {
+      "name": "stop_task_tool",
+      "description": "Tool for stopping running tasks.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.code_interpreter.code_interpreter_toolkit",
+      "category": "code_execution",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "code_execution"
+      ]
+    },
+    {
+      "name": "write_files_tool",
+      "description": "Tool for creating or updating files in the environment.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.aws.bedrock.code_interpreter.code_interpreter_toolkit",
+      "category": "filesystem",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "filesystem",
+        "write"
+      ]
+    },
+    {
+      "name": "crew_a_i_platform_action_tool",
+      "description": "CrewAI CrewAIPlatformActionTool",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.crewai_platform_tools.crewai_platform_action_tool",
+      "category": "general",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "serp_api_base_tool",
+      "description": "Base class for SerpApi functionality with shared capabilities.",
+      "source": "crewai_tools",
+      "module_path": "crewai_tools.tools.serpapi_tool.serpapi_base_tool",
+      "category": "search",
+      "parameters": [],
+      "return_type": "str",
+      "tags": [
+        "search"
+      ]
+    }
+  ]
+}

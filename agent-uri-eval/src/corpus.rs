@@ -55,6 +55,9 @@ const VALID_SOURCES: &[&str] = &[
     "smolagents",
     "openai",
     "huggingface",
+    "crewai",
+    "crewai_tools",
+    "autogen",
     "synthetic",
 ];
 
@@ -228,10 +231,12 @@ impl LoadedCorpus {
 pub fn parse_tool_source(source: &str) -> Result<ToolSource, CorpusError> {
     match source {
         "langchain_community.tools" | "langchain" => Ok(ToolSource::LangChain),
-        "mcp" => Ok(ToolSource::Mcp),
+        "mcp" | "mcp_community" => Ok(ToolSource::Mcp),
         "smolagents" => Ok(ToolSource::Smolagents),
         "openai" => Ok(ToolSource::OpenAi),
         "huggingface" => Ok(ToolSource::HuggingFace),
+        "crewai" | "crewai_tools" => Ok(ToolSource::CrewAi),
+        "autogen" => Ok(ToolSource::AutoGen),
         "synthetic" => Ok(ToolSource::Synthetic),
         _ => Err(CorpusError::UnknownSource {
             source: source.to_string(),

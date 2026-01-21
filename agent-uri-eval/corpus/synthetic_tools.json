@@ -1,0 +1,4135 @@
+{
+  "metadata": {
+    "source": "synthetic",
+    "extraction_date": "2026-01-20T21:42:23.084762+00:00",
+    "tool_count": 196,
+    "extractor_version": "1.0.0",
+    "notes": "Synthetically generated tools for collision testing",
+    "scenarios": [
+      "exact_collision",
+      "semantic_equivalent",
+      "case_variant",
+      "action_object_permutation",
+      "prefix_collision",
+      "namespace_collision"
+    ]
+  },
+  "tools": [
+    {
+      "name": "search",
+      "description": "Execute a search query (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "search",
+      "description": "Execute a search query (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "search",
+      "description": "Execute a search query (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "search",
+      "description": "Execute a search query (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "search",
+      "description": "Execute a search query (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "read",
+      "description": "Read data from a source (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "read",
+      "description": "Read data from a source (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "read",
+      "description": "Read data from a source (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "read",
+      "description": "Read data from a source (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "read",
+      "description": "Read data from a source (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "write",
+      "description": "Write data to a destination (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/write",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "write",
+      "description": "Write data to a destination (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/write",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "write",
+      "description": "Write data to a destination (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/write",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "write",
+      "description": "Write data to a destination (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/write",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "write",
+      "description": "Write data to a destination (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/write",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "execute",
+      "description": "Execute a command or code (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/execute",
+      "category": "code_execution",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "code_execution",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "execute",
+      "description": "Execute a command or code (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/execute",
+      "category": "code_execution",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "code_execution",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "execute",
+      "description": "Execute a command or code (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/execute",
+      "category": "code_execution",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "code_execution",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "execute",
+      "description": "Execute a command or code (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/execute",
+      "category": "code_execution",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "code_execution",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "execute",
+      "description": "Execute a command or code (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/execute",
+      "category": "code_execution",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "code_execution",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "send",
+      "description": "Send a message or request (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/send",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "send",
+      "description": "Send a message or request (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/send",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "send",
+      "description": "Send a message or request (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/send",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "send",
+      "description": "Send a message or request (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/send",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "send",
+      "description": "Send a message or request (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/send",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "get",
+      "description": "Retrieve a resource (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/get",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "get",
+      "description": "Retrieve a resource (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/get",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "get",
+      "description": "Retrieve a resource (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/get",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "get",
+      "description": "Retrieve a resource (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/get",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "get",
+      "description": "Retrieve a resource (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/get",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "create",
+      "description": "Create a new resource (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/create",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "create",
+      "description": "Create a new resource (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/create",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "create",
+      "description": "Create a new resource (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/create",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "create",
+      "description": "Create a new resource (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/create",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "create",
+      "description": "Create a new resource (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/create",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "delete",
+      "description": "Delete a resource (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/delete",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "delete",
+      "description": "Delete a resource (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/delete",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "delete",
+      "description": "Delete a resource (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/delete",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "delete",
+      "description": "Delete a resource (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/delete",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "delete",
+      "description": "Delete a resource (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/delete",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "list",
+      "description": "List available resources (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/list",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "list",
+      "description": "List available resources (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/list",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "list",
+      "description": "List available resources (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/list",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "list",
+      "description": "List available resources (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/list",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "list",
+      "description": "List available resources (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/list",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "fetch",
+      "description": "Fetch data from a URL (provider_alpha implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_alpha/fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "fetch",
+      "description": "Fetch data from a URL (provider_beta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_beta/fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "fetch",
+      "description": "Fetch data from a URL (provider_gamma implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_gamma/fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "fetch",
+      "description": "Fetch data from a URL (provider_delta implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_delta/fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "fetch",
+      "description": "Fetch data from a URL (provider_epsilon implementation)",
+      "source": "synthetic",
+      "module_path": "synthetic/provider_epsilon/fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input data"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "collision_test"
+      ],
+      "synthetic_scenario": "exact_collision"
+    },
+    {
+      "name": "web_search",
+      "description": "Search the web (variant 1)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/web_search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "search_web",
+      "description": "Search the web (variant 2)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/search_web",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "google_search",
+      "description": "Search the web (variant 3)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/google_search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "internet_search",
+      "description": "Search the web (variant 4)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/internet_search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "online_search",
+      "description": "Search the web (variant 5)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/online_search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "read_file",
+      "description": "Read file contents (variant 1)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/read_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "file_read",
+      "description": "Read file contents (variant 2)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/file_read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "load_file",
+      "description": "Read file contents (variant 3)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/load_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "get_file_contents",
+      "description": "Read file contents (variant 4)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/get_file_contents",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "read_text",
+      "description": "Read file contents (variant 5)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/read_text",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "write_file",
+      "description": "Write to a file (variant 1)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/write_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "file_write",
+      "description": "Write to a file (variant 2)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/file_write",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "save_file",
+      "description": "Write to a file (variant 3)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/save_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "put_file_contents",
+      "description": "Write to a file (variant 4)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/put_file_contents",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "write_text",
+      "description": "Write to a file (variant 5)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/write_text",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "http_get",
+      "description": "Make HTTP GET request (variant 1)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/http_get",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "get_request",
+      "description": "Make HTTP GET request (variant 2)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/get_request",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "fetch_url",
+      "description": "Make HTTP GET request (variant 3)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/fetch_url",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "http_fetch",
+      "description": "Make HTTP GET request (variant 4)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/http_fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "web_get",
+      "description": "Make HTTP GET request (variant 5)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/web_get",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "sql_query",
+      "description": "Execute database query (variant 1)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/sql_query",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "query_database",
+      "description": "Execute database query (variant 2)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/query_database",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "execute_sql",
+      "description": "Execute database query (variant 3)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/execute_sql",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "run_query",
+      "description": "Execute database query (variant 4)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/run_query",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "db_query",
+      "description": "Execute database query (variant 5)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/db_query",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "send_message",
+      "description": "Send a message (variant 1)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/send_message",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "message_send",
+      "description": "Send a message (variant 2)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/message_send",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "post_message",
+      "description": "Send a message (variant 3)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/post_message",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "dispatch_message",
+      "description": "Send a message (variant 4)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/dispatch_message",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "transmit",
+      "description": "Send a message (variant 5)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/transmit",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "create_resource",
+      "description": "Create a resource (variant 1)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/create_resource",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "resource_create",
+      "description": "Create a resource (variant 2)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/resource_create",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "add_resource",
+      "description": "Create a resource (variant 3)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/add_resource",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "new_resource",
+      "description": "Create a resource (variant 4)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/new_resource",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "make_resource",
+      "description": "Create a resource (variant 5)",
+      "source": "synthetic",
+      "module_path": "synthetic/semantic/make_resource",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "semantic_equivalent"
+      ],
+      "synthetic_scenario": "semantic_equivalent"
+    },
+    {
+      "name": "ReadFile",
+      "description": "Tool with case variant naming: ReadFile",
+      "source": "synthetic",
+      "module_path": "synthetic/case/ReadFile",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "readFile",
+      "description": "Tool with case variant naming: readFile",
+      "source": "synthetic",
+      "module_path": "synthetic/case/readFile",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "read_file",
+      "description": "Tool with case variant naming: read_file",
+      "source": "synthetic",
+      "module_path": "synthetic/case/read_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "READFILE",
+      "description": "Tool with case variant naming: READFILE",
+      "source": "synthetic",
+      "module_path": "synthetic/case/READFILE",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "Readfile",
+      "description": "Tool with case variant naming: Readfile",
+      "source": "synthetic",
+      "module_path": "synthetic/case/Readfile",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "WriteData",
+      "description": "Tool with case variant naming: WriteData",
+      "source": "synthetic",
+      "module_path": "synthetic/case/WriteData",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "writeData",
+      "description": "Tool with case variant naming: writeData",
+      "source": "synthetic",
+      "module_path": "synthetic/case/writeData",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "write_data",
+      "description": "Tool with case variant naming: write_data",
+      "source": "synthetic",
+      "module_path": "synthetic/case/write_data",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "WRITEDATA",
+      "description": "Tool with case variant naming: WRITEDATA",
+      "source": "synthetic",
+      "module_path": "synthetic/case/WRITEDATA",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "Writedata",
+      "description": "Tool with case variant naming: Writedata",
+      "source": "synthetic",
+      "module_path": "synthetic/case/Writedata",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "GetUser",
+      "description": "Tool with case variant naming: GetUser",
+      "source": "synthetic",
+      "module_path": "synthetic/case/GetUser",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "getUser",
+      "description": "Tool with case variant naming: getUser",
+      "source": "synthetic",
+      "module_path": "synthetic/case/getUser",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "get_user",
+      "description": "Tool with case variant naming: get_user",
+      "source": "synthetic",
+      "module_path": "synthetic/case/get_user",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "GETUSER",
+      "description": "Tool with case variant naming: GETUSER",
+      "source": "synthetic",
+      "module_path": "synthetic/case/GETUSER",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "Getuser",
+      "description": "Tool with case variant naming: Getuser",
+      "source": "synthetic",
+      "module_path": "synthetic/case/Getuser",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "CreateTask",
+      "description": "Tool with case variant naming: CreateTask",
+      "source": "synthetic",
+      "module_path": "synthetic/case/CreateTask",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "createTask",
+      "description": "Tool with case variant naming: createTask",
+      "source": "synthetic",
+      "module_path": "synthetic/case/createTask",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "create_task",
+      "description": "Tool with case variant naming: create_task",
+      "source": "synthetic",
+      "module_path": "synthetic/case/create_task",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "CREATETASK",
+      "description": "Tool with case variant naming: CREATETASK",
+      "source": "synthetic",
+      "module_path": "synthetic/case/CREATETASK",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "Createtask",
+      "description": "Tool with case variant naming: Createtask",
+      "source": "synthetic",
+      "module_path": "synthetic/case/Createtask",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "SendEmail",
+      "description": "Tool with case variant naming: SendEmail",
+      "source": "synthetic",
+      "module_path": "synthetic/case/SendEmail",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "sendEmail",
+      "description": "Tool with case variant naming: sendEmail",
+      "source": "synthetic",
+      "module_path": "synthetic/case/sendEmail",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "send_email",
+      "description": "Tool with case variant naming: send_email",
+      "source": "synthetic",
+      "module_path": "synthetic/case/send_email",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "SENDEMAIL",
+      "description": "Tool with case variant naming: SENDEMAIL",
+      "source": "synthetic",
+      "module_path": "synthetic/case/SENDEMAIL",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "Sendemail",
+      "description": "Tool with case variant naming: Sendemail",
+      "source": "synthetic",
+      "module_path": "synthetic/case/Sendemail",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "case_variant"
+      ],
+      "synthetic_scenario": "case_variant"
+    },
+    {
+      "name": "create_user",
+      "description": "Action-object permutation: create_user",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/create_user",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "user_create",
+      "description": "Action-object permutation: user_create",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/user_create",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "add_user",
+      "description": "Action-object permutation: add_user",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/add_user",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "new_user",
+      "description": "Action-object permutation: new_user",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/new_user",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "make_user",
+      "description": "Action-object permutation: make_user",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/make_user",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "delete_file",
+      "description": "Action-object permutation: delete_file",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/delete_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "file_delete",
+      "description": "Action-object permutation: file_delete",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/file_delete",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "remove_file",
+      "description": "Action-object permutation: remove_file",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/remove_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "unlink_file",
+      "description": "Action-object permutation: unlink_file",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/unlink_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "erase_file",
+      "description": "Action-object permutation: erase_file",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/erase_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "update_record",
+      "description": "Action-object permutation: update_record",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/update_record",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "record_update",
+      "description": "Action-object permutation: record_update",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/record_update",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "modify_record",
+      "description": "Action-object permutation: modify_record",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/modify_record",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "change_record",
+      "description": "Action-object permutation: change_record",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/change_record",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "edit_record",
+      "description": "Action-object permutation: edit_record",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/edit_record",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "fetch_data",
+      "description": "Action-object permutation: fetch_data",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/fetch_data",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "data_fetch",
+      "description": "Action-object permutation: data_fetch",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/data_fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "get_data",
+      "description": "Action-object permutation: get_data",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/get_data",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "retrieve_data",
+      "description": "Action-object permutation: retrieve_data",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/retrieve_data",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "load_data",
+      "description": "Action-object permutation: load_data",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/load_data",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "validate_input",
+      "description": "Action-object permutation: validate_input",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/validate_input",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "input_validate",
+      "description": "Action-object permutation: input_validate",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/input_validate",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "check_input",
+      "description": "Action-object permutation: check_input",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/check_input",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "verify_input",
+      "description": "Action-object permutation: verify_input",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/verify_input",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "test_input",
+      "description": "Action-object permutation: test_input",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/test_input",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "parse_json",
+      "description": "Action-object permutation: parse_json",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/parse_json",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "json_parse",
+      "description": "Action-object permutation: json_parse",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/json_parse",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "decode_json",
+      "description": "Action-object permutation: decode_json",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/decode_json",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "read_json",
+      "description": "Action-object permutation: read_json",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/read_json",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "load_json",
+      "description": "Action-object permutation: load_json",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/load_json",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "format_output",
+      "description": "Action-object permutation: format_output",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/format_output",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "output_format",
+      "description": "Action-object permutation: output_format",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/output_format",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "render_output",
+      "description": "Action-object permutation: render_output",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/render_output",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "stringify_output",
+      "description": "Action-object permutation: stringify_output",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/stringify_output",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "serialize_output",
+      "description": "Action-object permutation: serialize_output",
+      "source": "synthetic",
+      "module_path": "synthetic/permutation/serialize_output",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "action_object_permutation"
+      ],
+      "synthetic_scenario": "action_object_permutation"
+    },
+    {
+      "name": "read",
+      "description": "Prefix chain tool: read",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "read_file",
+      "description": "Prefix chain tool: read_file",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/read_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "read_file_text",
+      "description": "Prefix chain tool: read_file_text",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/read_file_text",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "read_file_text_utf8",
+      "description": "Prefix chain tool: read_file_text_utf8",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/read_file_text_utf8",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "write",
+      "description": "Prefix chain tool: write",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/write",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "write_file",
+      "description": "Prefix chain tool: write_file",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/write_file",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "write_file_binary",
+      "description": "Prefix chain tool: write_file_binary",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/write_file_binary",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "write_file_binary_sync",
+      "description": "Prefix chain tool: write_file_binary_sync",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/write_file_binary_sync",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "search",
+      "description": "Prefix chain tool: search",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/search",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "search_web",
+      "description": "Prefix chain tool: search_web",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/search_web",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "search_web_images",
+      "description": "Prefix chain tool: search_web_images",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/search_web_images",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "search_web_images_hd",
+      "description": "Prefix chain tool: search_web_images_hd",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/search_web_images_hd",
+      "category": "search",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "search",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "get",
+      "description": "Prefix chain tool: get",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/get",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "get_user",
+      "description": "Prefix chain tool: get_user",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/get_user",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "get_user_profile",
+      "description": "Prefix chain tool: get_user_profile",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/get_user_profile",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "get_user_profile_photo",
+      "description": "Prefix chain tool: get_user_profile_photo",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/get_user_profile_photo",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "general",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "send",
+      "description": "Prefix chain tool: send",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/send",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "send_message",
+      "description": "Prefix chain tool: send_message",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/send_message",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "send_message_async",
+      "description": "Prefix chain tool: send_message_async",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/send_message_async",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "send_message_async_batch",
+      "description": "Prefix chain tool: send_message_async_batch",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/send_message_async_batch",
+      "category": "communication",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "communication",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "list",
+      "description": "Prefix chain tool: list",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/list",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "list_files",
+      "description": "Prefix chain tool: list_files",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/list_files",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "list_files_recursive",
+      "description": "Prefix chain tool: list_files_recursive",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/list_files_recursive",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "list_files_recursive_filtered",
+      "description": "Prefix chain tool: list_files_recursive_filtered",
+      "source": "synthetic",
+      "module_path": "synthetic/prefix/list_files_recursive_filtered",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "prefix_collision"
+      ],
+      "synthetic_scenario": "prefix_collision"
+    },
+    {
+      "name": "filesystem_read_provider_alpha",
+      "description": "Read from filesystem (provider_alpha)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_alpha/filesystem_read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "filesystem_read_provider_beta",
+      "description": "Read from filesystem (provider_beta)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_beta/filesystem_read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "filesystem_read_provider_gamma",
+      "description": "Read from filesystem (provider_gamma)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_gamma/filesystem_read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "fs_read_provider_alpha",
+      "description": "FS read operation (provider_alpha)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_alpha/fs_read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "fs_read_provider_beta",
+      "description": "FS read operation (provider_beta)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_beta/fs_read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "fs_read_provider_gamma",
+      "description": "FS read operation (provider_gamma)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_gamma/fs_read",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "file_reader_provider_alpha",
+      "description": "File reader utility (provider_alpha)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_alpha/file_reader",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "file_reader_provider_beta",
+      "description": "File reader utility (provider_beta)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_beta/file_reader",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "file_reader_provider_gamma",
+      "description": "File reader utility (provider_gamma)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_gamma/file_reader",
+      "category": "filesystem",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "filesystem",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "database_query_provider_alpha",
+      "description": "Query database (provider_alpha)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_alpha/database_query",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "database_query_provider_beta",
+      "description": "Query database (provider_beta)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_beta/database_query",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "database_query_provider_gamma",
+      "description": "Query database (provider_gamma)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_gamma/database_query",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "db_query_provider_alpha",
+      "description": "DB query (provider_alpha)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_alpha/db_query",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "db_query_provider_beta",
+      "description": "DB query (provider_beta)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_beta/db_query",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "db_query_provider_gamma",
+      "description": "DB query (provider_gamma)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_gamma/db_query",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "sql_execute_provider_alpha",
+      "description": "Execute SQL (provider_alpha)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_alpha/sql_execute",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "sql_execute_provider_beta",
+      "description": "Execute SQL (provider_beta)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_beta/sql_execute",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "sql_execute_provider_gamma",
+      "description": "Execute SQL (provider_gamma)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_gamma/sql_execute",
+      "category": "database",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "database",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "web_fetch_provider_alpha",
+      "description": "Fetch from web (provider_alpha)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_alpha/web_fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "web_fetch_provider_beta",
+      "description": "Fetch from web (provider_beta)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_beta/web_fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "web_fetch_provider_gamma",
+      "description": "Fetch from web (provider_gamma)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_gamma/web_fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "http_request_provider_alpha",
+      "description": "HTTP request (provider_alpha)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_alpha/http_request",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "http_request_provider_beta",
+      "description": "HTTP request (provider_beta)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_beta/http_request",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "http_request_provider_gamma",
+      "description": "HTTP request (provider_gamma)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_gamma/http_request",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "url_fetch_provider_alpha",
+      "description": "Fetch URL (provider_alpha)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_alpha/url_fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "url_fetch_provider_beta",
+      "description": "Fetch URL (provider_beta)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_beta/url_fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    },
+    {
+      "name": "url_fetch_provider_gamma",
+      "description": "Fetch URL (provider_gamma)",
+      "source": "synthetic",
+      "module_path": "synthetic/namespace/provider_gamma/url_fetch",
+      "category": "web",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true,
+          "description": "Input"
+        }
+      ],
+      "return_type": "string",
+      "tags": [
+        "web",
+        "namespace_collision"
+      ],
+      "synthetic_scenario": "namespace_collision"
+    }
+  ]
+}

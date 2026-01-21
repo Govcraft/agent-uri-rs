@@ -1,0 +1,11 @@
+{
+  "metadata": {
+    "source": "mcp_community",
+    "extraction_date": "2026-01-20T21:49:06.590506+00:00",
+    "tool_count": 0,
+    "extractor_version": "1.0.0",
+    "github_source": "punkpeye/awesome-mcp-servers",
+    "notes": "Extracted from community MCP servers via source code parsing"
+  },
+  "tools": []
+}

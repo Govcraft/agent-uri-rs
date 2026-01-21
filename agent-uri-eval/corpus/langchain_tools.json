@@ -1,7 +1,7 @@
 {
   "metadata": {
     "source": "langchain_community.tools",
-    "extraction_date": "2026-01-20T19:51:41.529358+00:00",
+    "extraction_date": "2026-01-20T21:43:00.275777+00:00",
     "tool_count": 163,
     "extractor_version": "1.0.0"
   },
@@ -137,8 +137,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "search",
-        "asknews"
+        "asknews",
+        "search"
       ]
     },
     {
@@ -339,8 +339,8 @@
       "parameters": [],
       "return_type": "str",
       "tags": [
-        "search",
-        "brave_search"
+        "brave_search",
+        "search"
       ]
     },
     {
@@ -364,8 +364,8 @@
       "parameters": [],
       "return_type": "Dict[str, Any]",
       "tags": [
-        "api",
-        "cogniswitch"
+        "cogniswitch",
+        "api"
       ]
     },
     {
@@ -377,8 +377,8 @@
       "parameters": [],
       "return_type": "Dict[str, Any]",
       "tags": [
-        "file_operations",
-        "cogniswitch"
+        "cogniswitch",
+        "file_operations"
       ]
     },
     {
@@ -439,8 +439,8 @@
       "return_type": "<class 'str'>",
       "tags": [
         "api",
-        "dataforseo_api_search",
-        "search"
+        "search",
+        "dataforseo_api_search"
       ]
     },
     {
@@ -453,8 +453,8 @@
       "return_type": "<class 'str'>",
       "tags": [
         "api",
-        "dataforseo_api_search",
-        "search"
+        "search",
+        "dataforseo_api_search"
       ]
     },
     {
@@ -466,8 +466,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "dataherald",
-        "database"
+        "database",
+        "dataherald"
       ]
     },
     {
@@ -479,8 +479,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "ddg_search",
-        "search"
+        "search",
+        "ddg_search"
       ]
     },
     {
@@ -490,10 +490,10 @@
       "module_path": "langchain_community.tools.ddg_search.tool",
       "category": "ddg_search",
       "parameters": [],
-      "return_type": "tuple[typing.List[dict] | str, typing.List[dict]]",
+      "return_type": "tuple[typing.Union[typing.List[dict], str], typing.List[dict]]",
       "tags": [
-        "ddg_search",
-        "search"
+        "search",
+        "ddg_search"
       ]
     },
     {
@@ -665,8 +665,8 @@
       "return_type": "<class 'str'>",
       "tags": [
         "file_management",
-        "search",
-        "file_operations"
+        "file_operations",
+        "search"
       ]
     },
     {
@@ -826,8 +826,8 @@
       "parameters": [],
       "return_type": "typing.List[typing.Dict[str, typing.Any]]",
       "tags": [
-        "search",
-        "gmail"
+        "gmail",
+        "search"
       ]
     },
     {
@@ -914,8 +914,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "google_jobs",
-        "database"
+        "database",
+        "google_jobs"
       ]
     },
     {
@@ -1136,10 +1136,10 @@
       "module_path": "langchain_community.tools.metaphor_search.tool",
       "category": "metaphor_search",
       "parameters": [],
-      "return_type": "typing.List[typing.Dict] | str",
+      "return_type": "typing.Union[typing.List[typing.Dict], str]",
       "tags": [
-        "search",
-        "metaphor_search"
+        "metaphor_search",
+        "search"
       ]
     },
     {
@@ -1151,8 +1151,8 @@
       "parameters": [],
       "return_type": "str",
       "tags": [
-        "search",
-        "mojeek_search"
+        "mojeek_search",
+        "search"
       ]
     },
     {
@@ -1212,8 +1212,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "api",
-        "nuclia"
+        "nuclia",
+        "api"
       ]
     },
     {
@@ -1311,8 +1311,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "database",
-        "openweathermap"
+        "openweathermap",
+        "database"
       ]
     },
     {
@@ -1322,7 +1322,7 @@
       "module_path": "langchain_community.tools.passio_nutrition_ai.tool",
       "category": "passio_nutrition_ai",
       "parameters": [],
-      "return_type": "typing.Dict | None",
+      "return_type": "typing.Optional[typing.Dict]",
       "tags": [
         "passio_nutrition_ai"
       ]
@@ -1529,8 +1529,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "database",
-        "pubmed"
+        "pubmed",
+        "database"
       ]
     },
     {
@@ -1540,10 +1540,10 @@
       "module_path": "langchain_community.tools.requests.tool",
       "category": "requests",
       "parameters": [],
-      "return_type": "str | typing.Dict[str, typing.Any]",
+      "return_type": "typing.Union[str, typing.Dict[str, typing.Any]]",
       "tags": [
-        "api",
-        "requests"
+        "requests",
+        "api"
       ]
     },
     {
@@ -1553,10 +1553,10 @@
       "module_path": "langchain_community.tools.requests.tool",
       "category": "requests",
       "parameters": [],
-      "return_type": "str | typing.Dict[str, typing.Any]",
+      "return_type": "typing.Union[str, typing.Dict[str, typing.Any]]",
       "tags": [
-        "api",
-        "requests"
+        "requests",
+        "api"
       ]
     },
     {
@@ -1566,10 +1566,10 @@
       "module_path": "langchain_community.tools.requests.tool",
       "category": "requests",
       "parameters": [],
-      "return_type": "str | typing.Dict[str, typing.Any]",
+      "return_type": "typing.Union[str, typing.Dict[str, typing.Any]]",
       "tags": [
-        "api",
-        "requests"
+        "requests",
+        "api"
       ]
     },
     {
@@ -1579,10 +1579,10 @@
       "module_path": "langchain_community.tools.requests.tool",
       "category": "requests",
       "parameters": [],
-      "return_type": "str | typing.Dict[str, typing.Any]",
+      "return_type": "typing.Union[str, typing.Dict[str, typing.Any]]",
       "tags": [
-        "api",
-        "requests"
+        "requests",
+        "api"
       ]
     },
     {
@@ -1592,10 +1592,10 @@
       "module_path": "langchain_community.tools.requests.tool",
       "category": "requests",
       "parameters": [],
-      "return_type": "str | typing.Dict[str, typing.Any]",
+      "return_type": "typing.Union[str, typing.Dict[str, typing.Any]]",
       "tags": [
-        "api",
-        "requests"
+        "requests",
+        "api"
       ]
     },
     {
@@ -1643,9 +1643,9 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
+        "searchapi",
         "api",
-        "search",
-        "searchapi"
+        "search"
       ]
     },
     {
@@ -1657,9 +1657,9 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
+        "searchapi",
         "api",
-        "search",
-        "searchapi"
+        "search"
       ]
     },
     {
@@ -1671,8 +1671,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "search",
-        "searx_search"
+        "searx_search",
+        "search"
       ]
     },
     {
@@ -1684,8 +1684,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "search",
-        "searx_search"
+        "searx_search",
+        "search"
       ]
     },
     {
@@ -1858,8 +1858,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "api",
         "steam",
+        "api",
         "database"
       ]
     },
@@ -1882,7 +1882,7 @@
       "module_path": "langchain_community.tools.tavily_search.tool",
       "category": "tavily_search",
       "parameters": [],
-      "return_type": "typing.List[typing.Dict] | str",
+      "return_type": "typing.Union[typing.List[typing.Dict], str]",
       "tags": [
         "tavily_search"
       ]
@@ -1894,10 +1894,10 @@
       "module_path": "langchain_community.tools.tavily_search.tool",
       "category": "tavily_search",
       "parameters": [],
-      "return_type": "typing.Tuple[typing.List[typing.Dict[str, str]] | str, typing.Dict]",
+      "return_type": "typing.Tuple[typing.Union[typing.List[typing.Dict[str, str]], str], typing.Dict]",
       "tags": [
-        "search",
-        "tavily_search"
+        "tavily_search",
+        "search"
       ]
     },
     {
@@ -1946,8 +1946,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "wikipedia",
-        "database"
+        "database",
+        "wikipedia"
       ]
     },
     {
@@ -1984,8 +1984,8 @@
       "parameters": [],
       "return_type": "typing.List[langchain_core.documents.base.Document]",
       "tags": [
-        "search",
-        "you"
+        "you",
+        "search"
       ]
     },
     {
@@ -1997,8 +1997,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "search",
-        "youtube"
+        "youtube",
+        "search"
       ]
     },
     {
@@ -2010,8 +2010,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "api",
-        "zapier"
+        "zapier",
+        "api"
       ]
     },
     {
@@ -2023,8 +2023,8 @@
       "parameters": [],
       "return_type": "<class 'str'>",
       "tags": [
-        "api",
-        "zapier"
+        "zapier",
+        "api"
       ]
     },
     {

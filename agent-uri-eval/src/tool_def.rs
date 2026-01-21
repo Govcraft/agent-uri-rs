@@ -15,6 +15,10 @@ pub enum ToolSource {
     HuggingFace,
     /// Smolagents (`HuggingFace` successor to `transformers.agents`).
     Smolagents,
+    /// CrewAI tools.
+    CrewAi,
+    /// Microsoft AutoGen tools.
+    AutoGen,
     /// Synthetic/test data.
     Synthetic,
 }
@@ -27,6 +31,8 @@ impl std::fmt::Display for ToolSource {
             Self::OpenAi => write!(f, "openai"),
             Self::HuggingFace => write!(f, "huggingface"),
             Self::Smolagents => write!(f, "smolagents"),
+            Self::CrewAi => write!(f, "crewai"),
+            Self::AutoGen => write!(f, "autogen"),
             Self::Synthetic => write!(f, "synthetic"),
         }
     }

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "source": "mcp",
-    "extraction_date": "2026-01-20T20:04:57.398079+00:00",
+    "extraction_date": "2026-01-20T21:43:33.167119+00:00",
     "tool_count": 79,
     "extractor_version": "1.0.0",
     "github_repo": "modelcontextprotocol/servers",
@@ -340,8 +340,8 @@
       ],
       "return_type": "object",
       "tags": [
-        "create",
-        "memory"
+        "memory",
+        "create"
       ]
     },
     {
@@ -360,8 +360,8 @@
       ],
       "return_type": "object",
       "tags": [
-        "create",
-        "memory"
+        "memory",
+        "create"
       ]
     },
     {

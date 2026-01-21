@@ -1,0 +1,219 @@
+{
+  "metadata": {
+    "source": "autogen",
+    "extraction_date": "2026-01-20T21:44:08.366772+00:00",
+    "tool_count": 12,
+    "extractor_version": "1.0.0",
+    "notes": "Extracted from autogen-ext and autogen-core via Python introspection"
+  },
+  "tools": [
+    {
+      "name": "base_stream_tool",
+      "description": "AutoGen BaseStreamTool",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._base",
+      "category": "general",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "base_tool_with_state",
+      "description": "AutoGen BaseToolWithState",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._base",
+      "category": "general",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "image_result_content",
+      "description": "Image result content of a tool execution.",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._workbench",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "type",
+          "type": "string",
+          "required": false,
+          "description": ""
+        },
+        {
+          "name": "content",
+          "type": "Any",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "parameters_schema",
+      "description": "AutoGen ParametersSchema",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._base",
+      "category": "general",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "static_stream_workbench",
+      "description": "A workbench that provides a static set of tools that do not change after\neach tool execution, and supports streaming results.",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._static_workbench",
+      "category": "general",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "static_workbench",
+      "description": "A workbench that provides a static set of tools that do not change after\neach tool execution.\n\nArgs:\n    tools (List[BaseTool[Any, Any]]): A list of tools to be included in the workbench.\n        The tools should be subclasses of :class:`~autogen_core.tools.BaseTool`.\n    tool_overrides (Optional[Dict[str, ToolOverride]]): Optional mapping of original tool\n        names to override configurations for name and/or description. This allows\n        customizing how tools appear to consumers while mai",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._static_workbench",
+      "category": "general",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "stream_tool",
+      "description": "AutoGen StreamTool",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._base",
+      "category": "general",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "text_result_content",
+      "description": "Text result content of a tool execution.",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._workbench",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "type",
+          "type": "string",
+          "required": false,
+          "description": ""
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true,
+          "description": ""
+        }
+      ],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "tool_override",
+      "description": "Override configuration for a tool's name and/or description.",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._base",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "Any",
+          "required": false,
+          "description": ""
+        },
+        {
+          "name": "description",
+          "type": "Any",
+          "required": false,
+          "description": ""
+        }
+      ],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "tool_result",
+      "description": "A result of a tool execution by a workbench.",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._workbench",
+      "category": "general",
+      "parameters": [
+        {
+          "name": "type",
+          "type": "string",
+          "required": false,
+          "description": ""
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "result",
+          "type": "array",
+          "required": true,
+          "description": ""
+        },
+        {
+          "name": "is_error",
+          "type": "boolean",
+          "required": false,
+          "description": ""
+        }
+      ],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "tool_schema",
+      "description": "AutoGen ToolSchema",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._base",
+      "category": "general",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    },
+    {
+      "name": "workbench",
+      "description": "A workbench is a component that provides a set of tools that may share\nresources and state.\n\nA workbench is responsible for managing the lifecycle of the tools and\nproviding a single interface to call them. The tools provided by the workbench\nmay be dynamic and their availabilities may change after each tool execution.\n\nA workbench can be started by calling the :meth:`~autogen_core.tools.Workbench.start` method\nand stopped by calling the :meth:`~autogen_core.tools.Workbench.stop` method.\nIt can ",
+      "source": "autogen",
+      "module_path": "autogen_core.tools._workbench",
+      "category": "general",
+      "parameters": [],
+      "return_type": "Any",
+      "tags": [
+        "general"
+      ]
+    }
+  ]
+}
