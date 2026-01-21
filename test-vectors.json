@@ -12,7 +12,8 @@
     "dht_keys": "DHT key derivation test cases",
     "capability_coverage": "Capability binding coverage tests",
     "length_limits": "Boundary condition tests for length constraints",
-    "agent_id": "Agent identifier validation tests"
+    "agent_id": "Agent identifier validation tests",
+    "attestation_verification": "PASETO attestation claim verification tests"
   },
 
   "parsing": [
@@ -1258,6 +1259,389 @@
       "valid": "normalize_or_reject",
       "canonical": "llm_01h455vb4pex5vsknk084sn02q",
       "note": "Implementations must either normalize to lowercase or reject"
+    }
+  ],
+
+  "attestation_verification": [
+    {
+      "id": "att-001",
+      "description": "Valid attestation - all claims correct, no audience restriction",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow/approval"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true
+    },
+    {
+      "id": "att-002",
+      "description": "Valid attestation - audience present and matches verifier",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "aud": "partner.com",
+        "capabilities": ["workflow/approval"]
+      },
+      "verifier": "partner.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true
+    },
+    {
+      "id": "att-003",
+      "description": "REJECT - audience present but does not match verifier",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "aud": "partner.com",
+        "capabilities": ["workflow/approval"]
+      },
+      "verifier": "other-company.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "audience_mismatch",
+      "error_message": "Attestation audience 'partner.com' does not match verifier 'other-company.com'"
+    },
+    {
+      "id": "att-004",
+      "description": "REJECT - issuer does not match trust root",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "other.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "issuer_mismatch",
+      "error_message": "Attestation issuer 'other.com' does not match URI trust root 'acme.com'"
+    },
+    {
+      "id": "att-005",
+      "description": "REJECT - subject does not match agent URI",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02r",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "subject_mismatch",
+      "error_message": "Attestation subject does not match agent URI"
+    },
+    {
+      "id": "att-006",
+      "description": "REJECT - attestation expired",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2025-01-01T00:00:00Z",
+        "exp": "2025-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "expired",
+      "error_message": "Attestation expired at 2025-12-31T23:59:59Z"
+    },
+    {
+      "id": "att-007",
+      "description": "REJECT - capabilities do not cover URI path",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow/review"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "capability_not_covered",
+      "error_message": "URI path 'workflow/approval/invoice' not covered by capabilities ['workflow/review']"
+    },
+    {
+      "id": "att-008",
+      "description": "REJECT - empty capabilities list",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": []
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "capability_not_covered",
+      "error_message": "URI path 'workflow/approval' not covered by empty capabilities list"
+    },
+    {
+      "id": "att-009",
+      "description": "Valid - capabilities cover via prefix (parent covers child)",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/high-value/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/high-value/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "Capability 'workflow' covers 'workflow/approval/invoice/high-value' via prefix match"
+    },
+    {
+      "id": "att-010",
+      "description": "Valid - one of multiple capabilities covers path",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["financial", "legal", "workflow/approval"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "Third capability 'workflow/approval' covers the path"
+    },
+    {
+      "id": "att-011",
+      "description": "REJECT - partial string match insufficient for capabilities",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["work"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "capability_not_covered",
+      "error_message": "Capability 'work' is not a path prefix of 'workflow/approval'"
+    },
+    {
+      "id": "att-012",
+      "description": "REJECT - capability is child of path (child cannot cover parent)",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow/approval"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "capability_not_covered",
+      "error_message": "Capability 'workflow/approval' does not cover parent path 'workflow'"
+    },
+    {
+      "id": "att-013",
+      "description": "REJECT - missing required claim: iss",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'iss' is missing"
+    },
+    {
+      "id": "att-014",
+      "description": "REJECT - missing required claim: sub",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'sub' is missing"
+    },
+    {
+      "id": "att-015",
+      "description": "REJECT - missing required claim: exp",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'exp' is missing"
+    },
+    {
+      "id": "att-016",
+      "description": "REJECT - missing required claim: iat",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'iat' is missing"
+    },
+    {
+      "id": "att-017",
+      "description": "REJECT - missing required claim: capabilities",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z"
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'capabilities' is missing"
+    },
+    {
+      "id": "att-018",
+      "description": "Valid - attestation at exact expiration boundary (exp == current_time)",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-06-15T12:00:00Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "expired",
+      "note": "exp MUST be > current_time, not >= (attestation expires AT the exp time)"
+    },
+    {
+      "id": "att-019",
+      "description": "Valid - audience absent allows any verifier",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "completely-unknown-verifier.example.org",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "When aud is absent, any verifier MAY accept the attestation"
+    },
+    {
+      "id": "att-020",
+      "description": "REJECT - iat is in the future (not yet valid)",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2027-01-01T00:00:00Z",
+        "exp": "2027-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "not_yet_valid",
+      "error_message": "Attestation issued-at time is in the future"
+    },
+    {
+      "id": "att-021",
+      "description": "Valid - subject matches after URI normalization",
+      "agent_uri": "agent://ACME.COM/Workflow/Approval/rule_01H455VB4PEX5VSKNK084SN02Q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "URI must be normalized before comparing to sub claim"
+    },
+    {
+      "id": "att-022",
+      "description": "Valid - issuer matches trust root after normalization",
+      "agent_uri": "agent://ACME.COM/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "Trust root must be normalized before comparing to iss claim"
+    },
+    {
+      "id": "att-023",
+      "description": "REJECT - audience case-sensitive mismatch",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "aud": "Partner.Com",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "partner.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "audience_mismatch",
+      "note": "Audience comparison is case-sensitive unless spec says otherwise"
     }
   ]
 }
