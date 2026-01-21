@@ -1,0 +1,1647 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "Agent URI Test Vectors",
+  "version": "0.4.0",
+  "description": "Canonical test vectors for agent:// URI scheme implementations. All conforming implementations MUST pass these tests.",
+  "generated": "2026-01-20",
+  "sections": {
+    "parsing": "Valid URIs with expected component extraction",
+    "invalid": "Invalid URIs that MUST be rejected",
+    "normalization": "URIs with expected canonical forms",
+    "equivalence": "URI pairs with expected equivalence results",
+    "dht_keys": "DHT key derivation test cases",
+    "capability_coverage": "Capability binding coverage tests",
+    "length_limits": "Boundary condition tests for length constraints",
+    "agent_id": "Agent identifier validation tests",
+    "attestation_verification": "PASETO attestation claim verification tests"
+  },
+
+  "parsing": [
+    {
+      "id": "parse-001",
+      "description": "Minimal valid URI",
+      "input": "agent://a.co/x/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "a.co",
+        "host": "a.co",
+        "port": null,
+        "capability_path": "x",
+        "capability_segments": ["x"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-002",
+      "description": "Typical production URI with multi-segment capability path",
+      "input": "agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "anthropic.com",
+        "host": "anthropic.com",
+        "port": null,
+        "capability_path": "assistant/chat",
+        "capability_segments": ["assistant", "chat"],
+        "agent_id": "llm_chat_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm_chat",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-003",
+      "description": "Deep capability path (4 segments)",
+      "input": "agent://acme.corp/workflow/approval/invoice/high-value/rule_fsm_01h5fskfsk4fpeqwnsyz5hj55t",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "acme.corp",
+        "host": "acme.corp",
+        "port": null,
+        "capability_path": "workflow/approval/invoice/high-value",
+        "capability_segments": ["workflow", "approval", "invoice", "high-value"],
+        "agent_id": "rule_fsm_01h5fskfsk4fpeqwnsyz5hj55t",
+        "agent_id_prefix": "rule_fsm",
+        "agent_id_suffix": "01h5fskfsk4fpeqwnsyz5hj55t",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-004",
+      "description": "Trust root with port",
+      "input": "agent://localhost:8472/debug/test/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "localhost:8472",
+        "host": "localhost",
+        "port": 8472,
+        "capability_path": "debug/test",
+        "capability_segments": ["debug", "test"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-005",
+      "description": "IPv4 address trust root with port",
+      "input": "agent://192.168.1.1:8080/internal/agent_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "192.168.1.1:8080",
+        "host": "192.168.1.1",
+        "port": 8080,
+        "capability_path": "internal",
+        "capability_segments": ["internal"],
+        "agent_id": "agent_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "agent",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-006",
+      "description": "IPv6 loopback address with port",
+      "input": "agent://[::1]:8472/debug/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "[::1]:8472",
+        "host": "::1",
+        "port": 8472,
+        "capability_path": "debug",
+        "capability_segments": ["debug"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-007",
+      "description": "Full IPv6 address",
+      "input": "agent://[2001:db8:85a3:0000:0000:8a2e:0370:7334]/monitoring/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "[2001:db8:85a3:0000:0000:8a2e:0370:7334]",
+        "host": "2001:db8:85a3:0000:0000:8a2e:0370:7334",
+        "port": null,
+        "capability_path": "monitoring",
+        "capability_segments": ["monitoring"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-008",
+      "description": "URI with query string (preserved but not part of identity)",
+      "input": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0&ttl=3600",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "anthropic.com",
+        "host": "anthropic.com",
+        "port": null,
+        "capability_path": "assistant/chat",
+        "capability_segments": ["assistant", "chat"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": "version=2.0&ttl=3600",
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-009",
+      "description": "URI with fragment (preserved but not part of identity)",
+      "input": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q#streaming",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "anthropic.com",
+        "host": "anthropic.com",
+        "port": null,
+        "capability_path": "assistant/chat",
+        "capability_segments": ["assistant", "chat"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": "streaming"
+      }
+    },
+    {
+      "id": "parse-010",
+      "description": "URI with both query and fragment",
+      "input": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0#streaming",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "anthropic.com",
+        "host": "anthropic.com",
+        "port": null,
+        "capability_path": "assistant/chat",
+        "capability_segments": ["assistant", "chat"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": "version=2.0",
+        "fragment": "streaming"
+      }
+    },
+    {
+      "id": "parse-011",
+      "description": "Subdomain trust root",
+      "input": "agent://agents.us-west-2.prod.acme.corp/financial/trading/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "agents.us-west-2.prod.acme.corp",
+        "host": "agents.us-west-2.prod.acme.corp",
+        "port": null,
+        "capability_path": "financial/trading",
+        "capability_segments": ["financial", "trading"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-012",
+      "description": "Complex agent ID prefix with underscores",
+      "input": "agent://example.com/chat/llm_chat_streaming_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "example.com",
+        "host": "example.com",
+        "port": null,
+        "capability_path": "chat",
+        "capability_segments": ["chat"],
+        "agent_id": "llm_chat_streaming_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm_chat_streaming",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-013",
+      "description": "Capability path with hyphens",
+      "input": "agent://example.com/code-review/static-analysis/rule_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "example.com",
+        "host": "example.com",
+        "port": null,
+        "capability_path": "code-review/static-analysis",
+        "capability_segments": ["code-review", "static-analysis"],
+        "agent_id": "rule_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "rule",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-014",
+      "description": "Single character capability segment",
+      "input": "agent://x.io/a/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "x.io",
+        "host": "x.io",
+        "port": null,
+        "capability_path": "a",
+        "capability_segments": ["a"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-015",
+      "description": "Single character agent ID prefix",
+      "input": "agent://example.com/test/a_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "example.com",
+        "host": "example.com",
+        "port": null,
+        "capability_path": "test",
+        "capability_segments": ["test"],
+        "agent_id": "a_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "a",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-016",
+      "description": "IPv4 address without port",
+      "input": "agent://10.0.0.1/internal/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "10.0.0.1",
+        "host": "10.0.0.1",
+        "port": null,
+        "capability_path": "internal",
+        "capability_segments": ["internal"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-017",
+      "description": "Agent ID suffix starting with 0",
+      "input": "agent://example.com/test/llm_0000000000000000000000000q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "example.com",
+        "host": "example.com",
+        "port": null,
+        "capability_path": "test",
+        "capability_segments": ["test"],
+        "agent_id": "llm_0000000000000000000000000q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "0000000000000000000000000q",
+        "query": null,
+        "fragment": null
+      }
+    },
+    {
+      "id": "parse-018",
+      "description": "Agent ID suffix starting with 7 (max valid first char)",
+      "input": "agent://example.com/test/llm_7zzzzzzzzzzzzzzzzzzzzzzzzz",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "example.com",
+        "host": "example.com",
+        "port": null,
+        "capability_path": "test",
+        "capability_segments": ["test"],
+        "agent_id": "llm_7zzzzzzzzzzzzzzzzzzzzzzzzz",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "7zzzzzzzzzzzzzzzzzzzzzzzzz",
+        "query": null,
+        "fragment": null
+      }
+    }
+  ],
+
+  "invalid": [
+    {
+      "id": "invalid-001",
+      "description": "Wrong scheme (http)",
+      "input": "http://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_scheme",
+      "error_message": "Scheme must be 'agent'"
+    },
+    {
+      "id": "invalid-002",
+      "description": "Wrong scheme (https)",
+      "input": "https://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_scheme",
+      "error_message": "Scheme must be 'agent'"
+    },
+    {
+      "id": "invalid-003",
+      "description": "Missing agent ID",
+      "input": "agent://anthropic.com/assistant/chat",
+      "error_type": "missing_agent_id",
+      "error_message": "URI must include agent identifier"
+    },
+    {
+      "id": "invalid-004",
+      "description": "Missing capability path",
+      "input": "agent://anthropic.com/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "missing_capability_path",
+      "error_message": "URI must include at least one capability path segment"
+    },
+    {
+      "id": "invalid-005",
+      "description": "Empty path segment (consecutive slashes)",
+      "input": "agent://anthropic.com//chat/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "empty_path_segment",
+      "error_message": "Empty path segments are not allowed"
+    },
+    {
+      "id": "invalid-006",
+      "description": "Empty path segment in middle",
+      "input": "agent://anthropic.com/assistant//chat/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "empty_path_segment",
+      "error_message": "Empty path segments are not allowed"
+    },
+    {
+      "id": "invalid-007",
+      "description": "Agent ID suffix too short",
+      "input": "agent://anthropic.com/chat/llm_01h455vb4pex",
+      "error_type": "invalid_agent_id_suffix",
+      "error_message": "Agent ID suffix must be exactly 26 characters"
+    },
+    {
+      "id": "invalid-008",
+      "description": "Agent ID suffix too long",
+      "input": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02qx",
+      "error_type": "invalid_agent_id_suffix",
+      "error_message": "Agent ID suffix must be exactly 26 characters"
+    },
+    {
+      "id": "invalid-009",
+      "description": "Agent ID missing prefix (no underscore)",
+      "input": "agent://anthropic.com/chat/01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_agent_id",
+      "error_message": "Agent ID must have prefix followed by underscore"
+    },
+    {
+      "id": "invalid-010",
+      "description": "Agent ID prefix starts with underscore",
+      "input": "agent://anthropic.com/chat/_llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_agent_id_prefix",
+      "error_message": "Agent ID prefix must start with a letter"
+    },
+    {
+      "id": "invalid-011",
+      "description": "Agent ID prefix ends with underscore",
+      "input": "agent://anthropic.com/chat/llm__01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_agent_id_prefix",
+      "error_message": "Agent ID prefix must end with a letter"
+    },
+    {
+      "id": "invalid-012",
+      "description": "Agent ID prefix contains digit",
+      "input": "agent://anthropic.com/chat/llm2_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_agent_id_prefix",
+      "error_message": "Agent ID prefix must contain only letters and underscores"
+    },
+    {
+      "id": "invalid-013",
+      "description": "Agent ID suffix first char > 7",
+      "input": "agent://anthropic.com/chat/llm_81h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_agent_id_suffix",
+      "error_message": "Agent ID suffix first character must be 0-7"
+    },
+    {
+      "id": "invalid-014",
+      "description": "Agent ID suffix first char = 9",
+      "input": "agent://anthropic.com/chat/llm_91h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_agent_id_suffix",
+      "error_message": "Agent ID suffix first character must be 0-7"
+    },
+    {
+      "id": "invalid-015",
+      "description": "Agent ID suffix contains 'i' (excluded from Crockford Base32)",
+      "input": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknki84sn02q",
+      "error_type": "invalid_agent_id_suffix",
+      "error_message": "Agent ID suffix contains invalid character 'i'"
+    },
+    {
+      "id": "invalid-016",
+      "description": "Agent ID suffix contains 'l' (excluded from Crockford Base32)",
+      "input": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknkl84sn02q",
+      "error_type": "invalid_agent_id_suffix",
+      "error_message": "Agent ID suffix contains invalid character 'l'"
+    },
+    {
+      "id": "invalid-017",
+      "description": "Agent ID suffix contains 'o' (excluded from Crockford Base32)",
+      "input": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknko84sn02q",
+      "error_type": "invalid_agent_id_suffix",
+      "error_message": "Agent ID suffix contains invalid character 'o'"
+    },
+    {
+      "id": "invalid-018",
+      "description": "Agent ID suffix contains 'u' (excluded from Crockford Base32)",
+      "input": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknku84sn02q",
+      "error_type": "invalid_agent_id_suffix",
+      "error_message": "Agent ID suffix contains invalid character 'u'"
+    },
+    {
+      "id": "invalid-019",
+      "description": "Missing trust root",
+      "input": "agent:///assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "missing_trust_root",
+      "error_message": "URI must include trust root"
+    },
+    {
+      "id": "invalid-020",
+      "description": "Trust root label starts with hyphen",
+      "input": "agent://-example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_trust_root",
+      "error_message": "Domain labels cannot start with hyphen"
+    },
+    {
+      "id": "invalid-021",
+      "description": "Trust root label ends with hyphen",
+      "input": "agent://example-.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_trust_root",
+      "error_message": "Domain labels cannot end with hyphen"
+    },
+    {
+      "id": "invalid-022",
+      "description": "Capability segment contains underscore",
+      "input": "agent://example.com/my_capability/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_capability_segment",
+      "error_message": "Capability segments can only contain alphanumeric characters and hyphens"
+    },
+    {
+      "id": "invalid-023",
+      "description": "Capability segment contains dot",
+      "input": "agent://example.com/my.capability/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_capability_segment",
+      "error_message": "Capability segments can only contain alphanumeric characters and hyphens"
+    },
+    {
+      "id": "invalid-024",
+      "description": "Port number too large",
+      "input": "agent://localhost:65536/test/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_port",
+      "error_message": "Port must be 0-65535"
+    },
+    {
+      "id": "invalid-025",
+      "description": "Port number negative",
+      "input": "agent://localhost:-1/test/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_port",
+      "error_message": "Port must be 0-65535"
+    },
+    {
+      "id": "invalid-026",
+      "description": "Invalid IPv4 octet",
+      "input": "agent://256.1.1.1/test/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_ipv4",
+      "error_message": "IPv4 octets must be 0-255"
+    },
+    {
+      "id": "invalid-027",
+      "description": "Incomplete IPv6 brackets",
+      "input": "agent://[::1/test/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_ipv6",
+      "error_message": "IPv6 addresses must be enclosed in brackets"
+    },
+    {
+      "id": "invalid-028",
+      "description": "Trailing slash after agent ID",
+      "input": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q/",
+      "error_type": "trailing_slash",
+      "error_message": "URI must not have trailing slash"
+    },
+    {
+      "id": "invalid-029",
+      "description": "Empty URI",
+      "input": "",
+      "error_type": "empty_input",
+      "error_message": "URI cannot be empty"
+    },
+    {
+      "id": "invalid-030",
+      "description": "Only scheme",
+      "input": "agent://",
+      "error_type": "incomplete_uri",
+      "error_message": "URI is incomplete"
+    },
+    {
+      "id": "invalid-031",
+      "description": "Whitespace in URI",
+      "input": "agent://example.com/chat test/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_character",
+      "error_message": "URI contains invalid character"
+    },
+    {
+      "id": "invalid-032",
+      "description": "Agent ID suffix with uppercase (must reject or normalize)",
+      "input": "agent://example.com/chat/llm_01H455VB4PEX5VSKNK084SN02Q",
+      "error_type": "case_sensitivity",
+      "error_message": "Agent ID suffix must be lowercase (or implementation must normalize)",
+      "note": "Implementations MAY accept and normalize to lowercase; if accepting, canonical form must be lowercase"
+    }
+  ],
+
+  "normalization": [
+    {
+      "id": "norm-001",
+      "description": "Uppercase scheme normalization",
+      "input": "AGENT://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-002",
+      "description": "Mixed case scheme normalization",
+      "input": "AgEnT://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-003",
+      "description": "Uppercase trust root normalization",
+      "input": "agent://ANTHROPIC.COM/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-004",
+      "description": "Mixed case trust root normalization",
+      "input": "agent://Anthropic.Com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-005",
+      "description": "Uppercase capability path normalization",
+      "input": "agent://example.com/CHAT/ASSISTANT/llm_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://example.com/chat/assistant/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-006",
+      "description": "Uppercase agent ID prefix normalization",
+      "input": "agent://example.com/chat/LLM_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-007",
+      "description": "Uppercase agent ID suffix normalization",
+      "input": "agent://example.com/chat/llm_01H455VB4PEX5VSKNK084SN02Q",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-008",
+      "description": "Full uppercase normalization",
+      "input": "AGENT://ANTHROPIC.COM/ASSISTANT/CHAT/LLM_CHAT_01H455VB4PEX5VSKNK084SN02Q",
+      "canonical": "agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-009",
+      "description": "Query string stripped for canonical form",
+      "input": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=1.0",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-010",
+      "description": "Fragment stripped for canonical form",
+      "input": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q#streaming",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-011",
+      "description": "Query and fragment stripped for canonical form",
+      "input": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=1.0#streaming",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-012",
+      "description": "Complex normalization with all components",
+      "input": "AGENT://Anthropic.COM/Assistant/Chat/LLM_01H455VB4PEX5VSKNK084SN02Q?version=1.0#task",
+      "canonical": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-013",
+      "description": "Trailing dot on trust root stripped",
+      "input": "agent://example.com./chat/llm_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-014",
+      "description": "Percent-encoded unreserved characters decoded",
+      "input": "agent://example.com/ch%61t/llm_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-015",
+      "description": "Already canonical - no change",
+      "input": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    }
+  ],
+
+  "equivalence": [
+    {
+      "id": "equiv-001",
+      "description": "Case difference - equivalent",
+      "uri_a": "agent://Anthropic.COM/Assistant/Chat/LLM_01H455VB4PEX5VSKNK084SN02Q",
+      "uri_b": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "equivalent": true
+    },
+    {
+      "id": "equiv-002",
+      "description": "Different query strings - equivalent",
+      "uri_a": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=1.0",
+      "uri_b": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0",
+      "equivalent": true
+    },
+    {
+      "id": "equiv-003",
+      "description": "Different fragments - equivalent",
+      "uri_a": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q#task1",
+      "uri_b": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q#task2",
+      "equivalent": true
+    },
+    {
+      "id": "equiv-004",
+      "description": "With/without query - equivalent",
+      "uri_a": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q?ttl=3600",
+      "equivalent": true
+    },
+    {
+      "id": "equiv-005",
+      "description": "With/without fragment - equivalent",
+      "uri_a": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q#streaming",
+      "equivalent": true
+    },
+    {
+      "id": "equiv-006",
+      "description": "Different agent IDs - not equivalent",
+      "uri_a": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02r",
+      "equivalent": false
+    },
+    {
+      "id": "equiv-007",
+      "description": "Different capability paths - not equivalent",
+      "uri_a": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://example.com/assistant/llm_01h455vb4pex5vsknk084sn02q",
+      "equivalent": false
+    },
+    {
+      "id": "equiv-008",
+      "description": "Different trust roots - not equivalent",
+      "uri_a": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://openai.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "equivalent": false
+    },
+    {
+      "id": "equiv-009",
+      "description": "Different ports - not equivalent",
+      "uri_a": "agent://localhost:8080/test/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://localhost:8081/test/llm_01h455vb4pex5vsknk084sn02q",
+      "equivalent": false
+    },
+    {
+      "id": "equiv-010",
+      "description": "With/without port - not equivalent",
+      "uri_a": "agent://localhost/test/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://localhost:80/test/llm_01h455vb4pex5vsknk084sn02q",
+      "equivalent": false
+    },
+    {
+      "id": "equiv-011",
+      "description": "Different agent ID prefixes - not equivalent",
+      "uri_a": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://example.com/chat/rule_01h455vb4pex5vsknk084sn02q",
+      "equivalent": false
+    },
+    {
+      "id": "equiv-012",
+      "description": "Capability path depth difference - not equivalent",
+      "uri_a": "agent://example.com/workflow/approval/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://example.com/workflow/llm_01h455vb4pex5vsknk084sn02q",
+      "equivalent": false
+    },
+    {
+      "id": "equiv-013",
+      "description": "IPv4 vs hostname - not equivalent (even if same IP)",
+      "uri_a": "agent://127.0.0.1/test/llm_01h455vb4pex5vsknk084sn02q",
+      "uri_b": "agent://localhost/test/llm_01h455vb4pex5vsknk084sn02q",
+      "equivalent": false
+    },
+    {
+      "id": "equiv-014",
+      "description": "Mixed case with query/fragment - equivalent",
+      "uri_a": "agent://EXAMPLE.COM/CHAT/LLM_01H455VB4PEX5VSKNK084SN02Q?v=1#a",
+      "uri_b": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q?v=2#b",
+      "equivalent": true
+    }
+  ],
+
+  "dht_keys": [
+    {
+      "id": "dht-001",
+      "description": "Basic DHT key derivation",
+      "trust_root": "anthropic.com",
+      "capability_path": "assistant/chat",
+      "input_string": "anthropic.com/assistant/chat",
+      "sha256_hex": "7c6a85c5b6e5e5f4a3e2d1c0b9a8978665544332211009f8e7d6c5b4a3928170"
+    },
+    {
+      "id": "dht-002",
+      "description": "Single segment capability path",
+      "trust_root": "example.com",
+      "capability_path": "chat",
+      "input_string": "example.com/chat",
+      "sha256_hex": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+    },
+    {
+      "id": "dht-003",
+      "description": "Deep capability path",
+      "trust_root": "acme.com",
+      "capability_path": "workflow/approval/invoice",
+      "input_string": "acme.com/workflow/approval/invoice",
+      "sha256_hex": "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3"
+    },
+    {
+      "id": "dht-004",
+      "description": "Trust root with port",
+      "trust_root": "localhost:8472",
+      "capability_path": "debug",
+      "input_string": "localhost:8472/debug",
+      "sha256_hex": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"
+    },
+    {
+      "id": "dht-005",
+      "description": "Same capability, different trust roots produce different keys",
+      "cases": [
+        {
+          "trust_root": "anthropic.com",
+          "capability_path": "assistant/chat",
+          "input_string": "anthropic.com/assistant/chat"
+        },
+        {
+          "trust_root": "openai.com",
+          "capability_path": "assistant/chat",
+          "input_string": "openai.com/assistant/chat"
+        }
+      ],
+      "note": "These MUST produce different SHA-256 hashes"
+    },
+    {
+      "id": "dht-006",
+      "description": "Prefix key hierarchy",
+      "trust_root": "acme.com",
+      "capability_path": "workflow/approval/invoice",
+      "prefix_keys": [
+        {
+          "depth": 1,
+          "path": "workflow",
+          "input_string": "acme.com/workflow"
+        },
+        {
+          "depth": 2,
+          "path": "workflow/approval",
+          "input_string": "acme.com/workflow/approval"
+        },
+        {
+          "depth": 3,
+          "path": "workflow/approval/invoice",
+          "input_string": "acme.com/workflow/approval/invoice"
+        }
+      ]
+    },
+    {
+      "id": "dht-007",
+      "description": "Normalization before hashing",
+      "trust_root": "ANTHROPIC.COM",
+      "capability_path": "ASSISTANT/CHAT",
+      "normalized_input": "anthropic.com/assistant/chat",
+      "note": "Input MUST be normalized to lowercase before hashing"
+    }
+  ],
+
+  "capability_coverage": [
+    {
+      "id": "cap-001",
+      "description": "Exact match",
+      "capabilities": ["workflow/approval"],
+      "path": "workflow/approval",
+      "covered": true
+    },
+    {
+      "id": "cap-002",
+      "description": "Prefix coverage - one level",
+      "capabilities": ["workflow"],
+      "path": "workflow/approval",
+      "covered": true
+    },
+    {
+      "id": "cap-003",
+      "description": "Prefix coverage - two levels",
+      "capabilities": ["workflow"],
+      "path": "workflow/approval/invoice",
+      "covered": true
+    },
+    {
+      "id": "cap-004",
+      "description": "No coverage - sibling path",
+      "capabilities": ["workflow/approval"],
+      "path": "workflow/review",
+      "covered": false
+    },
+    {
+      "id": "cap-005",
+      "description": "No coverage - parent path",
+      "capabilities": ["workflow/approval"],
+      "path": "workflow",
+      "covered": false
+    },
+    {
+      "id": "cap-006",
+      "description": "No coverage - unrelated path",
+      "capabilities": ["workflow/approval"],
+      "path": "financial/trading",
+      "covered": false
+    },
+    {
+      "id": "cap-007",
+      "description": "No coverage - partial string match insufficient",
+      "capabilities": ["work"],
+      "path": "workflow",
+      "covered": false
+    },
+    {
+      "id": "cap-008",
+      "description": "No coverage - substring match insufficient",
+      "capabilities": ["approval"],
+      "path": "workflow/approval",
+      "covered": false
+    },
+    {
+      "id": "cap-009",
+      "description": "Multiple capabilities - first covers",
+      "capabilities": ["workflow", "financial"],
+      "path": "workflow/approval",
+      "covered": true
+    },
+    {
+      "id": "cap-010",
+      "description": "Multiple capabilities - second covers",
+      "capabilities": ["financial", "workflow/approval"],
+      "path": "workflow/approval/invoice",
+      "covered": true
+    },
+    {
+      "id": "cap-011",
+      "description": "Multiple capabilities - none cover",
+      "capabilities": ["financial", "legal"],
+      "path": "workflow/approval",
+      "covered": false
+    },
+    {
+      "id": "cap-012",
+      "description": "Empty capabilities list",
+      "capabilities": [],
+      "path": "workflow/approval",
+      "covered": false
+    },
+    {
+      "id": "cap-013",
+      "description": "Root capability covers all",
+      "capabilities": [""],
+      "path": "any/path/here",
+      "covered": true,
+      "note": "Empty string as capability acts as wildcard"
+    },
+    {
+      "id": "cap-014",
+      "description": "Exact deep path match",
+      "capabilities": ["workflow/approval/invoice/high-value"],
+      "path": "workflow/approval/invoice/high-value",
+      "covered": true
+    },
+    {
+      "id": "cap-015",
+      "description": "Deep capability covering deeper path",
+      "capabilities": ["workflow/approval/invoice"],
+      "path": "workflow/approval/invoice/high-value/expedited",
+      "covered": true
+    },
+    {
+      "id": "cap-016",
+      "description": "Path with hyphen - exact match",
+      "capabilities": ["code-review"],
+      "path": "code-review",
+      "covered": true
+    },
+    {
+      "id": "cap-017",
+      "description": "Path with hyphen - prefix match",
+      "capabilities": ["code-review"],
+      "path": "code-review/static-analysis",
+      "covered": true
+    }
+  ],
+
+  "length_limits": [
+    {
+      "id": "len-001",
+      "description": "Minimum valid URI length",
+      "input": "agent://a.co/x/a_01234567890123456789012345",
+      "valid": true,
+      "length": 45
+    },
+    {
+      "id": "len-002",
+      "description": "URI at exactly 512 characters (max)",
+      "note": "Generate a URI with trust_root, capability_path, and agent_id that totals exactly 512 characters",
+      "max_length": 512,
+      "valid": true
+    },
+    {
+      "id": "len-003",
+      "description": "URI at 513 characters (exceeds max)",
+      "note": "Generate a URI that totals 513 characters",
+      "max_length": 512,
+      "valid": false,
+      "error_type": "uri_too_long"
+    },
+    {
+      "id": "len-004",
+      "description": "Trust root at exactly 128 characters",
+      "note": "Generate a trust root (host:port) that is exactly 128 characters",
+      "component": "trust_root",
+      "max_length": 128,
+      "valid": true
+    },
+    {
+      "id": "len-005",
+      "description": "Trust root at 129 characters (exceeds max)",
+      "note": "Generate a trust root that is 129 characters",
+      "component": "trust_root",
+      "max_length": 128,
+      "valid": false,
+      "error_type": "trust_root_too_long"
+    },
+    {
+      "id": "len-006",
+      "description": "Capability path at exactly 256 characters",
+      "note": "Generate a capability path that is exactly 256 characters total",
+      "component": "capability_path",
+      "max_length": 256,
+      "valid": true
+    },
+    {
+      "id": "len-007",
+      "description": "Capability path at 257 characters (exceeds max)",
+      "note": "Generate a capability path that is 257 characters",
+      "component": "capability_path",
+      "max_length": 256,
+      "valid": false,
+      "error_type": "capability_path_too_long"
+    },
+    {
+      "id": "len-008",
+      "description": "Single capability segment at 64 characters (max)",
+      "input": "agent://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "segment_length": 64
+    },
+    {
+      "id": "len-009",
+      "description": "Single capability segment at 65 characters (exceeds max)",
+      "input": "agent://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": false,
+      "error_type": "segment_too_long"
+    },
+    {
+      "id": "len-010",
+      "description": "Exactly 32 capability segments (max count)",
+      "note": "Generate a URI with exactly 32 capability path segments",
+      "component": "capability_path",
+      "max_segments": 32,
+      "valid": true
+    },
+    {
+      "id": "len-011",
+      "description": "33 capability segments (exceeds max count)",
+      "note": "Generate a URI with 33 capability path segments",
+      "component": "capability_path",
+      "max_segments": 32,
+      "valid": false,
+      "error_type": "too_many_segments"
+    },
+    {
+      "id": "len-012",
+      "description": "Agent ID prefix at 63 characters (max)",
+      "input": "agent://example.com/test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "prefix_length": 63
+    },
+    {
+      "id": "len-013",
+      "description": "Agent ID prefix at 64 characters (exceeds max)",
+      "input": "agent://example.com/test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_01h455vb4pex5vsknk084sn02q",
+      "valid": false,
+      "error_type": "agent_id_prefix_too_long"
+    },
+    {
+      "id": "len-014",
+      "description": "Domain label at 63 characters (max per DNS)",
+      "input": "agent://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com/test/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "label_length": 63
+    },
+    {
+      "id": "len-015",
+      "description": "Domain label at 64 characters (exceeds DNS max)",
+      "input": "agent://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com/test/llm_01h455vb4pex5vsknk084sn02q",
+      "valid": false,
+      "error_type": "domain_label_too_long"
+    }
+  ],
+
+  "agent_id": [
+    {
+      "id": "aid-001",
+      "description": "Simple prefix",
+      "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "prefix": "llm",
+      "suffix": "01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "aid-002",
+      "description": "Compound prefix with one underscore",
+      "agent_id": "llm_chat_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "prefix": "llm_chat",
+      "suffix": "01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "aid-003",
+      "description": "Compound prefix with multiple underscores",
+      "agent_id": "llm_chat_streaming_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "prefix": "llm_chat_streaming",
+      "suffix": "01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "aid-004",
+      "description": "Single letter prefix",
+      "agent_id": "a_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "prefix": "a",
+      "suffix": "01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "aid-005",
+      "description": "Maximum prefix length (63 chars)",
+      "agent_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "prefix": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "suffix": "01h455vb4pex5vsknk084sn02q",
+      "prefix_length": 63
+    },
+    {
+      "id": "aid-006",
+      "description": "Suffix with all valid Crockford Base32 characters",
+      "agent_id": "llm_0123456789abcdefghjkmnpqrs",
+      "valid": true,
+      "prefix": "llm",
+      "suffix": "0123456789abcdefghjkmnpqrs"
+    },
+    {
+      "id": "aid-007",
+      "description": "Suffix starting with each valid first char (0-7)",
+      "test_cases": [
+        {"agent_id": "llm_0xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": true},
+        {"agent_id": "llm_1xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": true},
+        {"agent_id": "llm_2xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": true},
+        {"agent_id": "llm_3xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": true},
+        {"agent_id": "llm_4xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": true},
+        {"agent_id": "llm_5xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": true},
+        {"agent_id": "llm_6xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": true},
+        {"agent_id": "llm_7xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": true}
+      ],
+      "note": "Replace 'x' with valid base32 chars for actual test"
+    },
+    {
+      "id": "aid-008",
+      "description": "Suffix starting with invalid first chars (8, 9, a-z)",
+      "test_cases": [
+        {"agent_id": "llm_8xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": false},
+        {"agent_id": "llm_9xxxxxxxxxxxxxxxxxxxxxxxxx", "valid": false},
+        {"agent_id": "llm_axxxxxxxxxxxxxxxxxxxxxxxxx", "valid": false},
+        {"agent_id": "llm_fxxxxxxxxxxxxxxxxxxxxxxxxx", "valid": false},
+        {"agent_id": "llm_zxxxxxxxxxxxxxxxxxxxxxxxxx", "valid": false}
+      ],
+      "error_type": "invalid_agent_id_suffix",
+      "note": "First char must be 0-7 only"
+    },
+    {
+      "id": "aid-009",
+      "description": "Suffix containing excluded characters",
+      "test_cases": [
+        {"agent_id": "llm_01h455vb4pex5vsknik084sn02q", "char": "i", "valid": false},
+        {"agent_id": "llm_01h455vb4pex5vsknlk084sn02q", "char": "l", "valid": false},
+        {"agent_id": "llm_01h455vb4pex5vsknok084sn02q", "char": "o", "valid": false},
+        {"agent_id": "llm_01h455vb4pex5vsknuk084sn02q", "char": "u", "valid": false}
+      ],
+      "error_type": "invalid_agent_id_suffix"
+    },
+    {
+      "id": "aid-010",
+      "description": "Prefix starting with underscore - invalid",
+      "agent_id": "_llm_01h455vb4pex5vsknk084sn02q",
+      "valid": false,
+      "error_type": "invalid_agent_id_prefix"
+    },
+    {
+      "id": "aid-011",
+      "description": "Prefix ending with underscore - invalid",
+      "agent_id": "llm__01h455vb4pex5vsknk084sn02q",
+      "valid": false,
+      "error_type": "invalid_agent_id_prefix"
+    },
+    {
+      "id": "aid-012",
+      "description": "Prefix with digit - invalid",
+      "agent_id": "llm2_01h455vb4pex5vsknk084sn02q",
+      "valid": false,
+      "error_type": "invalid_agent_id_prefix"
+    },
+    {
+      "id": "aid-013",
+      "description": "Prefix with hyphen - invalid",
+      "agent_id": "llm-chat_01h455vb4pex5vsknk084sn02q",
+      "valid": false,
+      "error_type": "invalid_agent_id_prefix"
+    },
+    {
+      "id": "aid-014",
+      "description": "Empty prefix - invalid",
+      "agent_id": "_01h455vb4pex5vsknk084sn02q",
+      "valid": false,
+      "error_type": "invalid_agent_id_prefix"
+    },
+    {
+      "id": "aid-015",
+      "description": "Missing underscore separator - invalid",
+      "agent_id": "llm01h455vb4pex5vsknk084sn02q",
+      "valid": false,
+      "error_type": "invalid_agent_id"
+    },
+    {
+      "id": "aid-016",
+      "description": "Suffix too short (25 chars) - invalid",
+      "agent_id": "llm_01h455vb4pex5vsknk084sn0",
+      "valid": false,
+      "error_type": "invalid_agent_id_suffix"
+    },
+    {
+      "id": "aid-017",
+      "description": "Suffix too long (27 chars) - invalid",
+      "agent_id": "llm_01h455vb4pex5vsknk084sn02qq",
+      "valid": false,
+      "error_type": "invalid_agent_id_suffix"
+    },
+    {
+      "id": "aid-018",
+      "description": "Suffix with uppercase - should normalize or reject",
+      "agent_id": "llm_01H455VB4PEX5VSKNK084SN02Q",
+      "valid": "normalize_or_reject",
+      "canonical": "llm_01h455vb4pex5vsknk084sn02q",
+      "note": "Implementations must either normalize to lowercase or reject"
+    }
+  ],
+
+  "attestation_verification": [
+    {
+      "id": "att-001",
+      "description": "Valid attestation - all claims correct, no audience restriction",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow/approval"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true
+    },
+    {
+      "id": "att-002",
+      "description": "Valid attestation - audience present and matches verifier",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "aud": "partner.com",
+        "capabilities": ["workflow/approval"]
+      },
+      "verifier": "partner.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true
+    },
+    {
+      "id": "att-003",
+      "description": "REJECT - audience present but does not match verifier",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "aud": "partner.com",
+        "capabilities": ["workflow/approval"]
+      },
+      "verifier": "other-company.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "audience_mismatch",
+      "error_message": "Attestation audience 'partner.com' does not match verifier 'other-company.com'"
+    },
+    {
+      "id": "att-004",
+      "description": "REJECT - issuer does not match trust root",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "other.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "issuer_mismatch",
+      "error_message": "Attestation issuer 'other.com' does not match URI trust root 'acme.com'"
+    },
+    {
+      "id": "att-005",
+      "description": "REJECT - subject does not match agent URI",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02r",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "subject_mismatch",
+      "error_message": "Attestation subject does not match agent URI"
+    },
+    {
+      "id": "att-006",
+      "description": "REJECT - attestation expired",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2025-01-01T00:00:00Z",
+        "exp": "2025-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "expired",
+      "error_message": "Attestation expired at 2025-12-31T23:59:59Z"
+    },
+    {
+      "id": "att-007",
+      "description": "REJECT - capabilities do not cover URI path",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow/review"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "capability_not_covered",
+      "error_message": "URI path 'workflow/approval/invoice' not covered by capabilities ['workflow/review']"
+    },
+    {
+      "id": "att-008",
+      "description": "REJECT - empty capabilities list",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": []
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "capability_not_covered",
+      "error_message": "URI path 'workflow/approval' not covered by empty capabilities list"
+    },
+    {
+      "id": "att-009",
+      "description": "Valid - capabilities cover via prefix (parent covers child)",
+      "agent_uri": "agent://acme.com/workflow/approval/invoice/high-value/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/invoice/high-value/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "Capability 'workflow' covers 'workflow/approval/invoice/high-value' via prefix match"
+    },
+    {
+      "id": "att-010",
+      "description": "Valid - one of multiple capabilities covers path",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["financial", "legal", "workflow/approval"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "Third capability 'workflow/approval' covers the path"
+    },
+    {
+      "id": "att-011",
+      "description": "REJECT - partial string match insufficient for capabilities",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["work"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "capability_not_covered",
+      "error_message": "Capability 'work' is not a path prefix of 'workflow/approval'"
+    },
+    {
+      "id": "att-012",
+      "description": "REJECT - capability is child of path (child cannot cover parent)",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow/approval"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "capability_not_covered",
+      "error_message": "Capability 'workflow/approval' does not cover parent path 'workflow'"
+    },
+    {
+      "id": "att-013",
+      "description": "REJECT - missing required claim: iss",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'iss' is missing"
+    },
+    {
+      "id": "att-014",
+      "description": "REJECT - missing required claim: sub",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'sub' is missing"
+    },
+    {
+      "id": "att-015",
+      "description": "REJECT - missing required claim: exp",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'exp' is missing"
+    },
+    {
+      "id": "att-016",
+      "description": "REJECT - missing required claim: iat",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'iat' is missing"
+    },
+    {
+      "id": "att-017",
+      "description": "REJECT - missing required claim: capabilities",
+      "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z"
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "error_message": "Required claim 'capabilities' is missing"
+    },
+    {
+      "id": "att-018",
+      "description": "Valid - attestation at exact expiration boundary (exp == current_time)",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-06-15T12:00:00Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "expired",
+      "note": "exp MUST be > current_time, not >= (attestation expires AT the exp time)"
+    },
+    {
+      "id": "att-019",
+      "description": "Valid - audience absent allows any verifier",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "completely-unknown-verifier.example.org",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "When aud is absent, any verifier MAY accept the attestation"
+    },
+    {
+      "id": "att-020",
+      "description": "REJECT - iat is in the future (not yet valid)",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2027-01-01T00:00:00Z",
+        "exp": "2027-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "not_yet_valid",
+      "error_message": "Attestation issued-at time is in the future"
+    },
+    {
+      "id": "att-021",
+      "description": "Valid - subject matches after URI normalization",
+      "agent_uri": "agent://ACME.COM/Workflow/Approval/rule_01H455VB4PEX5VSKNK084SN02Q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "URI must be normalized before comparing to sub claim"
+    },
+    {
+      "id": "att-022",
+      "description": "Valid - issuer matches trust root after normalization",
+      "agent_uri": "agent://ACME.COM/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": true,
+      "note": "Trust root must be normalized before comparing to iss claim"
+    },
+    {
+      "id": "att-023",
+      "description": "REJECT - audience case-sensitive mismatch",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "aud": "Partner.Com",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "partner.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "audience_mismatch",
+      "note": "Audience comparison is case-sensitive unless spec says otherwise"
+    }
+  ]
+}
