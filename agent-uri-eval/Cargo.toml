@@ -9,8 +9,8 @@ keywords = ["agent", "evaluation", "benchmark", "uri"]
 categories = ["development-tools::testing"]
 
 [dependencies]
-agent-uri = { path = "../agent-uri" }
-agent-uri-dht = { path = "../agent-uri-dht" }
+agent-uri = { version = "0.4", path = "../agent-uri" }
+agent-uri-dht = { version = "0.1", path = "../agent-uri-dht" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
