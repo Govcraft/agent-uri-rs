@@ -40,7 +40,7 @@ pub struct Registration {
 
 impl Registration {
     /// Default TTL for registrations (1 hour).
-    pub const DEFAULT_TTL: Duration = Duration::from_secs(3600);
+    pub const DEFAULT_TTL: Duration = Duration::from_hours(1);
 
     /// Creates a new registration with default TTL.
     ///

@@ -200,7 +200,7 @@ impl AttestationClaimsBuilder {
             agent_uri: None,
             capabilities: Vec::new(),
             issuer: None,
-            ttl: Duration::from_secs(86400), // 24 hours
+            ttl: Duration::from_hours(24),
             audience: None,
         }
     }

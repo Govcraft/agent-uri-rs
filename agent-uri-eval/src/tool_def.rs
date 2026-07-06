@@ -15,9 +15,9 @@ pub enum ToolSource {
     HuggingFace,
     /// Smolagents (`HuggingFace` successor to `transformers.agents`).
     Smolagents,
-    /// CrewAI tools.
+    /// `CrewAI` tools.
     CrewAi,
-    /// Microsoft AutoGen tools.
+    /// Microsoft `AutoGen` tools.
     AutoGen,
     /// Synthetic/test data.
     Synthetic,

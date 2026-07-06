@@ -40,7 +40,7 @@ impl Default for SimulationConfig {
     fn default() -> Self {
         Self {
             max_registrations_per_key: 1000,
-            default_ttl: Duration::from_secs(3600),
+            default_ttl: Duration::from_hours(1),
             verify_attestations: false,
             simulated_delay: None,
             auto_expire: true,
