@@ -54,8 +54,20 @@
 //! | No algorithm confusion | PASETO v4 is Ed25519-only |
 //! | Replay protection | `exp` claim validated automatically |
 //! | Trust root binding | `iss` must match trusted roots |
+//! | Issuer/namespace binding | `iss` must equal the `agent_uri` claim's authority |
 //! | URI binding | `agent_uri` claim verified against expected |
 //! | Tamper detection | Ed25519 signature verification |
+//!
+//! # Breaking change in 0.3.0
+//!
+//! [`Verifier::verify`] now enforces an **issuer/namespace binding**: the
+//! authenticated `iss` claim MUST equal the trust root (authority) parsed from
+//! the `agent_uri` claim, and verification fails closed when that authority
+//! cannot be parsed. This closes a cross-namespace forgery: previously a key
+//! trusted for authority A could mint a verifying attestation for a URI rooted
+//! at authority B. Tokens that relied on that behavior now reject with
+//! [`AttestationError::IssuerNamespaceMismatch`]. Because the check lives in
+//! `verify`, it is inherited by `verify_for_uri` and `verify_for_capability`.
 //!
 //! # Grammar Specification
 //!

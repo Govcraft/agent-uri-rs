@@ -84,6 +84,18 @@ impl Verifier {
     /// 2. Verifies the signature using the issuer's public key
     /// 3. Checks expiration
     /// 4. Validates the issuer is trusted
+    /// 5. Binds the authenticated issuer to the attested URI's namespace
+    ///
+    /// # Issuer/namespace binding
+    ///
+    /// Step 5 is the security-critical check. Authenticating `iss` (steps 2-4)
+    /// only proves *which trusted key* signed the token; it does not stop a key
+    /// trusted for one authority from minting an attestation for a URI rooted at
+    /// a *different* authority. This method therefore requires that `iss` equals
+    /// the trust root (authority) parsed from the `agent_uri` claim, and fails
+    /// closed (rejects) if that authority cannot be parsed. Because every
+    /// higher-level verification path funnels through `verify`, this binding is
+    /// enforced uniformly.
     ///
     /// # Errors
     ///
@@ -91,6 +103,7 @@ impl Verifier {
     /// - `InvalidSignature` - Signature doesn't match any trusted key
     /// - `TokenExpired` - Token has passed its expiration time
     /// - `UntrustedIssuer` - Issuer is not in the trusted roots set
+    /// - `IssuerNamespaceMismatch` - Issuer does not own the URI's namespace
     /// - `InvalidTokenFormat` - Token is malformed
     /// - `InvalidClaims` - Claims cannot be parsed
     pub fn verify(&self, token: &str) -> Result<AttestationClaims, AttestationError> {
@@ -108,6 +121,16 @@ impl Verifier {
             return Err(AttestationError::UntrustedIssuer { issuer });
         }
 
+        // Bind the authenticated issuer to the attested URI's namespace.
+        // The issuer must equal the trust root (authority) of the `agent_uri`
+        // claim. Fail closed when the authority cannot be parsed.
+        if claims.trust_root() != Some(claims.iss.as_str()) {
+            return Err(AttestationError::IssuerNamespaceMismatch {
+                issuer: claims.iss.clone(),
+                uri_trust_root: claims.trust_root().unwrap_or_default().to_string(),
+            });
+        }
+
         Ok(claims)
     }
 
@@ -121,14 +144,18 @@ impl Verifier {
     /// # Errors
     ///
     /// Returns `AttestationError` if:
-    /// - Token verification fails
+    /// - Token verification fails (including `IssuerNamespaceMismatch` when the
+    ///   issuer does not own the attested URI's namespace)
     /// - The token's `agent_uri` doesn't match `expected_uri`
-    /// - The trust root in the token doesn't match the URI's trust root
     pub fn verify_for_uri(
         &self,
         token: &str,
         expected_uri: &AgentUri,
     ) -> Result<AttestationClaims, AttestationError> {
+        // `verify` already binds `iss` to the `agent_uri` claim's trust root, so
+        // an authenticated token's authority is guaranteed to equal its own
+        // issuer here. Comparing the full `agent_uri` to `expected_uri` is the
+        // only remaining, load-bearing check.
         let claims = self.verify(token)?;
 
         let expected_str = expected_uri.to_string();
@@ -137,17 +164,6 @@ impl Verifier {
                 token_uri: claims.agent_uri.clone(),
                 expected_uri: expected_str,
             });
-        }
-
-        // Also verify trust root matches
-        if let Some(token_root) = claims.trust_root() {
-            let expected_root = expected_uri.trust_root().as_str();
-            if token_root != expected_root {
-                return Err(AttestationError::TrustRootMismatch {
-                    token_root: token_root.to_string(),
-                    expected_root: expected_root.to_string(),
-                });
-            }
         }
 
         Ok(claims)
@@ -159,8 +175,8 @@ impl Verifier {
     /// 1. Signature verification using trusted keys
     /// 2. Expiration check
     /// 3. Issuer validation against trusted roots
-    /// 4. URI match verification
-    /// 5. Trust root consistency check
+    /// 4. Issuer/namespace binding (`iss` owns the attested URI's authority)
+    /// 5. URI match verification
     /// 6. Capability coverage verification
     ///
     /// # Arguments
@@ -179,8 +195,8 @@ impl Verifier {
     /// - `InvalidSignature` - Signature doesn't match any trusted key
     /// - `TokenExpired` - Token has passed its expiration time
     /// - `UntrustedIssuer` - Issuer is not in the trusted roots set
+    /// - `IssuerNamespaceMismatch` - Issuer does not own the attested URI's namespace
     /// - `UriMismatch` - Token's `agent_uri` doesn't match expected URI
-    /// - `TrustRootMismatch` - Trust root in token doesn't match URI's trust root
     /// - `InsufficientCapabilities` - Token capabilities don't cover required path
     ///
     /// # Examples
@@ -492,6 +508,101 @@ mod tests {
         assert!(matches!(
             result,
             Err(AttestationError::UntrustedIssuer { .. })
+        ));
+    }
+
+    #[test]
+    fn verify_rejects_cross_root_issuance() {
+        // A key trusted as authority "acme.com" mints an attestation for a URI
+        // rooted at a *different* authority "evil.com". The issuer claim is
+        // authentic (matches the registered trust root), but it does not own the
+        // attested URI's namespace, so every verification path must reject it.
+        let signing_key = SigningKey::generate();
+        let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
+
+        let foreign_uri =
+            AgentUri::parse("agent://evil.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
+        let token = issuer.issue(&foreign_uri, vec!["read".into()]).unwrap();
+
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        // verify
+        assert!(
+            matches!(
+                verifier.verify(&token),
+                Err(AttestationError::IssuerNamespaceMismatch { .. })
+            ),
+            "verify should reject cross-root issuance"
+        );
+
+        // verify_for_uri (even when the caller's expected URI matches the token)
+        assert!(
+            matches!(
+                verifier.verify_for_uri(&token, &foreign_uri),
+                Err(AttestationError::IssuerNamespaceMismatch { .. })
+            ),
+            "verify_for_uri should reject cross-root issuance"
+        );
+
+        // verify_for_capability
+        let required = CapabilityPath::parse("test").unwrap();
+        assert!(
+            matches!(
+                verifier.verify_for_capability(&token, &foreign_uri, &required),
+                Err(AttestationError::IssuerNamespaceMismatch { .. })
+            ),
+            "verify_for_capability should reject cross-root issuance"
+        );
+    }
+
+    #[test]
+    fn verify_for_capability_same_root_still_accepts() {
+        // Regression: legitimate same-root attestations still verify end to end.
+        let signing_key = SigningKey::generate();
+        let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
+        let uri =
+            AgentUri::parse("agent://acme.com/workflow/approval/agent_01h455vb4pex5vsknk084sn02q")
+                .unwrap();
+        let token = issuer.issue(&uri, vec!["workflow".into()]).unwrap();
+
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        let required = CapabilityPath::parse("workflow/approval").unwrap();
+
+        assert!(verifier.verify(&token).is_ok());
+        assert!(verifier.verify_for_uri(&token, &uri).is_ok());
+        let claims = verifier
+            .verify_for_capability(&token, &uri, &required)
+            .unwrap();
+        assert_eq!(claims.iss, "acme.com");
+    }
+
+    #[test]
+    fn verify_rejects_unparseable_agent_uri() {
+        // Fail closed: when the `agent_uri` claim has no parseable authority,
+        // `trust_root()` is `None` and verification must reject rather than skip
+        // the issuer/namespace binding.
+        let signing_key = SigningKey::generate();
+        let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
+
+        let claims = AttestationClaims::builder()
+            .agent_uri("not-an-agent-uri")
+            .issuer("acme.com")
+            .ttl(Duration::from_secs(3600))
+            .build()
+            .unwrap();
+        assert_eq!(claims.trust_root(), None);
+
+        let token = issuer.issue_claims(&claims).unwrap();
+
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        assert!(matches!(
+            verifier.verify(&token),
+            Err(AttestationError::IssuerNamespaceMismatch { .. })
         ));
     }
 

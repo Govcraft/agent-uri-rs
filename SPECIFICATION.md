@@ -601,6 +601,12 @@ Deployments requiring query privacy SHOULD consider private information retrieva
 
 **Mitigation:** Trust roots MAY restrict prefix queries to authorized requesters.
 
+### 8.7 Cross-Namespace Issuance
+
+**Threat:** In a multi-root deployment, a verifier trusts several trust roots. A valid signing key for one authority (e.g. `marketing.acme.com`) mints an attestation whose `agent_uri` is rooted at a *different* authority (e.g. `finance.acme.com`). Authenticating `iss` alone proves only which trusted key signed the token, not that the signer owns the attested namespace.
+
+**Mitigation:** Verifiers MUST reject an attestation whose `iss` claim differs from the trust root (authority) of the attested agent URI. If the attested URI's authority cannot be determined, verifiers MUST reject the attestation (fail closed). This binding makes `iss` authoritative for the URI's namespace and preserves the cross-trust-root isolation described in [Section 8.2](#82-trust-root-key-compromise): a key compromise or misuse cannot forge attestations for agents under a different trust root.
+
 ---
 
 ## 9. IANA Considerations

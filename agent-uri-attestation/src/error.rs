@@ -41,6 +41,20 @@ pub enum AttestationError {
         /// The expected trust root
         expected_root: String,
     },
+    /// The authenticated issuer does not own the attested URI's namespace.
+    ///
+    /// The `iss` claim is authenticated (it matched the trust root the
+    /// verifying key is registered under), but it differs from the trust root
+    /// (authority) parsed from the `agent_uri` claim. A key is only authorized
+    /// to attest URIs rooted at its own authority; anything else is a
+    /// cross-namespace forgery and is rejected. This is also returned when the
+    /// `agent_uri` claim has no parseable authority (fail closed).
+    IssuerNamespaceMismatch {
+        /// The authenticated issuer (`iss` claim)
+        issuer: String,
+        /// The trust root (authority) parsed from the `agent_uri` claim
+        uri_trust_root: String,
+    },
     /// The issuer is not in the trusted roots set.
     UntrustedIssuer {
         /// The untrusted issuer
@@ -109,6 +123,16 @@ impl fmt::Display for AttestationError {
                 write!(
                     f,
                     "trust root mismatch: token issued by '{token_root}' but expected '{expected_root}'"
+                )
+            }
+            Self::IssuerNamespaceMismatch {
+                issuer,
+                uri_trust_root,
+            } => {
+                write!(
+                    f,
+                    "issuer '{issuer}' is not authorized for the attested URI's namespace \
+                     '{uri_trust_root}'; a key may only attest agent URIs rooted at its own authority"
                 )
             }
             Self::UntrustedIssuer { issuer } => {
