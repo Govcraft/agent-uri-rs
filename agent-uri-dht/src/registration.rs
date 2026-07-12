@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn with_ttl_sets_expiration() {
         let registration = Registration::new(test_uri(), vec![test_endpoint()])
-            .with_ttl(Duration::from_secs(60));
+            .with_ttl(Duration::from_mins(1));
         let remaining = registration.remaining_ttl().unwrap();
         // Should be close to 60 seconds, allow for some test execution time
         assert!(remaining.as_secs() <= 60);
@@ -274,14 +274,14 @@ mod tests {
 
     #[test]
     fn refresh_updates_times() {
-        let past = SystemTime::now() - Duration::from_secs(3600);
+        let past = SystemTime::now() - Duration::from_hours(1);
         let mut registration = Registration::new(test_uri(), vec![test_endpoint()])
             .with_registered_at(past)
             .with_expires_at(past);
 
         assert!(registration.is_expired());
 
-        registration.refresh(Duration::from_secs(60));
+        registration.refresh(Duration::from_mins(1));
 
         assert!(!registration.is_expired());
         assert!(registration.remaining_ttl().is_some());

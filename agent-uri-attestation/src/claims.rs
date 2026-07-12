@@ -354,7 +354,7 @@ mod tests {
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
             .issuer("acme.com")
-            .ttl(Duration::from_secs(3600))
+            .ttl(Duration::from_hours(1))
             .build()
             .unwrap();
 
@@ -390,7 +390,7 @@ mod tests {
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
             .issuer("acme.com")
-            .ttl(Duration::from_secs(3600))
+            .ttl(Duration::from_hours(1))
             .build()
             .unwrap();
 

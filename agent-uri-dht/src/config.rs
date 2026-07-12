@@ -99,7 +99,7 @@ mod tests {
     fn default_config() {
         let config = SimulationConfig::default();
         assert_eq!(config.max_registrations_per_key, 1000);
-        assert_eq!(config.default_ttl, Duration::from_secs(3600));
+        assert_eq!(config.default_ttl, Duration::from_hours(1));
         assert!(!config.verify_attestations);
         assert!(config.simulated_delay.is_none());
         assert!(config.auto_expire);
@@ -109,13 +109,13 @@ mod tests {
     fn builder_pattern() {
         let config = SimulationConfig::new()
             .with_max_registrations_per_key(10)
-            .with_default_ttl(Duration::from_secs(1800))
+            .with_default_ttl(Duration::from_mins(30))
             .with_verify_attestations(true)
             .with_simulated_delay(Duration::from_millis(50))
             .with_auto_expire(false);
 
         assert_eq!(config.max_registrations_per_key, 10);
-        assert_eq!(config.default_ttl, Duration::from_secs(1800));
+        assert_eq!(config.default_ttl, Duration::from_mins(30));
         assert!(config.verify_attestations);
         assert_eq!(config.simulated_delay, Some(Duration::from_millis(50)));
         assert!(!config.auto_expire);

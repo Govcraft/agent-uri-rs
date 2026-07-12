@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn issue_creates_valid_token() {
-        let issuer = Issuer::generate("acme.com", Duration::from_secs(3600));
+        let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
         let uri = test_uri();
 
         let token = issuer.issue(&uri, vec!["read".into()]).unwrap();
@@ -235,8 +235,8 @@ mod tests {
 
     #[test]
     fn generated_issuer_has_unique_key() {
-        let issuer1 = Issuer::generate("acme.com", Duration::from_secs(3600));
-        let issuer2 = Issuer::generate("acme.com", Duration::from_secs(3600));
+        let issuer1 = Issuer::generate("acme.com", Duration::from_hours(1));
+        let issuer2 = Issuer::generate("acme.com", Duration::from_hours(1));
 
         assert_ne!(
             issuer1.verifying_key().to_bytes(),
@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn issuer_trust_root_accessible() {
         let signing_key = SigningKey::generate();
-        let issuer = Issuer::new("acme.com", signing_key, Duration::from_secs(3600));
+        let issuer = Issuer::new("acme.com", signing_key, Duration::from_hours(1));
 
         assert_eq!(issuer.trust_root(), "acme.com");
     }
@@ -255,19 +255,19 @@ mod tests {
     #[test]
     fn issuer_default_ttl_accessible() {
         let signing_key = SigningKey::generate();
-        let issuer = Issuer::new("acme.com", signing_key, Duration::from_secs(7200));
+        let issuer = Issuer::new("acme.com", signing_key, Duration::from_hours(2));
 
-        assert_eq!(issuer.default_ttl(), Duration::from_secs(7200));
+        assert_eq!(issuer.default_ttl(), Duration::from_hours(2));
     }
 
     #[test]
     fn issue_with_custom_ttl() {
-        let issuer = Issuer::generate("acme.com", Duration::from_secs(3600));
+        let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
         let uri = test_uri();
 
         // Should not error with different TTL
         let token = issuer
-            .issue_with_ttl(&uri, vec![], Duration::from_secs(60))
+            .issue_with_ttl(&uri, vec![], Duration::from_mins(1))
             .unwrap();
 
         assert!(token.starts_with("v4.public."));
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn issue_with_multiple_capabilities() {
-        let issuer = Issuer::generate("acme.com", Duration::from_secs(3600));
+        let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
         let uri = test_uri();
 
         let capabilities = vec![
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn issue_claims_directly() {
-        let issuer = Issuer::generate("acme.com", Duration::from_secs(3600));
+        let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
 
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
