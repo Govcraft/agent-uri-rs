@@ -123,18 +123,34 @@ impl DiscoveryEvaluator {
 
     /// Registers an agent at the given capability path.
     ///
+    /// `agent_prefix` is a *prefix*, not a whole agent id: the id is completed
+    /// with a fresh `UUIDv7` suffix. A prefix admits only lowercase letters and
+    /// underscores (`llm`, `rule_chat`); use [`AgentIdGenerator`] to mint a
+    /// series of distinct ones.
+    ///
+    /// [`AgentIdGenerator`]: crate::AgentIdGenerator
+    ///
     /// # Errors
     ///
-    /// Returns `DiscoveryError` if registration fails.
+    /// Returns `DiscoveryError` if the prefix is not a valid agent prefix, or if
+    /// registration fails.
     pub fn register_agent(
         &mut self,
         path: &CapabilityPath,
-        agent_id: &str,
+        agent_prefix: &str,
     ) -> Result<String, DiscoveryError> {
+        // Fallibly, not `AgentId::new`, which panics: this function returns a
+        // Result precisely so a caller with a bad prefix gets an error to handle
+        // rather than a process that dies mid-evaluation.
+        let agent_id = AgentId::try_new(agent_prefix).map_err(|e| DiscoveryError::Dht {
+            operation: "build_agent_id".to_string(),
+            message: format!("'{agent_prefix}' is not a valid agent prefix: {e}"),
+        })?;
+
         let uri = AgentUriBuilder::new()
             .trust_root(self.trust_root.clone())
             .capability_path(path.clone())
-            .agent_id(AgentId::new(agent_id))
+            .agent_id(agent_id)
             .build()
             .map_err(|e| DiscoveryError::Dht {
                 operation: "build_uri".to_string(),
@@ -339,6 +355,54 @@ pub fn aggregate_results(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AgentIdGenerator;
+
+    /// An evaluator over a throwaway trust root.
+    fn evaluator() -> DiscoveryEvaluator {
+        let config = DiscoveryConfig {
+            num_agents: 10,
+            trust_root: "test.example.com".to_string(),
+            ..Default::default()
+        };
+        DiscoveryEvaluator::new(&config).unwrap()
+    }
+
+    #[test]
+    fn an_invalid_prefix_is_an_error_not_a_panic() {
+        // This function returns a Result, and used to call `AgentId::new`, which
+        // panics. A caller handing it a bad prefix took the whole process down
+        // mid-evaluation instead of getting an error it could report.
+        let mut eval = evaluator();
+        let path = CapabilityPath::parse("assistant/chat").unwrap();
+
+        // Digits are not admissible in an agent prefix.
+        let result = eval.register_agent(&path, "agent1");
+
+        assert!(result.is_err(), "a prefix with a digit must be refused");
+        assert!(
+            format!("{}", result.unwrap_err()).contains("not a valid agent prefix"),
+            "the error must say what was wrong with it"
+        );
+    }
+
+    #[test]
+    fn generated_prefixes_register_successfully() {
+        // The regression the failing doctest was reporting: the generator's output
+        // must actually be registrable, which is the only reason it exists.
+        let mut eval = evaluator();
+        let path = CapabilityPath::parse("assistant/chat").unwrap();
+        let mut id_gen = AgentIdGenerator::new("eval");
+
+        for _ in 0..30 {
+            let prefix = id_gen.generate_next();
+            assert!(
+                eval.register_agent(&path, &prefix).is_ok(),
+                "generator produced '{prefix}', which the evaluator would not register"
+            );
+        }
+
+        assert_eq!(eval.agent_count(), 30);
+    }
 
     #[test]
     fn evaluator_registers_and_queries() {

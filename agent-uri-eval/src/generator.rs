@@ -171,14 +171,42 @@ impl PathGenerator {
     }
 }
 
-/// Generates agent IDs with a prefix.
+/// Renders a counter as a bijective base-26 letter sequence: 1 -> `a`, 26 -> `z`,
+/// 27 -> `aa`.
+///
+/// An agent prefix admits only lowercase letters and underscores, so a counter
+/// cannot be rendered as digits. Letters are the only way to carry one.
+fn letter_suffix(counter: u64) -> String {
+    let mut remaining = counter;
+    let mut letters = Vec::new();
+
+    while remaining > 0 {
+        let index = (remaining - 1) % 26;
+        letters.push(b'a' + u8::try_from(index).unwrap_or(0));
+        remaining = (remaining - 1) / 26;
+    }
+
+    letters.reverse();
+    String::from_utf8(letters).unwrap_or_default()
+}
+
+/// Generates distinct, valid agent prefixes from a common base.
+///
+/// Each generated value is an agent *prefix*: the `AgentId` it is handed to
+/// appends a fresh `UUIDv7` suffix of its own. Prefixes are constrained to
+/// lowercase letters and underscores, so the counter distinguishing them is
+/// rendered in letters (`eval_a`, `eval_b`, ... `eval_z`, `eval_aa`) rather than
+/// digits, which a prefix cannot contain.
 pub struct AgentIdGenerator {
     prefix: String,
     counter: u64,
 }
 
 impl AgentIdGenerator {
-    /// Creates a new generator with the given prefix.
+    /// Creates a new generator with the given base prefix.
+    ///
+    /// The base must itself be a valid prefix component: lowercase letters, at
+    /// least two of them (e.g. `eval`, `llm`, `rule`).
     #[must_use]
     pub fn new(prefix: impl Into<String>) -> Self {
         Self {
@@ -187,10 +215,10 @@ impl AgentIdGenerator {
         }
     }
 
-    /// Generates the next agent ID.
+    /// Generates the next agent prefix, e.g. `eval_a` then `eval_b`.
     pub fn generate_next(&mut self) -> String {
         self.counter += 1;
-        format!("{}_{:08x}", self.prefix, self.counter)
+        format!("{}_{}", self.prefix, letter_suffix(self.counter))
     }
 
     /// Resets the counter.
@@ -257,9 +285,39 @@ mod tests {
     fn agent_id_generator_increments() {
         let mut id_gen = AgentIdGenerator::new("test");
 
-        assert_eq!(id_gen.generate_next(), "test_00000001");
-        assert_eq!(id_gen.generate_next(), "test_00000002");
-        assert_eq!(id_gen.generate_next(), "test_00000003");
+        assert_eq!(id_gen.generate_next(), "test_a");
+        assert_eq!(id_gen.generate_next(), "test_b");
+        assert_eq!(id_gen.generate_next(), "test_c");
+    }
+
+    #[test]
+    fn generated_prefixes_are_actually_usable_as_agent_prefixes() {
+        // The whole point of the generator. The previous format embedded a
+        // hexadecimal counter, and an agent prefix admits no digits at all, so
+        // every value it produced was rejected by `AgentId` and the generator
+        // could not be used with the very API it exists to feed.
+        let mut id_gen = AgentIdGenerator::new("eval");
+
+        for _ in 0..60 {
+            let prefix = id_gen.generate_next();
+            assert!(
+                agent_uri::AgentId::try_new(&prefix).is_ok(),
+                "generator produced '{prefix}', which is not a valid agent prefix"
+            );
+        }
+    }
+
+    #[test]
+    fn generated_prefixes_are_distinct_past_the_alphabet() {
+        let mut id_gen = AgentIdGenerator::new("eval");
+        let generated: Vec<String> = (0..100).map(|_| id_gen.generate_next()).collect();
+
+        let unique: std::collections::HashSet<&String> = generated.iter().collect();
+        assert_eq!(unique.len(), generated.len(), "prefixes must not collide");
+
+        // The 26th rolls over into a two-letter sequence rather than repeating.
+        assert_eq!(generated[25], "eval_z");
+        assert_eq!(generated[26], "eval_aa");
     }
 
     #[test]
@@ -269,6 +327,6 @@ mod tests {
         id_gen.generate_next();
         id_gen.reset();
 
-        assert_eq!(id_gen.generate_next(), "agent_00000001");
+        assert_eq!(id_gen.generate_next(), "agent_a");
     }
 }
