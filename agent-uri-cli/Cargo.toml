@@ -1,0 +1,36 @@
+[package]
+name = "agent-uri-cli"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Command-line tool for the agent:// identity scheme: key ceremony, attestation minting, verification, and inspection"
+repository = "https://github.com/Govcraft/agent-uri-rs"
+homepage = "https://github.com/Govcraft/agent-uri-rs"
+documentation = "https://docs.rs/agent-uri-cli"
+readme = "README.md"
+keywords = ["agent", "uri", "attestation", "paseto", "cli"]
+categories = ["command-line-utilities", "authentication", "cryptography"]
+
+[[bin]]
+name = "agent-uri"
+path = "src/main.rs"
+
+[dependencies]
+agent-uri = { version = "0.4.0", path = "../agent-uri" }
+agent-uri-attestation = { version = "0.3.0", path = "../agent-uri-attestation" }
+base64 = "0.22.1"
+chrono = { version = "0.4.45", features = ["serde"] }
+clap = { version = "4.6.1", features = ["derive", "wrap_help"] }
+clap_complete = "4.6.7"
+clap_mangen = "0.3.0"
+hex = "0.4.3"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+predicates = "3.1.4"
+tempfile = "3.27.0"

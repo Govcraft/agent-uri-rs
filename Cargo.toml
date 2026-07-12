@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "agent-uri",
     "agent-uri-attestation",
+    "agent-uri-cli",
     "agent-uri-dht",
     "agent-uri-eval",
 ]
