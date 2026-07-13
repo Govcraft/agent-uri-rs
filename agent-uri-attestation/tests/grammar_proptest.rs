@@ -546,7 +546,7 @@ proptest! {
             let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
             let token = issuer.issue(&uri, vec![identity_path.to_string()]).unwrap();
 
-            let suffix = std::iter::repeat("child").take(depth).collect::<Vec<_>>().join("/");
+            let suffix = std::iter::repeat_n("child", depth).collect::<Vec<_>>().join("/");
             let required_path = if suffix.is_empty() {
                 identity_path.to_string()
             } else {

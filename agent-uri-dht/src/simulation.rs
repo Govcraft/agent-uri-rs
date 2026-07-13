@@ -486,7 +486,7 @@ impl Dht for SimulatedDht {
             if let Some(trie) = by_path.get_mut(&trust_root_str) {
                 // Remove old and insert updated
                 let capability_path = agent_uri.capability_path();
-                let uri_str_owned = uri_str.to_string();
+                let uri_str_owned = uri_str.clone();
                 trie.remove(capability_path, |r| {
                     r.agent_uri().canonical() == uri_str_owned
                 });
@@ -526,7 +526,7 @@ impl Dht for SimulatedDht {
             let trust_root_str = agent_uri.trust_root().as_str().to_string();
 
             if let Some(trie) = by_path.get_mut(&trust_root_str) {
-                let uri_str_owned = uri_str.to_string();
+                let uri_str_owned = uri_str.clone();
                 trie.remove(agent_uri.capability_path(), |r| {
                     r.agent_uri().canonical() == uri_str_owned
                 });
@@ -881,7 +881,7 @@ mod tests {
         let issuer = Issuer::new(
             "anthropic.com",
             signing_key.clone(),
-            Duration::from_secs(3600),
+            Duration::from_hours(1),
         );
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("anthropic.com", signing_key.verifying_key());
