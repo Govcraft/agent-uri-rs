@@ -19,8 +19,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use agent_uri_eval::{
-    evaluate_expressiveness, evaluate_flat_namespace, load_corpus_directory, EvaluationReport,
-    ExpressivenessResults, MappingConfig,
+    EvaluationReport, ExpressivenessResults, MappingConfig, ToolSource, evaluate_expressiveness,
+    evaluate_flat_namespace, load_corpus_directory,
 };
 
 /// Default corpus directory (relative to workspace root).
@@ -61,22 +61,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
 
+    // Synthetic collision cases are a stress corpus, not observations from
+    // production frameworks. Keep the populations separate in every result.
+    let (synthetic_tools, production_tools): (Vec<_>, Vec<_>) = corpus
+        .tools
+        .iter()
+        .cloned()
+        .partition(|tool| tool.source() == ToolSource::Synthetic);
+
+    println!(
+        "Primary corpus: {} production tools ({} synthetic stress cases excluded)",
+        production_tools.len(),
+        synthetic_tools.len()
+    );
+
     // Run hierarchical evaluation
     println!("Running hierarchical namespace evaluation...");
-    let hierarchical = evaluate_expressiveness(&corpus.tools, &MappingConfig::default());
+    let hierarchical = evaluate_expressiveness(&production_tools, &MappingConfig::default());
 
     // Run flat namespace evaluation (ablation)
     println!("Running flat namespace evaluation (ablation)...\n");
-    let flat = evaluate_flat_namespace(&corpus.tools);
+    let flat = evaluate_flat_namespace(&production_tools);
+
+    let synthetic = (!synthetic_tools.is_empty())
+        .then(|| evaluate_expressiveness(&synthetic_tools, &MappingConfig::default()));
+    let synthetic_flat =
+        (!synthetic_tools.is_empty()).then(|| evaluate_flat_namespace(&synthetic_tools));
 
     // Print summary
     print_summary(&hierarchical, &flat);
 
     // Build report
-    let report = EvaluationReport::new()
+    let mut report = EvaluationReport::new()
+        .with_runtime_metadata()
         .with_expressiveness(hierarchical)
-        .with_expressiveness_flat(flat)
-        .compute_summary();
+        .with_expressiveness_flat(flat);
+    if let Some(results) = synthetic {
+        report = report.with_expressiveness_synthetic(results);
+    }
+    if let Some(results) = synthetic_flat {
+        report = report.with_expressiveness_synthetic_flat(results);
+    }
+    let report = report.compute_summary();
 
     // Write results
     let results_dir = Path::new(RESULTS_DIR);

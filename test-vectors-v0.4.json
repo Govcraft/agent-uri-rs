@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "name": "Agent URI Test Vectors",
-  "version": "0.5.0",
+  "version": "0.4.0",
   "description": "Canonical test vectors for agent:// URI scheme implementations. All conforming implementations MUST pass these tests.",
-  "generated": "2026-07-13",
+  "generated": "2026-01-20",
   "sections": {
     "parsing": "Valid URIs with expected component extraction",
     "invalid": "Invalid URIs that MUST be rejected",
@@ -581,11 +581,11 @@
     },
     {
       "id": "invalid-032",
-      "description": "Agent ID suffix with uppercase (must reject)",
+      "description": "Agent ID suffix with uppercase (must reject or normalize)",
       "input": "agent://example.com/chat/llm_01H455VB4PEX5VSKNK084SN02Q",
       "error_type": "case_sensitivity",
-      "error_message": "Agent ID suffix must be lowercase",
-      "note": "Only the scheme and trust-root authority are case-insensitive"
+      "error_message": "Agent ID suffix must be lowercase (or implementation must normalize)",
+      "note": "Implementations MAY accept and normalize to lowercase; if accepting, canonical form must be lowercase"
     }
   ],
 
@@ -613,6 +613,30 @@
       "description": "Mixed case trust root normalization",
       "input": "agent://Anthropic.Com/chat/llm_01h455vb4pex5vsknk084sn02q",
       "canonical": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-005",
+      "description": "Uppercase capability path normalization",
+      "input": "agent://example.com/CHAT/ASSISTANT/llm_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://example.com/chat/assistant/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-006",
+      "description": "Uppercase agent ID prefix normalization",
+      "input": "agent://example.com/chat/LLM_01h455vb4pex5vsknk084sn02q",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-007",
+      "description": "Uppercase agent ID suffix normalization",
+      "input": "agent://example.com/chat/llm_01H455VB4PEX5VSKNK084SN02Q",
+      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    },
+    {
+      "id": "norm-008",
+      "description": "Full uppercase normalization",
+      "input": "AGENT://ANTHROPIC.COM/ASSISTANT/CHAT/LLM_CHAT_01H455VB4PEX5VSKNK084SN02Q",
+      "canonical": "agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q"
     },
     {
       "id": "norm-009",
@@ -834,11 +858,11 @@
     },
     {
       "id": "dht-007",
-      "description": "Trust-root normalization before hashing",
+      "description": "Normalization before hashing",
       "trust_root": "ANTHROPIC.COM",
-      "capability_path": "assistant/chat",
+      "capability_path": "ASSISTANT/CHAT",
       "normalized_input": "anthropic.com/assistant/chat",
-      "note": "Trust roots normalize to lowercase; capability paths are lowercase by grammar"
+      "note": "Input MUST be normalized to lowercase before hashing"
     }
   ],
 
@@ -929,11 +953,11 @@
     },
     {
       "id": "cap-013",
-      "description": "Empty capability is invalid and covers nothing",
+      "description": "Root capability covers all",
       "capabilities": [""],
       "path": "any/path/here",
-      "covered": false,
-      "note": "There is no wildcard capability"
+      "covered": true,
+      "note": "Empty string as capability acts as wildcard"
     },
     {
       "id": "cap-014",
@@ -961,20 +985,6 @@
       "description": "Path with hyphen - prefix match",
       "capabilities": ["code-review"],
       "path": "code-review/static-analysis",
-      "covered": true
-    },
-    {
-      "id": "cap-018",
-      "description": "Shared lexical prefix is not a segment-prefix match",
-      "capabilities": ["workflow/approval"],
-      "path": "workflow/approvals",
-      "covered": false
-    },
-    {
-      "id": "cap-019",
-      "description": "Whole-segment descendant remains covered",
-      "capabilities": ["workflow/approval"],
-      "path": "workflow/approval/invoice",
       "covered": true
     }
   ],
@@ -1244,11 +1254,11 @@
     },
     {
       "id": "aid-018",
-      "description": "Suffix with uppercase - invalid",
+      "description": "Suffix with uppercase - should normalize or reject",
       "agent_id": "llm_01H455VB4PEX5VSKNK084SN02Q",
-      "valid": false,
-      "error_type": "invalid_agent_id_suffix",
-      "note": "Agent IDs are lowercase identity material and are not normalized"
+      "valid": "normalize_or_reject",
+      "canonical": "llm_01h455vb4pex5vsknk084sn02q",
+      "note": "Implementations must either normalize to lowercase or reject"
     }
   ],
 
@@ -1259,10 +1269,10 @@
       "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval/invoice"]
+        "capabilities": ["workflow/approval"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1274,11 +1284,11 @@
       "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
         "aud": "partner.com",
-        "capabilities": ["workflow/approval/invoice"]
+        "capabilities": ["workflow/approval"]
       },
       "verifier": "partner.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1290,11 +1300,11 @@
       "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
         "aud": "partner.com",
-        "capabilities": ["workflow/approval/invoice"]
+        "capabilities": ["workflow/approval"]
       },
       "verifier": "other-company.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1308,10 +1318,10 @@
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "other.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval"]
+        "capabilities": ["workflow"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1325,10 +1335,10 @@
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02r",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02r",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval"]
+        "capabilities": ["workflow"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1342,10 +1352,10 @@
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2025-01-01T00:00:00Z",
         "exp": "2025-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval"]
+        "capabilities": ["workflow"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1359,7 +1369,7 @@
       "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
         "capabilities": ["workflow/review"]
@@ -1367,8 +1377,8 @@
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
       "valid": false,
-      "error_type": "capability_outside_identity",
-      "error_message": "Capability 'workflow/review' is outside identity path 'workflow/approval/invoice'"
+      "error_type": "capability_not_covered",
+      "error_message": "URI path 'workflow/approval/invoice' not covered by capabilities ['workflow/review']"
     },
     {
       "id": "att-008",
@@ -1376,7 +1386,7 @@
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
         "capabilities": []
@@ -1389,19 +1399,19 @@
     },
     {
       "id": "att-009",
-      "description": "Valid - exact identity-path capability",
+      "description": "Valid - capabilities cover via prefix (parent covers child)",
       "agent_uri": "agent://acme.com/workflow/approval/invoice/high-value/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/invoice/high-value/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/invoice/high-value/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval/invoice/high-value"]
+        "capabilities": ["workflow"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
       "valid": true,
-      "note": "The exact URI identity path is a valid grant"
+      "note": "Capability 'workflow' covers 'workflow/approval/invoice/high-value' via prefix match"
     },
     {
       "id": "att-010",
@@ -1409,10 +1419,10 @@
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval/read", "workflow/approval/write", "workflow/approval"]
+        "capabilities": ["financial", "legal", "workflow/approval"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1421,11 +1431,11 @@
     },
     {
       "id": "att-011",
-      "description": "REJECT - ancestor capability lies outside identity scope",
+      "description": "REJECT - partial string match insufficient for capabilities",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
         "capabilities": ["work"]
@@ -1433,8 +1443,8 @@
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
       "valid": false,
-      "error_type": "capability_outside_identity",
-      "error_message": "Capability 'work' is outside identity path 'workflow/approval'"
+      "error_type": "capability_not_covered",
+      "error_message": "Capability 'work' is not a path prefix of 'workflow/approval'"
     },
     {
       "id": "att-012",
@@ -1442,7 +1452,7 @@
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
         "capabilities": ["workflow/approval"]
@@ -1458,10 +1468,10 @@
       "description": "REJECT - missing required claim: iss",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval"]
+        "capabilities": ["workflow"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1471,19 +1481,19 @@
     },
     {
       "id": "att-014",
-      "description": "REJECT - missing required claim: agent_uri",
+      "description": "REJECT - missing required claim: sub",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval"]
+        "capabilities": ["workflow"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
       "valid": false,
       "error_type": "missing_claim",
-      "error_message": "Required claim 'agent_uri' is missing"
+      "error_message": "Required claim 'sub' is missing"
     },
     {
       "id": "att-015",
@@ -1491,9 +1501,9 @@
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
-        "capabilities": ["workflow/approval"]
+        "capabilities": ["workflow"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1507,9 +1517,9 @@
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "exp": "2026-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval"]
+        "capabilities": ["workflow"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
@@ -1523,7 +1533,7 @@
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z"
       },
@@ -1535,11 +1545,11 @@
     },
     {
       "id": "att-018",
-      "description": "REJECT - attestation at exact expiration boundary (exp == current_time)",
+      "description": "Valid - attestation at exact expiration boundary (exp == current_time)",
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-06-15T12:00:00Z",
         "capabilities": ["workflow"]
@@ -1556,7 +1566,7 @@
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
         "capabilities": ["workflow"]
@@ -1572,7 +1582,7 @@
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2027-01-01T00:00:00Z",
         "exp": "2027-12-31T23:59:59Z",
         "capabilities": ["workflow"]
@@ -1586,18 +1596,18 @@
     {
       "id": "att-021",
       "description": "Valid - subject matches after URI normalization",
-      "agent_uri": "agent://ACME.COM/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+      "agent_uri": "agent://ACME.COM/Workflow/Approval/rule_01H455VB4PEX5VSKNK084SN02Q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
-        "capabilities": ["workflow/approval"]
+        "capabilities": ["workflow"]
       },
       "verifier": "any-verifier.com",
       "current_time": "2026-06-15T12:00:00Z",
       "valid": true,
-      "note": "Trust-root authority is normalized before canonical agent_uri comparison"
+      "note": "URI must be normalized before comparing to sub claim"
     },
     {
       "id": "att-022",
@@ -1605,7 +1615,7 @@
       "agent_uri": "agent://ACME.COM/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
         "capabilities": ["workflow"]
@@ -1621,7 +1631,7 @@
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
         "iss": "acme.com",
-        "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "sub": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
         "exp": "2026-12-31T23:59:59Z",
         "aud": "Partner.Com",

@@ -34,6 +34,15 @@ pub enum DhtError {
         /// The attested capability path
         attested: String,
     },
+    /// An existing agent identifier was presented under a different capability path.
+    IdentityCapabilityConflict {
+        /// Stable trust-root and agent-ID identity key
+        identity: String,
+        /// Capability path already bound to the identity
+        existing_path: String,
+        /// New conflicting capability path
+        requested_path: String,
+    },
     /// Maximum registrations per key exceeded.
     KeyCapacityExceeded {
         /// The DHT key that is at capacity
@@ -78,6 +87,17 @@ impl fmt::Display for DhtError {
                 write!(
                     f,
                     "capability mismatch: claimed path '{claimed}' is not covered by attested path '{attested}'"
+                )
+            }
+            Self::IdentityCapabilityConflict {
+                identity,
+                existing_path,
+                requested_path,
+            } => {
+                write!(
+                    f,
+                    "agent identity '{identity}' is already bound to capability path \
+                     '{existing_path}' and cannot be reused at '{requested_path}'; mint a new agent ID"
                 )
             }
             Self::KeyCapacityExceeded { key, max } => {

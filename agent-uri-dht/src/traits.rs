@@ -125,6 +125,8 @@ pub trait Dht: Send + Sync {
     /// # Errors
     ///
     /// Returns `DhtError` if an internal error occurs.
-    fn lookup_global(&self, capability_path: &CapabilityPath)
-        -> Result<Vec<Registration>, DhtError>;
+    fn lookup_global(
+        &self,
+        capability_path: &CapabilityPath,
+    ) -> Result<Vec<Registration>, DhtError>;
 }

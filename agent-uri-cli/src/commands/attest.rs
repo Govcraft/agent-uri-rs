@@ -22,7 +22,10 @@ use crate::ttl::Ttl;
 ///
 /// Returns [`CliError::Refused`] when a token or URI is rejected, or
 /// [`CliError::Fault`] on a key or I/O failure.
-pub fn run<O: Write, E: Write>(command: &AttestCommand, out: &mut Output<O, E>) -> Result<(), CliError> {
+pub fn run<O: Write, E: Write>(
+    command: &AttestCommand,
+    out: &mut Output<O, E>,
+) -> Result<(), CliError> {
     match command {
         AttestCommand::Issue {
             key,
@@ -47,12 +50,14 @@ pub fn run<O: Write, E: Write>(command: &AttestCommand, out: &mut Output<O, E>) 
             trust_root,
             agent,
             capability,
+            audience,
         } => verify(
             &VerifyRequest {
                 token,
                 trust_roots: trust_root,
                 agent: agent.as_deref(),
                 capability: capability.as_deref(),
+                audience: audience.as_deref(),
             },
             out,
         ),
@@ -76,6 +81,7 @@ struct VerifyRequest<'a> {
     trust_roots: &'a [TrustedRoot],
     agent: Option<&'a str>,
     capability: Option<&'a str>,
+    audience: Option<&'a str>,
 }
 
 /// Resolves the issuing authority for a token, enforcing the issuer/namespace binding.
@@ -114,7 +120,10 @@ fn resolve_issuer(uri: &AgentUri, requested: Option<&str>) -> Result<String, Cli
 }
 
 /// Mints an attestation token.
-fn issue<O: Write, E: Write>(request: &IssueRequest<'_>, out: &mut Output<O, E>) -> Result<(), CliError> {
+fn issue<O: Write, E: Write>(
+    request: &IssueRequest<'_>,
+    out: &mut Output<O, E>,
+) -> Result<(), CliError> {
     let uri = parse_agent_uri(request.agent)?;
     let issuer_root = resolve_issuer(&uri, request.issuer)?;
     let signing_key = keyfile::load(request.key_path)?;
@@ -167,11 +176,17 @@ fn issue<O: Write, E: Write>(request: &IssueRequest<'_>, out: &mut Output<O, E>)
     out.field("signing key", &public_key);
     out.blank();
 
-    out.emit(&TokenIssued { token, claims: view })
+    out.emit(&TokenIssued {
+        token,
+        claims: view,
+    })
 }
 
 /// Verifies a token against the supplied trust roots.
-fn verify<O: Write, E: Write>(request: &VerifyRequest<'_>, out: &mut Output<O, E>) -> Result<(), CliError> {
+fn verify<O: Write, E: Write>(
+    request: &VerifyRequest<'_>,
+    out: &mut Output<O, E>,
+) -> Result<(), CliError> {
     let token = resolve_token(request.token)?;
 
     let mut verifier = Verifier::new();
@@ -186,20 +201,37 @@ fn verify<O: Write, E: Write>(request: &VerifyRequest<'_>, out: &mut Output<O, E
         "issuer/namespace binding".to_string(),
     ];
 
-    let claims = match (request.agent, request.capability) {
-        (Some(agent), Some(capability)) => {
+    if request.audience.is_some() {
+        checks.push("audience".to_string());
+    }
+
+    let claims = match (request.agent, request.capability, request.audience) {
+        (Some(agent), Some(capability), Some(audience)) => {
+            let uri = parse_agent_uri(agent)?;
+            let required = parse_capability(capability)?;
+            checks.push("subject".to_string());
+            checks.push("capability coverage".to_string());
+            verifier.verify_for_capability_and_audience(&token, &uri, &required, audience)
+        }
+        (Some(agent), Some(capability), None) => {
             let uri = parse_agent_uri(agent)?;
             let required = parse_capability(capability)?;
             checks.push("subject".to_string());
             checks.push("capability coverage".to_string());
             verifier.verify_for_capability(&token, &uri, &required)
         }
-        (Some(agent), None) => {
+        (Some(agent), None, Some(audience)) => {
+            let uri = parse_agent_uri(agent)?;
+            checks.push("subject".to_string());
+            verifier.verify_for_uri_and_audience(&token, &uri, audience)
+        }
+        (Some(agent), None, None) => {
             let uri = parse_agent_uri(agent)?;
             checks.push("subject".to_string());
             verifier.verify_for_uri(&token, &uri)
         }
-        (None, _) => verifier.verify(&token),
+        (None, _, Some(audience)) => verifier.verify_for_audience(&token, audience),
+        (None, _, None) => verifier.verify(&token),
     }
     .map_err(|source| diagnose(&source, &token, request.trust_roots))?;
 
@@ -276,10 +308,12 @@ fn diagnose(error: &AttestationError, token: &str, roots: &[TrustedRoot]) -> Cli
             format!("token is not a well-formed attestation: {reason}"),
             "check the token was copied whole; inspect it with 'agent-uri attest inspect'",
         ),
-        AttestationError::UntrustedIssuer { issuer } | AttestationError::MissingPublicKey { issuer } => {
-            unknown_root(issuer, roots)
-        }
-        AttestationError::UriMismatch { token_uri, expected_uri } => CliError::refused(
+        AttestationError::UntrustedIssuer { issuer }
+        | AttestationError::MissingPublicKey { issuer } => unknown_root(issuer, roots),
+        AttestationError::UriMismatch {
+            token_uri,
+            expected_uri,
+        } => CliError::refused(
             "subject_mismatch",
             format!("token attests '{token_uri}', not the '{expected_uri}' you required"),
             "verify against the URI the token actually attests, or obtain a token for this one",
@@ -294,10 +328,13 @@ fn diagnose(error: &AttestationError, token: &str, roots: &[TrustedRoot]) -> Cli
                     attested.join(", ")
                 }
             ),
-            "obtain a token granting that capability, or one granting a prefix of it \
-             (granting 'workflow' covers 'workflow/approval')",
+            "obtain a token granting that capability or an allowed prefix within the \
+             agent URI's identity path",
         ),
-        AttestationError::IssuerNamespaceMismatch { issuer, uri_trust_root } => CliError::refused(
+        AttestationError::IssuerNamespaceMismatch {
+            issuer,
+            uri_trust_root,
+        } => CliError::refused(
             "issuer_namespace_mismatch",
             format!(
                 "token was issued by '{issuer}' but attests a URI rooted at '{uri_trust_root}'; \
@@ -338,7 +375,10 @@ fn expired(expired_at: &str) -> CliError {
 fn not_yet_valid(valid_from: &str) -> CliError {
     CliError::refused(
         "token_not_yet_valid",
-        format!("token is not yet valid; it becomes valid at {}", instant(valid_from)),
+        format!(
+            "token is not yet valid; it becomes valid at {}",
+            instant(valid_from)
+        ),
         "wait until it becomes valid, or check the clock on the issuing host",
     )
 }
@@ -381,7 +421,9 @@ fn unknown_root(issuer: &str, roots: &[TrustedRoot]) -> CliError {
 
     CliError::refused(
         "unknown_trust_root",
-        format!("token was issued by '{issuer}', which is not among the trust roots supplied ({supplied})"),
+        format!(
+            "token was issued by '{issuer}', which is not among the trust roots supplied ({supplied})"
+        ),
         format!("supply that authority's public key: --trust-root {issuer}=<public-key-hex>"),
     )
 }
@@ -403,7 +445,10 @@ mod tests {
 
     #[test]
     fn a_matching_issuer_is_accepted() {
-        assert_eq!(resolve_issuer(&uri(), Some("acme.com")).unwrap(), "acme.com");
+        assert_eq!(
+            resolve_issuer(&uri(), Some("acme.com")).unwrap(),
+            "acme.com"
+        );
     }
 
     #[test]
@@ -420,7 +465,8 @@ mod tests {
 
     #[test]
     fn an_authority_with_a_port_resolves_whole() {
-        let uri = AgentUri::parse("agent://localhost:8472/chat/bot_01h455vb4pex5vsknk084sn02q").unwrap();
+        let uri =
+            AgentUri::parse("agent://localhost:8472/chat/bot_01h455vb4pex5vsknk084sn02q").unwrap();
 
         assert_eq!(resolve_issuer(&uri, None).unwrap(), "localhost:8472");
         assert!(resolve_issuer(&uri, Some("localhost")).is_err());
@@ -441,7 +487,12 @@ mod tests {
 
         assert_eq!(error.diagnosis().kind, "unknown_trust_root");
         assert!(error.to_string().contains("partner.io"));
-        assert!(error.diagnosis().remedy.contains("--trust-root partner.io="));
+        assert!(
+            error
+                .diagnosis()
+                .remedy
+                .contains("--trust-root partner.io=")
+        );
     }
 
     #[test]
@@ -471,7 +522,9 @@ mod tests {
         let error = not_yet_valid(&starts.to_rfc3339());
 
         assert_eq!(error.diagnosis().kind, "token_not_yet_valid");
-        assert!(error.to_string().contains("in 1 hour") || error.to_string().contains("in 2 hours"));
+        assert!(
+            error.to_string().contains("in 1 hour") || error.to_string().contains("in 2 hours")
+        );
     }
 
     #[test]

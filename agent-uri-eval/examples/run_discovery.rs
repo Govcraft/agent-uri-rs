@@ -29,8 +29,8 @@ use std::fs;
 use std::path::Path;
 
 use agent_uri_eval::{
-    aggregate_results, DiscoveryConfig, DiscoveryEvaluator, EvaluationReport, MatchMode,
-    PathGenerator,
+    DiscoveryConfig, DiscoveryEvaluator, EvaluationReport, MatchMode, PathGenerator,
+    aggregate_results,
 };
 
 /// Directory to write results to.
@@ -103,6 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build report
     let report = EvaluationReport::new()
+        .with_runtime_metadata()
         .with_discovery_prefix(prefix_summary)
         .with_discovery_exact(exact_summary)
         .compute_summary();
@@ -227,11 +228,7 @@ fn print_summary(
 
 /// Converts a boolean to a status string.
 fn status_str(passed: bool) -> &'static str {
-    if passed {
-        "PASS"
-    } else {
-        "FAIL"
-    }
+    if passed { "PASS" } else { "FAIL" }
 }
 
 /// Generates a letter-only suffix for the given index.

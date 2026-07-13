@@ -25,7 +25,7 @@
 //! let uri = AgentUri::parse(
 //!     "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q"
 //! ).unwrap();
-//! let token = issuer.issue(&uri, vec!["workflow.approval.read".into()]).unwrap();
+//! let token = issuer.issue(&uri, vec!["workflow/approval/read".into()]).unwrap();
 //!
 //! // Verifier side: validate attestation
 //! let mut verifier = Verifier::new();
@@ -33,7 +33,7 @@
 //!
 //! let claims = verifier.verify(&token).unwrap();
 //! assert_eq!(claims.agent_uri, uri.to_string());
-//! assert_eq!(claims.capabilities, vec!["workflow.approval.read"]);
+//! assert_eq!(claims.capabilities, vec!["workflow/approval/read"]);
 //! ```
 //!
 //! # Token Structure
@@ -88,7 +88,7 @@
 //! | Total token | 8192 chars |
 //! | agent_uri | 512 chars |
 //! | capabilities | 64 items |
-//! | Each capability | 128 chars |
+//! | Each capability | 256 chars |
 //! | issuer | 128 chars |
 //! | audience | 128 chars |
 
@@ -111,8 +111,8 @@ pub use error::AttestationError;
 pub use issuer::Issuer;
 pub use keys::{SigningKey, VerifyingKey};
 pub use verification::{
-    capability_covers, check_capability_coverage, check_expiration, validate_issuer,
-    validate_subject,
+    capability_covers, check_capability_coverage, check_expiration, validate_audience,
+    validate_capability_scope, validate_issuer, validate_subject,
 };
 pub use verifier::Verifier;
 
@@ -125,8 +125,8 @@ pub use verifier::Verifier;
 /// ```
 pub mod prelude {
     pub use crate::{
-        capability_covers, check_capability_coverage, check_expiration, validate_issuer,
-        validate_subject, AttestationClaims, AttestationClaimsBuilder, AttestationError, Issuer,
-        SigningKey, Verifier, VerifyingKey,
+        AttestationClaims, AttestationClaimsBuilder, AttestationError, Issuer, SigningKey,
+        Verifier, VerifyingKey, capability_covers, check_capability_coverage, check_expiration,
+        validate_issuer, validate_subject,
     };
 }

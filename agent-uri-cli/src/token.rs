@@ -116,7 +116,7 @@ mod tests {
         let issuer = Issuer::new("acme.com", SigningKey::generate(), ttl);
         let uri = AgentUri::parse(URI).unwrap();
         issuer
-            .issue(&uri, vec!["workflow.approval.read".into()])
+            .issue(&uri, vec!["workflow/approval/read".into()])
             .unwrap()
     }
 
@@ -126,7 +126,7 @@ mod tests {
 
         assert_eq!(claims.agent_uri, URI);
         assert_eq!(claims.iss, "acme.com");
-        assert_eq!(claims.capabilities, vec!["workflow.approval.read"]);
+        assert_eq!(claims.capabilities, vec!["workflow/approval/read"]);
         assert!(claims.exp > claims.iat);
     }
 

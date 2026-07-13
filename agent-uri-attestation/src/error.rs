@@ -84,6 +84,20 @@ pub enum AttestationError {
         /// The capabilities that were attested in the token
         attested: Vec<String>,
     },
+    /// An attested capability falls outside the subject URI's identity scope.
+    CapabilityOutsideIdentity {
+        /// Capability path embedded in the subject URI
+        identity_path: String,
+        /// Capability claim that is broader than or unrelated to the identity
+        capability: String,
+    },
+    /// An audience-restricted token was verified without the required audience.
+    AudienceMismatch {
+        /// Audience required by the token
+        token_audience: String,
+        /// Audience supplied by the verifier, if any
+        verifier_audience: Option<String>,
+    },
 }
 
 impl fmt::Display for AttestationError {
@@ -164,6 +178,26 @@ impl fmt::Display for AttestationError {
                     f,
                     "token capabilities {attested:?} do not cover required capability '{required}'; \
                      add a capability that is a prefix of or equals the required path"
+                )
+            }
+            Self::CapabilityOutsideIdentity {
+                identity_path,
+                capability,
+            } => {
+                write!(
+                    f,
+                    "attested capability '{capability}' is outside agent identity scope \
+                     '{identity_path}'; capabilities must equal the URI path or be descendants"
+                )
+            }
+            Self::AudienceMismatch {
+                token_audience,
+                verifier_audience,
+            } => {
+                write!(
+                    f,
+                    "token is restricted to audience '{token_audience}', but verifier audience was {}",
+                    verifier_audience.as_deref().unwrap_or("not supplied")
                 )
             }
         }

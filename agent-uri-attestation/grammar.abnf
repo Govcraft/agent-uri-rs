@@ -17,7 +17,7 @@
 ; Payload (decoded)      4096 bytes    After base64url decode
 ; agent_uri              512 chars     Per agent-uri specification
 ; capabilities array     64 items      Practical limit
-; Each capability        128 chars     Dotted/namespaced string
+; Each capability        256 chars     Agent URI capability-path grammar
 ; issuer (iss)           128 chars     Matches trust-root limit
 ; audience (aud)         128 chars     Optional field
 ; Timestamp              30 chars      ISO 8601 with milliseconds
@@ -89,19 +89,15 @@ agent-uri           = <defined in agent-uri-abnf.txt>
 
 ; capabilities: Array of granted capability strings
 capabilities-claim  = %x22 "capabilities" %x22 ":" ws capabilities-array
-capabilities-array  = "[" ws [ capability-list ] ws "]"
+capabilities-array  = "[" ws capability-list ws "]"
 capability-list     = capability *( ws "," ws capability )
-capability          = %x22 capability-string %x22
-capability-string   = cap-start *126cap-char [ cap-end ]
-                      ; 1-128 characters total
-cap-start           = LOWER
-cap-end             = LOWER / DIGIT
-cap-char            = LOWER / DIGIT / "." / "-" / "_" / ":"
+capability          = %x22 capability-path %x22
+capability-path     = path-segment *31( "/" path-segment )
+                      ; Imported from agent-uri; max 256 characters total
+path-segment        = 1*64( LOWER / DIGIT / "-" )
                       ; Examples:
-                      ;   "read"
-                      ;   "workflow.approval.read"
-                      ;   "admin:users:write"
-                      ;   "file.upload.size-limit"
+                      ;   "workflow/approval"
+                      ;   "workflow/approval/read"
 
 ; iss: Issuer (trust root) that created this attestation
 ; Format: Must match the trust-root in the agent_uri
@@ -186,13 +182,14 @@ LOWER               = %x61-7A              ; a-z
 ; 3. Timestamps are normalized to UTC where possible, though offset
 ;    formats are accepted per RFC 3339
 ;
-; 4. Capability strings are case-sensitive and should use lowercase
-;    by convention
+; 4. Capabilities use the canonical agent URI capability-path grammar.
+;    Each capability MUST equal the agent_uri path or be its descendant.
 ;
 ; 5. The issuer (iss) must match the trust-root portion of the agent_uri
 ;    after normalization
 ;
-; 6. Empty capabilities array is valid: {"capabilities": []}
+; 6. The capabilities array MUST contain at least one entry. An issuer API MAY
+;    default an omitted list to the exact agent_uri capability path.
 ;
 ; 7. Whitespace in JSON is optional and not semantically significant
 
@@ -209,11 +206,11 @@ LOWER               = %x61-7A              ; a-z
 ; 3. Issuer verification: The `iss` claim must match a trusted root's public
 ;    key. Do not accept tokens from unknown issuers.
 ;
-; 4. Trust root binding: The `iss` claim SHOULD match the trust-root in
-;    `agent_uri`. Mismatches indicate potential spoofing.
+; 4. Trust root binding: The `iss` claim MUST match the trust-root in
+;    `agent_uri`. Mismatches MUST be rejected.
 ;
-; 5. Capability minimization: Tokens SHOULD grant minimum necessary
-;    capabilities. Avoid wildcard or overly broad capability strings.
+; 5. Capability binding: Every grant MUST equal the URI identity path or be a
+;    descendant. Ancestor, sibling, and unrelated grants MUST be rejected.
 ;
 ; 6. Clock skew: Implementations MAY allow small clock skew (e.g., 60 seconds)
 ;    when validating `iat` and `exp`. Document any tolerance.
@@ -236,7 +233,7 @@ LOWER               = %x61-7A              ; a-z
 ;   Decoded claims:
 ;     {
 ;       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
-;       "capabilities": ["workflow.approval.read"],
+;       "capabilities": ["workflow/approval/read"],
 ;       "iss": "acme.com",
 ;       "iat": "2024-01-15T10:30:00.000Z",
 ;       "exp": "2024-01-16T10:30:00.000Z"
@@ -248,9 +245,8 @@ LOWER               = %x61-7A              ; a-z
 ;     {
 ;       "agent_uri": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
 ;       "capabilities": [
-;         "assistant.chat.respond",
-;         "assistant.chat.stream",
-;         "context.read"
+;         "assistant/chat/respond",
+;         "assistant/chat/stream"
 ;       ],
 ;       "iss": "anthropic.com",
 ;       "iat": "2024-01-15T10:30:00.000Z",
@@ -263,12 +259,12 @@ LOWER               = %x61-7A              ; a-z
 ;   Decoded claims:
 ;     {
 ;       "agent_uri": "agent://localhost:8472/debug/test/llm_01h455vb4pex5vsknk084sn02q",
-;       "capabilities": [],
+;       "capabilities": ["debug/test"],
 ;       "iss": "localhost:8472",
 ;       "iat": "2024-01-15T10:30:00.000Z",
 ;       "exp": "2024-01-15T10:35:00.000Z"
 ;     }
 ;
-; Example 4: Maximum length capability string (128 chars)
+; Example 4: Capability-path hierarchy
 ;
-;   "organization.department.team.project.module.submodule.component.action.qualifier.variant.version"
+;   "organization/department/team/project/module/action"

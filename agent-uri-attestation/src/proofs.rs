@@ -49,9 +49,10 @@ mod issuer_proofs {
         let token_issuer: [u8; 16] = kani::any();
 
         // Convert to strings safely
-        if let (Ok(uri_str), Ok(token_str)) =
-            (std::str::from_utf8(&uri_root), std::str::from_utf8(&token_issuer))
-        {
+        if let (Ok(uri_str), Ok(token_str)) = (
+            std::str::from_utf8(&uri_root),
+            std::str::from_utf8(&token_issuer),
+        ) {
             let _ = validate_issuer(uri_str, token_str);
         }
     }
@@ -96,9 +97,10 @@ mod subject_proofs {
         let presented: [u8; 16] = kani::any();
         let token_sub: [u8; 16] = kani::any();
 
-        if let (Ok(pres_str), Ok(tok_str)) =
-            (std::str::from_utf8(&presented), std::str::from_utf8(&token_sub))
-        {
+        if let (Ok(pres_str), Ok(tok_str)) = (
+            std::str::from_utf8(&presented),
+            std::str::from_utf8(&token_sub),
+        ) {
             let _ = validate_subject(pres_str, tok_str);
         }
     }

@@ -25,7 +25,7 @@
 
 use chrono::{DateTime, Utc};
 
-use agent_uri::CapabilityPath;
+use agent_uri::{AgentUri, CapabilityPath};
 
 use crate::error::AttestationError;
 
@@ -71,6 +71,72 @@ pub fn capability_covers(attested_capabilities: &[String], required: &Capability
     })
 }
 
+/// Validates that every attested capability is contained by the subject URI's
+/// capability path.
+///
+/// Capability is constitutive identity material. A token may narrow an agent's
+/// identity to the same path or descendants, but it may not broaden the agent
+/// to an ancestor path or grant an unrelated capability.
+///
+/// # Errors
+///
+/// Returns [`AttestationError::InvalidClaims`] when the subject URI or a
+/// capability is malformed, and [`AttestationError::CapabilityOutsideIdentity`]
+/// when a capability is broader than or unrelated to the URI path.
+pub fn validate_capability_scope(
+    agent_uri: &str,
+    capabilities: &[String],
+) -> Result<(), AttestationError> {
+    let uri = AgentUri::parse(agent_uri).map_err(|error| AttestationError::InvalidClaims {
+        reason: format!("invalid agent_uri claim: {error}"),
+    })?;
+    let identity = uri.capability_path();
+
+    if capabilities.is_empty() {
+        return Err(AttestationError::MissingField {
+            field: "capabilities",
+        });
+    }
+
+    for capability in capabilities {
+        let parsed =
+            CapabilityPath::parse(capability).map_err(|error| AttestationError::InvalidClaims {
+                reason: format!("invalid capability '{capability}': {error}"),
+            })?;
+        if !parsed.starts_with(identity) {
+            return Err(AttestationError::CapabilityOutsideIdentity {
+                identity_path: identity.as_str().to_string(),
+                capability: capability.clone(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+/// Enforces an optional PASETO audience restriction.
+///
+/// Tokens without `aud` are valid for any verifier. Tokens carrying `aud`
+/// require the verifier to supply an exact matching identity.
+///
+/// # Errors
+///
+/// Returns [`AttestationError::AudienceMismatch`] when a restricted token is
+/// checked without a matching verifier audience.
+pub fn validate_audience(
+    token_audience: Option<&str>,
+    verifier_audience: Option<&str>,
+) -> Result<(), AttestationError> {
+    match token_audience {
+        None => Ok(()),
+        Some(required) if verifier_audience == Some(required) => Ok(()),
+        Some(required) => Err(AttestationError::AudienceMismatch {
+            token_audience: required.to_string(),
+            verifier_audience: verifier_audience.map(str::to_string),
+        }),
+    }
+}
+
 /// Pure function: validates that the token issuer matches the URI trust root.
 ///
 /// # Arguments
@@ -94,10 +160,7 @@ pub fn capability_covers(attested_capabilities: &[String], required: &Capability
 /// assert!(validate_issuer("acme.com", "acme.com").is_ok());
 /// assert!(validate_issuer("acme.com", "evil.com").is_err());
 /// ```
-pub fn validate_issuer(
-    uri_trust_root: &str,
-    token_issuer: &str,
-) -> Result<(), AttestationError> {
+pub fn validate_issuer(uri_trust_root: &str, token_issuer: &str) -> Result<(), AttestationError> {
     if uri_trust_root == token_issuer {
         Ok(())
     } else {
@@ -132,10 +195,7 @@ pub fn validate_issuer(
 /// assert!(validate_subject(uri, uri).is_ok());
 /// assert!(validate_subject(uri, "agent://evil.com/test/agent_xyz").is_err());
 /// ```
-pub fn validate_subject(
-    presented_uri: &str,
-    token_subject: &str,
-) -> Result<(), AttestationError> {
+pub fn validate_subject(presented_uri: &str, token_subject: &str) -> Result<(), AttestationError> {
     if presented_uri == token_subject {
         Ok(())
     } else {
@@ -289,10 +349,13 @@ mod tests {
 
         #[test]
         fn partial_segment_match_not_covered() {
-            // "work" should NOT cover "workflow"
-            let attested = vec!["work".to_string()];
-            let required = CapabilityPath::parse("workflow").unwrap();
+            // A shared lexical prefix is not a capability-path segment prefix.
+            let attested = vec!["workflow/approval".to_string()];
+            let required = CapabilityPath::parse("workflow/approvals").unwrap();
             assert!(!capability_covers(&attested, &required));
+
+            let descendant = CapabilityPath::parse("workflow/approval/invoice").unwrap();
+            assert!(capability_covers(&attested, &descendant));
         }
 
         #[test]

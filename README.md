@@ -18,7 +18,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-agent-uri = "0.4"
+agent-uri = "0.5"
 ```
 
 Parse an existing URI:
@@ -85,7 +85,7 @@ Use `agent-uri` alone for parsing and validation. Add `agent-uri-attestation` wh
 
 ```toml
 [dependencies]
-agent-uri = "0.4"
+agent-uri = "0.5"
 ```
 
 ```rust
@@ -116,7 +116,7 @@ Agent IDs use [TypeID](https://github.com/jetify-com/typeid) format: a semantic 
 
 ```toml
 [dependencies]
-agent-uri-attestation = "0.2"
+agent-uri-attestation = "0.4"
 ```
 
 ```rust
@@ -131,7 +131,7 @@ let uri = AgentUri::parse(
 
 let signing_key = SigningKey::generate();
 let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(86400));
-let token = issuer.issue(&uri, vec!["workflow.approval".into()]).unwrap();
+let token = issuer.issue(&uri, vec!["workflow/approval".into()]).unwrap();
 
 // Verifier checks token without callback
 let mut verifier = Verifier::new();
@@ -140,7 +140,7 @@ let claims = verifier.verify(&token).unwrap();
 assert_eq!(claims.agent_uri, uri.to_string());
 ```
 
-Tokens use PASETO v4.public (Ed25519 signatures). Capability claims support hierarchical coverage: an attestation for `workflow` covers `workflow/approval` and `workflow/approval/invoice`.
+Tokens use PASETO v4.public (Ed25519 signatures). The URI path is identity-defining: every attested capability must equal that path or be its descendant. Changing the path creates a different agent identity and requires a new Agent ID and attestation.
 
 ### agent-uri-dht
 
@@ -148,23 +148,34 @@ Tokens use PASETO v4.public (Ed25519 signatures). Capability claims support hier
 
 ```toml
 [dependencies]
-agent-uri-dht = "0.1"
+agent-uri-dht = "0.2"
 ```
 
 ```rust
 use agent_uri::{AgentUri, TrustRoot, CapabilityPath};
-use agent_uri_dht::{Dht, SimulatedDht, Registration, Endpoint};
+use agent_uri_attestation::{Issuer, SigningKey, Verifier};
+use agent_uri_dht::{Dht, SimulatedDht, Registration, Endpoint, SimulationConfig};
+use std::time::Duration;
 
 // Agent registers its current location
 let uri = AgentUri::parse(
     "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q"
 ).unwrap();
 
-let dht = SimulatedDht::with_defaults();
+let signing_key = SigningKey::generate();
+let issuer = Issuer::new(
+    "anthropic.com",
+    signing_key.clone(),
+    Duration::from_secs(3600),
+);
+let token = issuer.issue(&uri, vec!["assistant/chat".into()]).unwrap();
+let mut verifier = Verifier::new();
+verifier.add_trusted_root("anthropic.com", signing_key.verifying_key());
+let dht = SimulatedDht::with_verifier(SimulationConfig::default(), verifier);
 let registration = Registration::new(
     uri.clone(),
     vec![Endpoint::https("us-east-1.agent.anthropic.com")]
-);
+).with_attestation(token);
 dht.register(registration).unwrap();
 
 // Client discovers by capability prefix
@@ -175,7 +186,7 @@ let results = dht.lookup_prefix(
 assert!(!results.is_empty());
 ```
 
-DHT keys are derived as `SHA-256(trust_root || "/" || capability_path)`. The `lookup_prefix` function finds all agents under a capability subtree: query `assistant` to discover agents at `assistant/chat`, `assistant/code`, and `assistant/vision`.
+DHT keys are derived as `SHA-256(trust_root || "/" || capability_path)`. A registration is replicated to its exact path key and every ancestor key, so `lookup_prefix` performs one exact-key lookup and returns that subtree. This costs O(path depth) writes and can make broad ancestor keys hot.
 
 **Feature flags:**
 - `serde` - Serialize and deserialize types (enables `agent-uri/serde`)
@@ -200,6 +211,13 @@ Query strings and fragments are supported but stripped for identity comparison a
 ## Specification
 
 See [SPECIFICATION.md](SPECIFICATION.md) for the complete formal specification, including ABNF grammar, normalization rules, DHT key derivation algorithm, attestation claims structure, and security considerations.
+
+Conformance vectors for the current lowercase-by-grammar behavior are in
+[`test-vectors.json`](test-vectors.json) (v0.5). The published v0.4 behavior,
+which permitted implementations to normalize some uppercase path and Agent ID
+inputs, remains archived in [`test-vectors-v0.4.json`](test-vectors-v0.4.json)
+for reproducibility. Version 0.5 rejects those inputs so identity material is
+never silently rewritten.
 
 ## Paper
 

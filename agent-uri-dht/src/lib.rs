@@ -11,8 +11,7 @@
 //!
 //! # Overview
 //!
-//! The core idea is that agents register at DHT keys derived from their
-//! trust root and capability path:
+//! Agents register at keys for their exact capability path and every ancestor:
 //!
 //! ```text
 //! key = SHA256(trust_root || "/" || capability_path)
@@ -27,8 +26,11 @@
 //! use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
 //! use agent_uri_dht::{Dht, Endpoint, Registration, SimulatedDht, SimulationConfig};
 //!
-//! // Create a simulated DHT
-//! let dht = SimulatedDht::new(SimulationConfig::default());
+//! // Disable verification only for this isolated indexing example. Production
+//! // registration uses the secure default and a configured Verifier.
+//! let dht = SimulatedDht::new(
+//!     SimulationConfig::default().with_verify_attestations(false)
+//! );
 //!
 //! // Register an agent
 //! let uri = AgentUri::parse(
@@ -84,7 +86,9 @@
 //! use agent_uri::AgentUri;
 //! use agent_uri_dht::{Dht, Endpoint, Registration, SimulatedDht, SimulationConfig};
 //!
-//! let dht = SimulatedDht::with_defaults();
+//! let dht = SimulatedDht::new(
+//!     SimulationConfig::default().with_verify_attestations(false)
+//! );
 //!
 //! let uri = AgentUri::parse(
 //!     "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q"

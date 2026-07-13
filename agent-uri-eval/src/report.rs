@@ -19,6 +19,10 @@ pub struct EvaluationReport {
     pub discovery_exact: Option<DiscoveryResults>,
     /// Ablation: Flat namespace expressiveness.
     pub expressiveness_flat: Option<ExpressivenessResults>,
+    /// Synthetic stress-corpus expressiveness, kept separate from production tools.
+    pub expressiveness_synthetic: Option<ExpressivenessResults>,
+    /// Flat-namespace ablation for the synthetic stress corpus.
+    pub expressiveness_synthetic_flat: Option<ExpressivenessResults>,
     /// Summary of criteria met.
     pub summary: EvaluationSummary,
 }
@@ -70,6 +74,8 @@ impl EvaluationReport {
             discovery_prefix: None,
             discovery_exact: None,
             expressiveness_flat: None,
+            expressiveness_synthetic: None,
+            expressiveness_synthetic_flat: None,
             summary: EvaluationSummary {
                 expressiveness_passed: false,
                 discovery_passed: false,
@@ -104,6 +110,41 @@ impl EvaluationReport {
     #[must_use]
     pub fn with_expressiveness_flat(mut self, results: ExpressivenessResults) -> Self {
         self.expressiveness_flat = Some(results);
+        self
+    }
+
+    /// Sets synthetic stress-corpus results.
+    #[must_use]
+    pub fn with_expressiveness_synthetic(mut self, results: ExpressivenessResults) -> Self {
+        self.expressiveness_synthetic = Some(results);
+        self
+    }
+
+    /// Sets the flat-namespace synthetic ablation.
+    #[must_use]
+    pub fn with_expressiveness_synthetic_flat(mut self, results: ExpressivenessResults) -> Self {
+        self.expressiveness_synthetic_flat = Some(results);
+        self
+    }
+
+    /// Captures the current source revision and a compact machine descriptor.
+    #[must_use]
+    pub fn with_runtime_metadata(mut self) -> Self {
+        self.metadata.git_commit = std::process::Command::new("git")
+            .args(["rev-parse", "--short", "HEAD"])
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .map(|commit| commit.trim().to_string())
+            .filter(|commit| !commit.is_empty());
+
+        let host = std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown-host".to_string());
+        self.metadata.machine = Some(format!(
+            "{host}; {}-{}",
+            std::env::consts::ARCH,
+            std::env::consts::OS
+        ));
         self
     }
 
@@ -320,10 +361,12 @@ mod tests {
 
         assert!(!report.summary.expressiveness_passed);
         assert!(!report.summary.all_passed);
-        assert!(report
-            .summary
-            .failed_criteria
-            .iter()
-            .any(|c| c.contains("Coverage")));
+        assert!(
+            report
+                .summary
+                .failed_criteria
+                .iter()
+                .any(|c| c.contains("Coverage"))
+        );
     }
 }

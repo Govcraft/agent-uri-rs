@@ -205,8 +205,7 @@ impl<'de> serde::Deserialize<'de> for Registration {
         }
 
         let data = RegistrationData::deserialize(deserializer)?;
-        let agent_uri =
-            AgentUri::parse(&data.agent_uri).map_err(serde::de::Error::custom)?;
+        let agent_uri = AgentUri::parse(&data.agent_uri).map_err(serde::de::Error::custom)?;
 
         Ok(Self {
             agent_uri,
@@ -240,8 +239,8 @@ mod tests {
 
     #[test]
     fn with_ttl_sets_expiration() {
-        let registration = Registration::new(test_uri(), vec![test_endpoint()])
-            .with_ttl(Duration::from_mins(1));
+        let registration =
+            Registration::new(test_uri(), vec![test_endpoint()]).with_ttl(Duration::from_mins(1));
         let remaining = registration.remaining_ttl().unwrap();
         // Should be close to 60 seconds, allow for some test execution time
         assert!(remaining.as_secs() <= 60);
@@ -250,16 +249,16 @@ mod tests {
 
     #[test]
     fn with_attestation_sets_attestation() {
-        let registration = Registration::new(test_uri(), vec![test_endpoint()])
-            .with_attestation("token123");
+        let registration =
+            Registration::new(test_uri(), vec![test_endpoint()]).with_attestation("token123");
         assert_eq!(registration.attestation(), Some("token123"));
     }
 
     #[test]
     fn expired_registration() {
         let past = SystemTime::now() - Duration::from_secs(10);
-        let registration = Registration::new(test_uri(), vec![test_endpoint()])
-            .with_expires_at(past);
+        let registration =
+            Registration::new(test_uri(), vec![test_endpoint()]).with_expires_at(past);
         assert!(registration.is_expired());
         assert!(registration.remaining_ttl().is_none());
     }
@@ -296,14 +295,12 @@ mod tests {
 
     #[test]
     fn different_uris_not_equal() {
-        let uri1 = AgentUri::parse(
-            "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
-        )
-        .unwrap();
-        let uri2 = AgentUri::parse(
-            "agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02r",
-        )
-        .unwrap();
+        let uri1 =
+            AgentUri::parse("agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q")
+                .unwrap();
+        let uri2 =
+            AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02r")
+                .unwrap();
         let registration1 = Registration::new(uri1, vec![test_endpoint()]);
         let registration2 = Registration::new(uri2, vec![test_endpoint()]);
         assert_ne!(registration1, registration2);

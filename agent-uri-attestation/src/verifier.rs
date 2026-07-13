@@ -34,7 +34,7 @@ use crate::verification;
 /// let uri = AgentUri::parse(
 ///     "agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q"
 /// ).unwrap();
-/// let token = issuer.issue(&uri, vec!["read".into()]).unwrap();
+/// let token = issuer.issue(&uri, vec!["test".into()]).unwrap();
 ///
 /// // Create a verifier with the issuer's public key
 /// let mut verifier = Verifier::new();
@@ -108,6 +108,32 @@ impl Verifier {
     /// - `InvalidTokenFormat` - Token is malformed
     /// - `InvalidClaims` - Claims cannot be parsed
     pub fn verify(&self, token: &str) -> Result<AttestationClaims, AttestationError> {
+        self.verify_with_audience_context(token, None)
+    }
+
+    /// Verifies a token for a specific verifier audience.
+    ///
+    /// Audience-restricted tokens are accepted only when `verifier_audience`
+    /// exactly matches their `aud` claim. Unrestricted tokens are accepted for
+    /// any audience.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::verify`], plus
+    /// [`AttestationError::AudienceMismatch`] for a non-matching audience.
+    pub fn verify_for_audience(
+        &self,
+        token: &str,
+        verifier_audience: &str,
+    ) -> Result<AttestationClaims, AttestationError> {
+        self.verify_with_audience_context(token, Some(verifier_audience))
+    }
+
+    fn verify_with_audience_context(
+        &self,
+        token: &str,
+        verifier_audience: Option<&str>,
+    ) -> Result<AttestationClaims, AttestationError> {
         if self.trusted_roots.is_empty() {
             return Err(AttestationError::UntrustedIssuer {
                 issuer: "unknown".to_string(),
@@ -131,6 +157,9 @@ impl Verifier {
                 uri_trust_root: claims.trust_root().unwrap_or_default().to_string(),
             });
         }
+
+        verification::validate_capability_scope(&claims.agent_uri, &claims.capabilities)?;
+        verification::validate_audience(claims.aud.as_deref(), verifier_audience)?;
 
         Ok(claims)
     }
@@ -159,14 +188,46 @@ impl Verifier {
         // only remaining, load-bearing check.
         let claims = self.verify(token)?;
 
-        let expected_str = expected_uri.to_string();
-        if claims.agent_uri != expected_str {
+        let expected_str = expected_uri.canonical();
+        let token_uri = AgentUri::parse(&claims.agent_uri).map_err(|error| {
+            AttestationError::InvalidClaims {
+                reason: format!("invalid agent_uri claim: {error}"),
+            }
+        })?;
+        if token_uri.canonical() != expected_str {
             return Err(AttestationError::UriMismatch {
                 token_uri: claims.agent_uri.clone(),
                 expected_uri: expected_str,
             });
         }
 
+        Ok(claims)
+    }
+
+    /// Verifies a token, canonical subject URI, and verifier audience.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when signature, claims, audience, or subject validation
+    /// fails.
+    pub fn verify_for_uri_and_audience(
+        &self,
+        token: &str,
+        expected_uri: &AgentUri,
+        verifier_audience: &str,
+    ) -> Result<AttestationClaims, AttestationError> {
+        let claims = self.verify_for_audience(token, verifier_audience)?;
+        let token_uri = AgentUri::parse(&claims.agent_uri).map_err(|error| {
+            AttestationError::InvalidClaims {
+                reason: format!("invalid agent_uri claim: {error}"),
+            }
+        })?;
+        if token_uri.canonical() != expected_uri.canonical() {
+            return Err(AttestationError::UriMismatch {
+                token_uri: claims.agent_uri.clone(),
+                expected_uri: expected_uri.canonical(),
+            });
+        }
         Ok(claims)
     }
 
@@ -214,7 +275,7 @@ impl Verifier {
     /// let uri = AgentUri::parse(
     ///     "agent://acme.com/workflow/approval/agent_01h455vb4pex5vsknk084sn02q"
     /// ).unwrap();
-    /// let token = issuer.issue(&uri, vec!["workflow".into()]).unwrap();
+    /// let token = issuer.issue(&uri, vec!["workflow/approval".into()]).unwrap();
     ///
     /// let mut verifier = Verifier::new();
     /// verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -231,12 +292,43 @@ impl Verifier {
         uri: &AgentUri,
         required_capability: &CapabilityPath,
     ) -> Result<AttestationClaims, AttestationError> {
+        if !required_capability.starts_with(uri.capability_path()) {
+            return Err(AttestationError::CapabilityOutsideIdentity {
+                identity_path: uri.capability_path().as_str().to_string(),
+                capability: required_capability.as_str().to_string(),
+            });
+        }
+
         // First verify the token and URI match
         let claims = self.verify_for_uri(token, uri)?;
 
         // Then check capability coverage using pure function
         verification::check_capability_coverage(&claims.capabilities, required_capability)?;
 
+        Ok(claims)
+    }
+
+    /// Verifies a token for a URI, required capability, and audience.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when any signature, claim, subject, capability, or
+    /// audience check fails.
+    pub fn verify_for_capability_and_audience(
+        &self,
+        token: &str,
+        uri: &AgentUri,
+        required_capability: &CapabilityPath,
+        verifier_audience: &str,
+    ) -> Result<AttestationClaims, AttestationError> {
+        if !required_capability.starts_with(uri.capability_path()) {
+            return Err(AttestationError::CapabilityOutsideIdentity {
+                identity_path: uri.capability_path().as_str().to_string(),
+                capability: required_capability.as_str().to_string(),
+            });
+        }
+        let claims = self.verify_for_uri_and_audience(token, uri, verifier_audience)?;
+        verification::check_capability_coverage(&claims.capabilities, required_capability)?;
         Ok(claims)
     }
 
@@ -271,7 +363,6 @@ impl Verifier {
             issuer: "unknown".to_string(),
         }))
     }
-
 }
 
 /// Classifies a PASETO failure by its cause rather than by its message text.
@@ -456,10 +547,13 @@ mod tests {
     }
 
     /// Claims for `acme.com`, with a caller-chosen validity window.
-    fn claims_valid_for(iat: chrono::DateTime<Utc>, exp: chrono::DateTime<Utc>) -> AttestationClaims {
+    fn claims_valid_for(
+        iat: chrono::DateTime<Utc>,
+        exp: chrono::DateTime<Utc>,
+    ) -> AttestationClaims {
         AttestationClaims {
             agent_uri: test_uri().to_string(),
-            capabilities: vec!["read".into()],
+            capabilities: vec!["test".into()],
             iss: "acme.com".into(),
             iat,
             exp,
@@ -475,7 +569,7 @@ mod tests {
         // InvalidTokenFormat, sending callers hunting for a copy-paste error.
         let signing_key = SigningKey::generate();
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
-        let token = issuer.issue(&test_uri(), vec!["read".into()]).unwrap();
+        let token = issuer.issue(&test_uri(), vec!["test".into()]).unwrap();
 
         let tampered = tamper(&token);
 
@@ -492,7 +586,7 @@ mod tests {
     fn a_token_signed_by_another_key_is_reported_as_an_invalid_signature() {
         let signing_key = SigningKey::generate();
         let issuer = Issuer::new("acme.com", signing_key, Duration::from_hours(1));
-        let token = issuer.issue(&test_uri(), vec!["read".into()]).unwrap();
+        let token = issuer.issue(&test_uri(), vec!["test".into()]).unwrap();
 
         // The right authority, but the wrong key registered for it.
         let mut verifier = Verifier::new();
@@ -532,7 +626,9 @@ mod tests {
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         match verifier.verify(&token) {
-            Err(AttestationError::TokenExpired { expired_at: reported }) => {
+            Err(AttestationError::TokenExpired {
+                expired_at: reported,
+            }) => {
                 assert_ne!(reported, "unknown", "the real instant must be carried");
 
                 // It is the token's own exp, to the second, and it round-trips.
@@ -552,7 +648,10 @@ mod tests {
         // by forging an expiry, so the signature check comes first.
         let signing_key = SigningKey::generate();
         let now = Utc::now();
-        let claims = claims_valid_for(now - chrono::Duration::days(4), now - chrono::Duration::days(3));
+        let claims = claims_valid_for(
+            now - chrono::Duration::days(4),
+            now - chrono::Duration::days(3),
+        );
 
         let tampered = tamper(&issue_raw(&signing_key, &claims));
 
@@ -570,7 +669,10 @@ mod tests {
     fn a_token_inside_its_window_still_verifies() {
         let signing_key = SigningKey::generate();
         let now = Utc::now();
-        let claims = claims_valid_for(now - chrono::Duration::hours(1), now + chrono::Duration::hours(1));
+        let claims = claims_valid_for(
+            now - chrono::Duration::hours(1),
+            now + chrono::Duration::hours(1),
+        );
 
         let token = issue_raw(&signing_key, &claims);
 
@@ -586,7 +688,7 @@ mod tests {
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec!["read".into()]).unwrap();
+        let token = issuer.issue(&uri, vec!["test".into()]).unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -595,7 +697,7 @@ mod tests {
 
         assert_eq!(claims.agent_uri, uri.to_string());
         assert_eq!(claims.iss, "acme.com");
-        assert_eq!(claims.capabilities, vec!["read"]);
+        assert_eq!(claims.capabilities, vec!["test"]);
     }
 
     #[test]
@@ -641,10 +743,8 @@ mod tests {
         assert!(
             matches!(
                 result,
-                Err(
-                    AttestationError::InvalidSignature
-                        | AttestationError::InvalidTokenFormat { .. }
-                )
+                Err(AttestationError::InvalidSignature
+                    | AttestationError::InvalidTokenFormat { .. })
             ),
             "Expected InvalidSignature or InvalidTokenFormat, got {result:?}",
         );
@@ -713,7 +813,7 @@ mod tests {
 
         let foreign_uri =
             AgentUri::parse("agent://evil.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
-        let token = issuer.issue(&foreign_uri, vec!["read".into()]).unwrap();
+        let token = issuer.issue(&foreign_uri, vec!["test".into()]).unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -755,7 +855,9 @@ mod tests {
         let uri =
             AgentUri::parse("agent://acme.com/workflow/approval/agent_01h455vb4pex5vsknk084sn02q")
                 .unwrap();
-        let token = issuer.issue(&uri, vec!["workflow".into()]).unwrap();
+        let token = issuer
+            .issue(&uri, vec!["workflow/approval".into()])
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -775,17 +877,29 @@ mod tests {
         // Fail closed: when the `agent_uri` claim has no parseable authority,
         // `trust_root()` is `None` and verification must reject rather than skip
         // the issuer/namespace binding.
-        let signing_key = SigningKey::generate();
-        let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
-
-        let claims = AttestationClaims::builder()
+        let result = AttestationClaims::builder()
             .agent_uri("not-an-agent-uri")
             .issuer("acme.com")
             .ttl(Duration::from_hours(1))
+            .build();
+        assert!(matches!(
+            result,
+            Err(AttestationError::InvalidClaims { .. })
+        ));
+    }
+
+    #[test]
+    fn audience_restricted_token_requires_matching_verifier() {
+        let signing_key = SigningKey::generate();
+        let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
+        let uri = test_uri();
+        let claims = AttestationClaims::builder()
+            .agent_uri(uri.canonical())
+            .issuer("acme.com")
+            .add_capability("test")
+            .audience("api.globex.com")
             .build()
             .unwrap();
-        assert_eq!(claims.trust_root(), None);
-
         let token = issuer.issue_claims(&claims).unwrap();
 
         let mut verifier = Verifier::new();
@@ -793,8 +907,45 @@ mod tests {
 
         assert!(matches!(
             verifier.verify(&token),
-            Err(AttestationError::IssuerNamespaceMismatch { .. })
+            Err(AttestationError::AudienceMismatch { .. })
         ));
+        assert!(matches!(
+            verifier.verify_for_audience(&token, "api.evil.com"),
+            Err(AttestationError::AudienceMismatch { .. })
+        ));
+        assert!(
+            verifier
+                .verify_for_uri_and_audience(&token, &uri, "api.globex.com")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn broader_or_unrelated_capabilities_are_rejected() {
+        let uri =
+            AgentUri::parse("agent://acme.com/workflow/approval/agent_01h455vb4pex5vsknk084sn02q")
+                .unwrap();
+
+        for capability in ["workflow", "financial/payment", "workflow/review"] {
+            let result = AttestationClaims::builder()
+                .agent_uri(uri.canonical())
+                .issuer("acme.com")
+                .add_capability(capability)
+                .build();
+            assert!(matches!(
+                result,
+                Err(AttestationError::CapabilityOutsideIdentity { .. })
+            ));
+        }
+
+        assert!(
+            AttestationClaims::builder()
+                .agent_uri(uri.canonical())
+                .issuer("acme.com")
+                .add_capability("workflow/approval/invoice")
+                .build()
+                .is_ok()
+        );
     }
 
     #[test]
@@ -803,7 +954,11 @@ mod tests {
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
         let uri = test_uri();
 
-        let capabilities = vec!["read".to_string(), "write".to_string(), "admin".to_string()];
+        let capabilities = vec![
+            "test/read".to_string(),
+            "test/write".to_string(),
+            "test/admin".to_string(),
+        ];
         let token = issuer.issue(&uri, capabilities.clone()).unwrap();
 
         let mut verifier = Verifier::new();

@@ -15,10 +15,16 @@
 //! | SimulatedDht lookup_exact | Fast | From populated DHT |
 //! | SimulatedDht lookup_prefix | Scales | With result count |
 
-use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 
 use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
-use agent_uri_dht::{Dht, DhtKey, Endpoint, PathTrie, Registration, SimulatedDht};
+use agent_uri_dht::{
+    Dht, DhtKey, Endpoint, PathTrie, Registration, SimulatedDht, SimulationConfig,
+};
+
+fn benchmark_dht() -> SimulatedDht {
+    SimulatedDht::new(SimulationConfig::default().with_verify_attestations(false))
+}
 
 // ============================================================================
 // DhtKey Benchmarks
@@ -53,8 +59,7 @@ fn bench_dht_key_derive(c: &mut Criterion) {
 /// Tests prefix key derivation for hierarchical queries.
 fn bench_dht_key_derive_at_depth(c: &mut Criterion) {
     let trust_root = TrustRoot::parse("anthropic.com").expect("valid trust root");
-    let full_path =
-        CapabilityPath::parse("assistant/chat/streaming/v2/beta").expect("valid path");
+    let full_path = CapabilityPath::parse("assistant/chat/streaming/v2/beta").expect("valid path");
 
     let mut group = c.benchmark_group("dht_key/derive_at_depth");
 
@@ -103,12 +108,9 @@ fn bench_path_trie_insert(c: &mut Criterion) {
                         // Setup: create trie with existing entries
                         let mut trie = PathTrie::<String>::new();
                         for i in 0..size {
-                            let path = CapabilityPath::parse(&format!(
-                                "cat{}/sub{}",
-                                i / 100,
-                                i % 100
-                            ))
-                            .expect("valid path");
+                            let path =
+                                CapabilityPath::parse(&format!("cat{}/sub{}", i / 100, i % 100))
+                                    .expect("valid path");
                             trie.insert(&path, format!("value{i}"));
                         }
                         trie
@@ -148,9 +150,18 @@ fn bench_path_trie_get_exact(c: &mut Criterion) {
 
     // Benchmark lookups at different positions
     let lookup_paths = [
-        ("first", CapabilityPath::parse("cat0/sub0").expect("valid path")),
-        ("middle", CapabilityPath::parse("cat5/sub50").expect("valid path")),
-        ("last", CapabilityPath::parse("cat9/sub99").expect("valid path")),
+        (
+            "first",
+            CapabilityPath::parse("cat0/sub0").expect("valid path"),
+        ),
+        (
+            "middle",
+            CapabilityPath::parse("cat5/sub50").expect("valid path"),
+        ),
+        (
+            "last",
+            CapabilityPath::parse("cat9/sub99").expect("valid path"),
+        ),
     ];
 
     for (name, path) in &lookup_paths {
@@ -225,7 +236,7 @@ fn bench_simulated_dht_register(c: &mut Criterion) {
     c.bench_function("simulated_dht/register", |b| {
         b.iter_batched(
             || {
-                let dht = SimulatedDht::with_defaults();
+                let dht = benchmark_dht();
                 let uri = AgentUri::parse(
                     "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
                 )
@@ -250,35 +261,32 @@ fn bench_simulated_dht_lookup_exact(c: &mut Criterion) {
     let mut group = c.benchmark_group("simulated_dht/lookup_exact");
 
     for size in [100, 1000, 10_000] {
-        group.bench_with_input(
-            BenchmarkId::new("dht_size", size),
-            &size,
-            |b, &size| {
-                b.iter_batched(
-                    || {
-                        // Setup: populate DHT
-                        let dht = SimulatedDht::with_defaults();
-                        for i in 0..size {
-                            let uri = make_agent_uri(i);
-                            let registration = Registration::new(
-                                uri,
-                                vec![Endpoint::https(format!("agent{i}.anthropic.com"))],
-                            );
-                            // Ignore errors for duplicates at same path
-                            let _ = dht.register(registration);
-                        }
-                        dht
-                    },
-                    |dht| {
-                        // Benchmark: lookup
-                        let trust_root = TrustRoot::parse("anthropic.com").expect("valid");
-                        let path = CapabilityPath::parse("cat0/sub0").expect("valid");
-                        dht.lookup_exact(&trust_root, &path).expect("lookup succeeds")
-                    },
-                    BatchSize::SmallInput,
-                );
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("dht_size", size), &size, |b, &size| {
+            b.iter_batched(
+                || {
+                    // Setup: populate DHT
+                    let dht = benchmark_dht();
+                    for i in 0..size {
+                        let uri = make_agent_uri(i);
+                        let registration = Registration::new(
+                            uri,
+                            vec![Endpoint::https(format!("agent{i}.anthropic.com"))],
+                        );
+                        // Ignore errors for duplicates at same path
+                        let _ = dht.register(registration);
+                    }
+                    dht
+                },
+                |dht| {
+                    // Benchmark: lookup
+                    let trust_root = TrustRoot::parse("anthropic.com").expect("valid");
+                    let path = CapabilityPath::parse("cat0/sub0").expect("valid");
+                    dht.lookup_exact(&trust_root, &path)
+                        .expect("lookup succeeds")
+                },
+                BatchSize::SmallInput,
+            );
+        });
     }
 
     group.finish();
@@ -290,7 +298,7 @@ fn bench_simulated_dht_lookup_exact(c: &mut Criterion) {
 fn bench_simulated_dht_lookup_prefix(c: &mut Criterion) {
     // Create DHT with hierarchical structure:
     // 10 categories x 10 subcategories x 10 agents = 1000 total
-    let dht = SimulatedDht::with_defaults();
+    let dht = benchmark_dht();
 
     for cat in 0..10 {
         for sub in 0..10 {
@@ -371,7 +379,7 @@ fn bench_dht_memory_scaling(c: &mut Criterion) {
             |b, &count| {
                 b.iter_batched(
                     || {
-                        let dht = SimulatedDht::with_defaults();
+                        let dht = benchmark_dht();
                         let registrations: Vec<Registration> = (0..count)
                             .map(|i| {
                                 let uri = make_agent_uri(i);

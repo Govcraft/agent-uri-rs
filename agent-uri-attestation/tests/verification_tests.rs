@@ -8,8 +8,8 @@ use std::time::Duration;
 use agent_uri::AgentUri;
 use agent_uri::CapabilityPath;
 use agent_uri_attestation::{
-    capability_covers, check_capability_coverage, check_expiration, validate_issuer,
-    validate_subject, AttestationClaimsBuilder, AttestationError, Issuer, SigningKey, Verifier,
+    AttestationClaimsBuilder, AttestationError, Issuer, SigningKey, Verifier, capability_covers,
+    check_capability_coverage, check_expiration, validate_issuer, validate_subject,
 };
 use chrono::{Duration as ChronoDuration, Utc};
 
@@ -72,10 +72,13 @@ mod capability_coverage_tests {
 
     #[test]
     fn partial_segment_match_not_covered() {
-        // "work" should NOT cover "workflow"
-        let attested = vec!["work".to_string()];
-        let required = CapabilityPath::parse("workflow").unwrap();
+        // A shared lexical prefix is not a capability-path segment prefix.
+        let attested = vec!["workflow/approval".to_string()];
+        let required = CapabilityPath::parse("workflow/approvals").unwrap();
         assert!(!capability_covers(&attested, &required));
+
+        let descendant = CapabilityPath::parse("workflow/approval/invoice").unwrap();
+        assert!(capability_covers(&attested, &descendant));
     }
 
     #[test]
@@ -400,7 +403,9 @@ mod verify_for_capability_tests {
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec!["workflow".into()]).unwrap();
+        let token = issuer
+            .issue(&uri, vec!["workflow/approval".into()])
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -438,14 +443,16 @@ mod verify_for_capability_tests {
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
         let uri = test_uri();
 
-        // Token only has "assistant/chat" capability
-        let token = issuer.issue(&uri, vec!["assistant/chat".into()]).unwrap();
+        // Token grants one descendant of the identity path.
+        let token = issuer
+            .issue(&uri, vec!["workflow/approval/read".into()])
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-        // But we require "workflow/approval"
-        let required = CapabilityPath::parse("workflow/approval").unwrap();
+        // A sibling descendant is not covered.
+        let required = CapabilityPath::parse("workflow/approval/write").unwrap();
         let result = verifier.verify_for_capability(&token, &uri, &required);
 
         assert!(matches!(
@@ -455,7 +462,7 @@ mod verify_for_capability_tests {
     }
 
     #[test]
-    fn fails_with_no_capabilities() {
+    fn omitted_capabilities_default_to_identity_path() {
         let signing_key = SigningKey::generate();
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
         let uri = test_uri();
@@ -465,13 +472,10 @@ mod verify_for_capability_tests {
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-        let required = CapabilityPath::parse("workflow").unwrap();
+        let required = CapabilityPath::parse("workflow/approval/child").unwrap();
         let result = verifier.verify_for_capability(&token, &uri, &required);
 
-        assert!(matches!(
-            result,
-            Err(AttestationError::InsufficientCapabilities { .. })
-        ));
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -481,7 +485,9 @@ mod verify_for_capability_tests {
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_millis(1));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec!["workflow".into()]).unwrap();
+        let token = issuer
+            .issue(&uri, vec!["workflow/approval".into()])
+            .unwrap();
 
         // Wait for expiration
         std::thread::sleep(Duration::from_millis(50));
@@ -489,7 +495,7 @@ mod verify_for_capability_tests {
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-        let required = CapabilityPath::parse("workflow").unwrap();
+        let required = CapabilityPath::parse("workflow/approval").unwrap();
         let result = verifier.verify_for_capability(&token, &uri, &required);
 
         // Should fail with TokenExpired, not InsufficientCapabilities
@@ -501,17 +507,18 @@ mod verify_for_capability_tests {
         let signing_key = SigningKey::generate();
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
         let uri1 = test_uri();
-        let uri2 =
-            AgentUri::parse("agent://acme.com/other/path/agent_01h455vb4pex5vsknk084sn02q")
-                .unwrap();
+        let uri2 = AgentUri::parse("agent://acme.com/other/path/agent_01h455vb4pex5vsknk084sn02q")
+            .unwrap();
 
-        let token = issuer.issue(&uri1, vec!["workflow".into()]).unwrap();
+        let token = issuer
+            .issue(&uri1, vec!["workflow/approval".into()])
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         // Try to verify for different URI
-        let required = CapabilityPath::parse("workflow").unwrap();
+        let required = CapabilityPath::parse("other/path").unwrap();
         let result = verifier.verify_for_capability(&token, &uri2, &required);
 
         // Should fail with UriMismatch, not InsufficientCapabilities
@@ -524,12 +531,14 @@ mod verify_for_capability_tests {
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec!["workflow".into()]).unwrap();
+        let token = issuer
+            .issue(&uri, vec!["workflow/approval".into()])
+            .unwrap();
 
         // Verifier has no trusted roots
         let verifier = Verifier::new();
 
-        let required = CapabilityPath::parse("workflow").unwrap();
+        let required = CapabilityPath::parse("workflow/approval").unwrap();
         let result = verifier.verify_for_capability(&token, &uri, &required);
 
         assert!(matches!(
@@ -548,9 +557,9 @@ mod verify_for_capability_tests {
             .issue(
                 &uri,
                 vec![
-                    "storage/read".into(),
-                    "workflow".into(),
-                    "assistant/chat".into(),
+                    "workflow/approval/storage-read".into(),
+                    "workflow/approval/read".into(),
+                    "workflow/approval/assistant-chat".into(),
                 ],
             )
             .unwrap();
@@ -558,7 +567,7 @@ mod verify_for_capability_tests {
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-        let required = CapabilityPath::parse("workflow/approval").unwrap();
+        let required = CapabilityPath::parse("workflow/approval/read/detail").unwrap();
         let result = verifier.verify_for_capability(&token, &uri, &required);
 
         assert!(result.is_ok());

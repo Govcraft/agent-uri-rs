@@ -1,6 +1,6 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.4.0
+**Version:** 0.5.0
 **Status:** Draft
 **Last Updated:** 2026-01-20
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
@@ -46,10 +46,10 @@ Multi-agent systems require stable agent identity that survives infrastructure c
 
 ### 1.2 Solution Overview
 
-The `agent://` URI scheme decouples identity from topology through three orthogonal components:
+The `agent://` URI scheme decouples identity from topology through three components:
 
 - **Trust root**: Organizational authority vouching for the agent
-- **Capability path**: Hierarchical description of agent capabilities
+- **Capability path**: Hierarchical, identity-defining description of agent capabilities
 - **Agent identifier**: Globally unique, time-sortable reference
 
 ### 1.3 Design Goals
@@ -75,6 +75,10 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 **Trust root**: An organizational authority that vouches for agents' existence and capabilities by issuing attestation tokens.
 
 **Capability path**: A hierarchical path describing what an agent can do.
+
+The capability path is constitutive identity material. Moving the same
+implementation to a different capability path denotes a different agent and
+requires a newly minted Agent ID and attestation.
 
 **Agent identifier**: A TypeID combining a semantic prefix with a UUIDv7 suffix.
 
@@ -149,7 +153,7 @@ label      = 1*63( ALPHA / DIGIT / "-" )
 1. The trust root MUST follow DNS hostname syntax or be a valid IP address.
 2. Domain labels MUST NOT start or end with a hyphen.
 3. The trust root MUST publish verification keys at a well-known endpoint (see [Section 7.2](#72-key-publication)).
-4. The trust root is case-insensitive and MUST be normalized to lowercase.
+4. DNS trust roots are case-insensitive and MUST be normalized to lowercase. IPv4 addresses use dotted-decimal form and IPv6 literals use RFC 5952 canonical text in brackets. An explicit port is preserved; no default port is inferred or stripped.
 
 **Examples:**
 
@@ -169,7 +173,7 @@ The capability path describes what the agent does using hierarchical segments.
 
 ```abnf
 capability-path = segment *( "/" segment )
-segment         = 1*64( ALPHA / DIGIT / "-" )
+segment         = 1*64( LOWER / DIGIT / "-" )
 ```
 
 **Requirements:**
@@ -179,6 +183,9 @@ segment         = 1*64( ALPHA / DIGIT / "-" )
 3. Each segment MUST be lowercase alphanumeric with hyphens permitted.
 4. Segments MUST NOT be empty (no consecutive slashes).
 5. Capability paths support prefix matching for discovery.
+6. An agent's capability path is immutable. A capability-path change MUST use a
+   new Agent ID; implementations MUST reject reuse of a trust-root/Agent-ID pair
+   under another path.
 
 **Examples:**
 
@@ -208,7 +215,7 @@ The agent identifier is a TypeID providing globally unique, time-sortable refere
 
 ```abnf
 agent-id     = prefix "_" suffix
-prefix       = 1*63( ALPHA / "_" )
+prefix       = LOWER *( LOWER / "_" ) LOWER / LOWER
 suffix       = first-char 25base32char
 first-char   = "0" / "1" / "2" / "3" / "4" / "5" / "6" / "7"
 base32char   = DIGIT / "a" / "b" / "c" / "d" / "e" / "f" / "g" / "h"
@@ -270,7 +277,7 @@ query = *( pchar / "/" / "?" )
 **Requirements:**
 
 1. Query parameters are NOT part of agent identity.
-2. Two URIs differing only in query string MAY reference the same agent.
+2. Two URIs differing only in query string reference the same agent.
 3. Query parameters MUST be stripped for normalization and DHT key derivation.
 
 ### 4.5 Fragment
@@ -300,15 +307,15 @@ Two URIs denote the same agent if and only if their canonical forms are byte-equ
 **Normalization Rules:**
 
 1. **Scheme**: Lowercase (`agent`, not `AGENT`)
-2. **Trust root**: Lowercase, no trailing dot
-3. **Capability path**: Lowercase, no trailing slash, percent-decode unreserved characters
-4. **Agent ID**: Lowercase (Base32 is case-insensitive)
+2. **Trust root**: DNS names lowercase with no trailing dot; IP addresses in canonical text form; explicit ports preserved
+3. **Capability path**: Already lowercase by grammar, with no trailing slash
+4. **Agent ID**: Already lowercase by grammar
 5. **Query and fragment**: Stripped entirely
 
 **Example:**
 
 ```
-Input:  agent://Anthropic.COM/Assistant/Chat/LLM_01H455VB4PEX5VSKNK084SN02Q?version=1.0#task
+Input:  agent://Anthropic.COM/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?version=1.0#task
 Output: agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q
 ```
 
@@ -357,7 +364,9 @@ Key: SHA-256("anthropic.com/assistant/chat")
 
 ### 6.2 Registration Protocol
 
-An agent registers by storing a registration record at its capability path's DHT key:
+An agent registers by storing its record at the DHT key for its exact capability
+path and at the key for every ancestor path. This ancestor-key materialization
+makes a prefix query one ordinary exact-key DHT lookup.
 
 ```rust
 Registration {
@@ -371,10 +380,13 @@ Registration {
 
 **Requirements:**
 
-1. Agents MUST register at their most specific capability level.
+1. Agents MUST register at the capability path encoded in their URI.
 2. Registration MUST include at least one endpoint.
-3. Registration SHOULD include a valid attestation token.
-4. DHT nodes SHOULD verify attestations before storing records.
+3. Registration MUST include a valid attestation token covering the URI path.
+4. DHT nodes MUST verify attestations before storing records.
+5. The reference in-memory index MUST write the record atomically to the exact key and all ancestor keys. A distributed backend MUST either tolerate transient divergence between these keys or define an additional coordination protocol; this specification does not require cross-node multi-key atomicity.
+6. Registration write amplification is O(d), where d is path depth. Deployments
+   MUST provision broad ancestor keys for higher load or impose capacity limits.
 
 ### 6.3 Lookup Protocol
 
@@ -382,29 +394,39 @@ Discovery proceeds in three steps:
 
 1. **Key derivation**: Compute DHT key from trust root and capability path.
 
-2. **DHT lookup**: Query for records at that key (exact match) or keys in the subtree (prefix match).
+2. **DHT lookup**: Perform one ordinary lookup at that key. Ancestor-key
+   materialization makes the returned bucket the prefix subtree.
 
 3. **Result filtering**: Verify attestations on returned records; filter by query parameters.
 
 **Prefix Matching:**
 
-For prefix queries, derive keys at each level:
+For registration, derive and write keys at each level. A query for
+`/workflow/approval` reads only the depth-2 key:
 
 ```
-Query: /workflow/approval (prefix match)
-Keys:  SHA-256("acme.com/workflow/approval")
-       SHA-256("acme.com/workflow/approval/invoice")
-       SHA-256("acme.com/workflow/approval/expense")
-       ...
+Register: /workflow/approval/invoice
+Writes:   SHA-256("acme.com/workflow")
+          SHA-256("acme.com/workflow/approval")
+          SHA-256("acme.com/workflow/approval/invoice")
+
+Query:    /workflow/approval
+Reads:    SHA-256("acme.com/workflow/approval")
 ```
 
 ### 6.4 Resolution Guarantees
 
-**Theorem (Bounded Resolution):** Resolution of any agent URI terminates in O(log N) DHT hops, where N is the number of DHT nodes.
+Under the standard Kademlia routing-table and connectivity assumptions, one
+exact-key lookup is expected to require O(log N) overlay hops, where N is the
+number of DHT nodes. Prefix lookup has the same routing shape because it reads
+one materialized ancestor key; result transfer remains proportional to the
+number and size of returned records.
 
 **Corollary:** Resolution cost is independent of migration history. An agent that has migrated 100 times has the same resolution cost as one that never migrated.
 
-**Theorem (Eventual Consistency):** After migration with DHT record update, all subsequent lookups return the new endpoint within time T_prop ≤ k × RTT_max, where k is the Kademlia replication factor.
+Propagation time after an update depends on the concrete DHT's replication,
+retry, churn, and cache policies. This specification does not claim a fixed
+upper bound.
 
 ### 6.5 Migration
 
@@ -415,7 +437,9 @@ Agent migration updates only the DHT record; the URI remains stable:
 3. After propagation, lookups return new endpoint.
 4. Cached references continue to resolve correctly.
 
-The agent's identity (URI) does not change. Trust root changes require re-attestation and result in a new identity.
+The agent's identity (URI) does not change for endpoint migration. A trust-root
+or capability-path change creates a new identity and requires a new Agent ID and
+attestation.
 
 ---
 
@@ -434,7 +458,7 @@ v4.public.<payload>[.<footer>]
 | Claim | Type | Required | Description |
 |-------|------|----------|-------------|
 | `iss` | string | REQUIRED | Issuing trust root |
-| `sub` | string | REQUIRED | Agent URI being attested |
+| `agent_uri` | string | REQUIRED | Canonical Agent URI being attested |
 | `iat` | datetime | REQUIRED | Issued-at timestamp |
 | `exp` | datetime | REQUIRED | Expiration timestamp |
 | `aud` | string | OPTIONAL | Audience restriction |
@@ -445,10 +469,10 @@ v4.public.<payload>[.<footer>]
 ```json
 {
   "iss": "acme.com",
-  "sub": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+  "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
   "iat": "2026-01-20T00:00:00Z",
   "exp": "2026-02-19T00:00:00Z",
-  "capabilities": ["workflow/approval"]
+  "capabilities": ["workflow/approval/invoice"]
 }
 ```
 
@@ -485,7 +509,13 @@ GET https://{trust-root}/.well-known/agent-keys.json
 
 ### 7.3 Capability Binding
 
-An attestation authorizes registration at capability paths covered by its `capabilities` claim:
+Every attested capability MUST first be constrained to the subject identity:
+
+```
+scoped(c, agent_uri) := c == uri_path || c.starts_with(uri_path + "/")
+```
+
+Within that scope, a grant may cover an equal or narrower requested operation:
 
 ```
 covered(path, capabilities) := ∃c ∈ capabilities : path.starts_with(c)
@@ -493,14 +523,15 @@ covered(path, capabilities) := ∃c ∈ capabilities : path.starts_with(c)
 
 **Example:**
 
-Attestation with `capabilities: ["workflow"]` covers:
-- `/workflow` (exact match)
-- `/workflow/approval` (prefix match)
-- `/workflow/approval/invoice` (prefix match)
+For subject path `/workflow/approval`, an attestation with
+`capabilities: ["workflow/approval"]` covers:
+- `/workflow/approval` (exact match)
+- `/workflow/approval/invoice` (descendant)
 
 But NOT:
-- `/financial` (no prefix relationship)
-- `/work` (partial string match insufficient)
+- `/workflow` (broader than the identity)
+- `/workflow/review` (sibling)
+- `/financial` (unrelated)
 
 ### 7.4 Verification Flow
 
@@ -511,8 +542,10 @@ Complete verification of an agent presenting URI and attestation:
 3. Verify PASETO signature using the key.
 4. Check `exp` > current time (not expired).
 5. Check `iss` == `trust_root` from URI.
-6. Check `sub` == full agent URI.
-7. Check `capabilities` covers the URI's `capability_path`.
+6. Check `agent_uri` == the canonical full agent URI.
+7. Check every capability equals the URI path or is its descendant.
+8. Check at least one capability covers the requested operation or registration path.
+9. If `aud` is present, require an explicit, exact verifier audience match.
 
 All checks MUST pass. Failure at any step MUST reject the attestation.
 
@@ -732,8 +765,8 @@ capability-path = segment *( "/" segment )
                   ; Maximum 256 characters total
                   ; Maximum 32 segments
 
-segment         = 1*64( ALPHA / DIGIT / "-" )
-                  ; Lowercase only; case-insensitive input normalized
+segment         = 1*64( LOWER / DIGIT / "-" )
+                  ; Lowercase only; uppercase input is rejected
 
 ; ==========================================================================
 ; AGENT IDENTIFIER
@@ -741,7 +774,7 @@ segment         = 1*64( ALPHA / DIGIT / "-" )
 
 agent-id        = prefix "_" suffix
 
-prefix          = 1*63( ALPHA / "_" )
+prefix          = LOWER *( LOWER / "_" ) LOWER / LOWER
                   ; Must start and end with ALPHA
                   ; Lowercase only
 
@@ -877,17 +910,17 @@ Input:  agent://a]
 Status: INVALID
 Reason: Trust root exceeds 128 character limit
 
-# Uppercase in capability path (valid but normalized)
+# Uppercase in capability path
 Input:  agent://anthropic.com/Assistant/Chat/llm_01h455vb4pex5vsknk084sn02q
-Status: VALID (normalized)
-Canonical: agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q
+Status: INVALID
+Reason: Capability segments are lowercase by grammar
 ```
 
 ### B.3 Normalization Equivalence
 
 ```
-# Case normalization
-URI A: agent://Anthropic.COM/Assistant/Chat/LLM_01H455VB4PEX5VSKNK084SN02Q
+# Authority normalization
+URI A: agent://Anthropic.COM/assistant/chat/llm_01h455vb4pex5vsknk084sn02q
 URI B: agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q
 Equivalent: YES
 Canonical: agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q
@@ -943,9 +976,10 @@ Capabilities: ["workflow/approval"]
 Path: workflow/approval
 Covered: YES
 
-# Prefix coverage
-Capabilities: ["workflow"]
-Path: workflow/approval/invoice
+# Descendant coverage within the URI identity path
+Subject path: workflow/approval
+Capabilities: ["workflow/approval"]
+Requested path: workflow/approval/invoice
 Covered: YES
 
 # No coverage (sibling)
@@ -959,8 +993,9 @@ Path: workflow
 Covered: NO
 
 # Multiple capabilities (any covers)
-Capabilities: ["financial", "workflow/approval"]
-Path: workflow/approval/invoice
+Subject path: workflow/approval
+Capabilities: ["workflow/approval/read", "workflow/approval/write"]
+Requested path: workflow/approval/write/invoice
 Covered: YES (second capability covers)
 ```
 
@@ -989,8 +1024,8 @@ Covered: YES (second capability covers)
 | Total token | — | 8192 | PASETO practical limit |
 | Payload (decoded) | — | 4096 | Bytes after base64url decode |
 | agent_uri | 45 | 512 | Per URI constraints |
-| capabilities array | 0 | 64 | Item count |
-| Each capability | 1 | 128 | Characters |
+| capabilities array | 1 | 64 | Recommended practical item count |
+| Each capability | 1 | 256 | Same grammar and limit as URI capability path |
 | issuer | 4 | 128 | Matches trust root limit |
 | audience | 1 | 128 | Optional |
 | Timestamp | — | 30 | ISO 8601 with milliseconds |
@@ -1009,6 +1044,7 @@ Covered: YES (second capability covers)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.5.0 | 2026-07-13 | Capability path made constitutive identity material; lowercase path and Agent ID inputs are rejected rather than normalized; URI-scoped capability claims and ancestor-key registration defined |
 | 0.4.0 | 2026-01-20 | Initial draft specification |
 
 ---

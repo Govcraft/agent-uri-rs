@@ -20,8 +20,8 @@ pub struct SimulationConfig {
 
     /// Whether to verify attestations on registration.
     ///
-    /// Set to false for evaluation without attestation infrastructure.
-    /// Default: false
+    /// Set to false only for isolated indexing evaluations.
+    /// Default: true
     pub verify_attestations: bool,
 
     /// Simulated network delay for operations.
@@ -41,7 +41,7 @@ impl Default for SimulationConfig {
         Self {
             max_registrations_per_key: 1000,
             default_ttl: Duration::from_hours(1),
-            verify_attestations: false,
+            verify_attestations: true,
             simulated_delay: None,
             auto_expire: true,
         }
@@ -100,7 +100,7 @@ mod tests {
         let config = SimulationConfig::default();
         assert_eq!(config.max_registrations_per_key, 1000);
         assert_eq!(config.default_ttl, Duration::from_hours(1));
-        assert!(!config.verify_attestations);
+        assert!(config.verify_attestations);
         assert!(config.simulated_delay.is_none());
         assert!(config.auto_expire);
     }

@@ -118,7 +118,6 @@ impl VerifyingKey {
     pub fn to_bytes(&self) -> [u8; 32] {
         self.inner.to_bytes()
     }
-
 }
 
 impl std::fmt::Debug for VerifyingKey {
@@ -168,15 +167,11 @@ mod tests {
     fn verifying_key_from_invalid_bytes_fails() {
         // This specific byte pattern is invalid - we test multiple patterns
         // to find one that ed25519-dalek rejects
-        let test_cases = [
-            [0xFFu8; 32],
-            [0xEEu8; 32],
-            {
-                let mut b = [0u8; 32];
-                b[31] = 0x80; // Invalid: high bit in last byte
-                b
-            },
-        ];
+        let test_cases = [[0xFFu8; 32], [0xEEu8; 32], {
+            let mut b = [0u8; 32];
+            b[31] = 0x80; // Invalid: high bit in last byte
+            b
+        }];
 
         let mut found_invalid = false;
         for invalid_bytes in &test_cases {

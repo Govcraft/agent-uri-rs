@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 description = "Command-line tool for the agent:// identity scheme: key ceremony, attestation minting, verification, and inspection"
@@ -16,8 +16,8 @@ name = "agent-uri"
 path = "src/main.rs"
 
 [dependencies]
-agent-uri = { version = "0.4.0", path = "../agent-uri" }
-agent-uri-attestation = { version = "0.3.1", path = "../agent-uri-attestation" }
+agent-uri = { version = "0.5.0", path = "../agent-uri" }
+agent-uri-attestation = { version = "0.4.0", path = "../agent-uri-attestation" }
 base64 = "0.22.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 clap = { version = "4.6.1", features = ["derive", "wrap_help"] }

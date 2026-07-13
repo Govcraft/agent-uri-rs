@@ -36,7 +36,7 @@ use crate::error::AttestationError;
 ///
 /// let claims = AttestationClaims::builder()
 ///     .agent_uri("agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q")
-///     .capabilities(vec!["workflow.approval.read".into()])
+///     .capabilities(vec!["workflow/approval/read".into()])
 ///     .issuer("acme.com")
 ///     .ttl(Duration::from_secs(3600))
 ///     .build()
@@ -172,8 +172,8 @@ impl AttestationClaims {
 ///
 /// let claims = AttestationClaimsBuilder::new()
 ///     .agent_uri("agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q")
-///     .add_capability("workflow.approval.read")
-///     .add_capability("workflow.approval.execute")
+///     .add_capability("workflow/approval/read")
+///     .add_capability("workflow/approval/execute")
 ///     .issuer("acme.com")
 ///     .ttl(Duration::from_secs(7200))
 ///     .audience("api.acme.com")
@@ -253,20 +253,32 @@ impl AttestationClaimsBuilder {
     ///
     /// Returns `AttestationError::MissingField` if required fields are not set.
     pub fn build(self) -> Result<AttestationClaims, AttestationError> {
-        let agent_uri = self.agent_uri.ok_or(AttestationError::MissingField {
-            field: "agent_uri",
+        let agent_uri = self
+            .agent_uri
+            .ok_or(AttestationError::MissingField { field: "agent_uri" })?;
+        let issuer = self
+            .issuer
+            .ok_or(AttestationError::MissingField { field: "issuer" })?;
+
+        let parsed_uri = agent_uri::AgentUri::parse(&agent_uri).map_err(|error| {
+            AttestationError::InvalidClaims {
+                reason: format!("invalid agent_uri claim: {error}"),
+            }
         })?;
-        let issuer = self.issuer.ok_or(AttestationError::MissingField {
-            field: "issuer",
-        })?;
+        let capabilities = if self.capabilities.is_empty() {
+            vec![parsed_uri.capability_path().as_str().to_string()]
+        } else {
+            self.capabilities
+        };
+        crate::verification::validate_capability_scope(&agent_uri, &capabilities)?;
 
         let now = Utc::now();
-        let exp = now
-            + chrono::Duration::from_std(self.ttl).map_err(|_| AttestationError::InvalidTtl)?;
+        let exp =
+            now + chrono::Duration::from_std(self.ttl).map_err(|_| AttestationError::InvalidTtl)?;
 
         Ok(AttestationClaims {
             agent_uri,
-            capabilities: self.capabilities,
+            capabilities,
             iss: issuer,
             iat: now,
             exp,
@@ -298,7 +310,7 @@ mod tests {
             "agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q"
         );
         assert_eq!(claims.iss, "acme.com");
-        assert!(claims.capabilities.is_empty());
+        assert_eq!(claims.capabilities, vec!["test"]);
         assert!(claims.aud.is_none());
     }
 
@@ -329,12 +341,12 @@ mod tests {
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
             .issuer("acme.com")
-            .add_capability("read")
-            .add_capability("write")
+            .add_capability("test/read")
+            .add_capability("test/write")
             .build()
             .unwrap();
 
-        assert_eq!(claims.capabilities, vec!["read", "write"]);
+        assert_eq!(claims.capabilities, vec!["test/read", "test/write"]);
     }
 
     #[test]
@@ -402,7 +414,7 @@ mod tests {
         let original = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
             .issuer("acme.com")
-            .add_capability("read")
+            .add_capability("test/read")
             .audience("api.acme.com")
             .build()
             .unwrap();

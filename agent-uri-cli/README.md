@@ -121,14 +121,14 @@ $ agent-uri attest issue --key ./acme.key --agent agent://acme.com/... --capabil
 The issuer is derived from the URI's authority. `--issuer` exists only so a mistake can be caught out loud:
 
 ```console
-$ agent-uri attest issue --key ./acme.key --agent agent://acme.com/... --capability read --issuer evil.com
+$ agent-uri attest issue --key ./acme.key --agent agent://acme.com/workflow/approval/... --capability workflow/approval --issuer evil.com
 error: issuer 'evil.com' does not own the attested URI's authority 'acme.com'; a key may only attest agent URIs rooted at its own authority
   fix: drop --issuer to use 'acme.com', or attest a URI rooted at 'evil.com'; a token issued this way could never verify
 ```
 
 **TTL.** `--ttl` takes humane durations: `30s`, `30m`, `12h`, `90d`, `2w`, `1h30m`. A bare number is rejected rather than guessed, because silent unit ambiguity is how a 30-second credential gets shipped in place of a 30-day one. The default is **24h**, and the maximum is 365d. Prefer short lifetimes and re-issue: an attestation cannot be revoked before it expires, so its TTL is the blast radius of a leak.
 
-**Capabilities** are hierarchical, and cover their descendants. A token granting `workflow` satisfies a later check for `workflow/approval`. Grant the narrowest capability that works.
+**Capabilities** are constrained by identity. Every grant must equal the URI capability path or be its descendant; ancestors, siblings, and unrelated paths are refused. A token for `workflow/approval` can grant that path or narrower paths such as `workflow/approval/read`. Changing the URI capability path means creating a different agent with a new Agent ID and attestation.
 
 ### 4. Verify an attestation
 
@@ -147,7 +147,7 @@ issued at     2026-07-12T01:14:20Z
 expires at    2026-10-10T01:14:20Z (in 89 days)
 ```
 
-Exit 0 means verified. Pass `-` to read the token from stdin; prefer that, since a token on the command line is visible to anyone who can run `ps`. Pass `--trust-root` more than once to accept several authorities.
+Exit 0 means verified. Pass `-` to read the token from stdin; prefer that, since a token on the command line is visible to anyone who can run `ps`. Pass `--trust-root` more than once to accept several authorities. If a token has an `aud` claim, pass the exact expected value with `--audience`; audience-restricted tokens are refused when that verifier context is absent or different.
 
 Every refusal is exit 1, and says precisely what was wrong and what to do:
 
@@ -164,9 +164,9 @@ $ agent-uri attest verify - --trust-root acme.com=<wrong key> < token.txt
 error: token signature does not verify against the trusted key for its issuer
   fix: the token was tampered with, or the public key you supplied for that authority is wrong; re-fetch the authority's public key and try again
 
-$ agent-uri attest verify - --trust-root acme.com=2917... --agent agent://acme.com/... --capability workflow/approval < chat-token.txt
-error: token does not cover the capability 'workflow/approval'; it grants chat/reply
-  fix: obtain a token granting that capability, or one granting a prefix of it (granting 'workflow' covers 'workflow/approval')
+$ agent-uri attest verify - --trust-root acme.com=2917... --agent agent://acme.com/workflow/approval/... --capability workflow/approval/write < read-token.txt
+error: token does not cover the capability 'workflow/approval/write'; it grants workflow/approval/read
+  fix: obtain a token granting that capability or an allowed prefix within the agent URI's identity path
 ```
 
 Gate a script on the verdict:

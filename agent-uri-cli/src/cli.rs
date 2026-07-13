@@ -49,7 +49,7 @@ Output:
 Examples:
   agent-uri key generate
   agent-uri attest issue --key issuer.key --agent agent://acme.com/chat/bot_01h4... \\
-      --capability chat.reply --ttl 90d | pbcopy
+      --capability chat/reply --ttl 90d | pbcopy
   agent-uri attest verify - --trust-root acme.com=3b6a... < token.txt";
 
 /// Command-line interface for the `agent://` identity scheme.
@@ -218,29 +218,29 @@ rather than producing a token that every verifier would reject.
 The token is the only thing written to stdout, so it pipes cleanly. The summary
 of what you just signed goes to stderr, where a pipe will not swallow it.
 
-Capabilities are hierarchical and cover their descendants: attesting 'workflow'
-covers a later check for 'workflow/approval'.
+Capabilities are hierarchical, but every grant must equal the URI capability
+path or be its descendant. An identity-path grant covers its descendants.
 
 EXAMPLES:
   Mint a token with the default 24h lifetime:
       agent-uri attest issue --key ./acme.key \\
           --agent agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q \\
-          --capability workflow.approval.read
+          --capability workflow/approval/read
 
   Grant several capabilities, for 90 days, to one audience:
       agent-uri attest issue --key ./acme.key \\
           --agent agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q \\
-          --capability workflow.approval.read \\
-          --capability workflow.approval.execute \\
+          --capability workflow/approval/read \\
+          --capability workflow/approval/execute \\
           --ttl 90d --audience api.acme.com
 
   Copy the token straight to the clipboard:
       agent-uri attest issue --key ./acme.key --agent agent://acme.com/... \\
-          --capability chat.reply | pbcopy
+          --capability chat/reply | pbcopy
 
   Emit the token and its claims as JSON:
       agent-uri --json attest issue --key ./acme.key --agent agent://acme.com/... \\
-          --capability chat.reply")]
+          --capability chat/reply")]
     Issue {
         /// The private key to sign with.
         #[arg(long, value_name = "PATH")]
@@ -252,8 +252,8 @@ EXAMPLES:
 
         /// A capability to grant. Repeat to grant several.
         ///
-        /// Capabilities are hierarchical: granting 'workflow' covers a later
-        /// check for 'workflow/approval'.
+        /// Each grant must equal the agent URI's capability path or be one of
+        /// its descendants. A broader, sibling, or unrelated grant is refused.
         #[arg(long, value_name = "CAP", required = true)]
         capability: Vec<String>,
 
@@ -284,6 +284,8 @@ This is the real check: the Ed25519 signature, the expiry, the issuer's presence
 in the trust roots you supplied, and the binding between the issuer and the
 authority of the URI it attests. Narrow it further with --agent to demand a
 specific subject, and --capability to demand a specific permission.
+Tokens restricted to an audience are accepted only when that audience is
+supplied explicitly with --audience.
 
 Exit 0 means the token verified, and its authenticated claims are on stdout.
 Exit 1 means it was refused, and stderr says precisely why: expired at T, not yet
@@ -333,6 +335,13 @@ EXAMPLES:
         /// requirement of 'workflow/approval'.
         #[arg(long, value_name = "CAP", requires = "agent")]
         capability: Option<String>,
+
+        /// Require this exact token audience.
+        ///
+        /// An audience-restricted token is refused unless this value is
+        /// supplied and exactly matches its `aud` claim.
+        #[arg(long, value_name = "AUDIENCE")]
+        audience: Option<String>,
     },
 
     /// Decode a token's claims WITHOUT verifying them.

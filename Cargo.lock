@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agent-uri"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "criterion 0.5.1",
  "mti",
@@ -16,7 +16,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-attestation"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "agent-uri",
  "chrono",
@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -50,9 +50,10 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-dht"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "agent-uri",
+ "agent-uri-attestation",
  "criterion 0.8.1",
  "proptest",
  "serde",
@@ -61,7 +62,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-eval"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "agent-uri",
  "agent-uri-dht",

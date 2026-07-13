@@ -50,7 +50,7 @@ use crate::trust_root::TrustRoot;
 /// assert_eq!(uri.query().version(), Some("2.0"));
 /// assert_eq!(uri.fragment().map(|f| f.as_str()), Some("summarization"));
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct AgentUri {
     trust_root: TrustRoot,
     capability_path: CapabilityPath,
@@ -60,6 +60,16 @@ pub struct AgentUri {
     /// Normalized string representation
     normalized: String,
 }
+
+impl PartialEq for AgentUri {
+    fn eq(&self, other: &Self) -> bool {
+        self.trust_root == other.trust_root
+            && self.capability_path == other.capability_path
+            && self.agent_id == other.agent_id
+    }
+}
+
+impl Eq for AgentUri {}
 
 impl AgentUri {
     /// Parses an agent URI from a string.
@@ -90,7 +100,13 @@ impl AgentUri {
         query: QueryParams,
         fragment: Option<Fragment>,
     ) -> Result<Self, ParseError> {
-        let normalized = Self::normalize(&trust_root, &capability_path, &agent_id, &query, fragment.as_ref());
+        let normalized = Self::normalize(
+            &trust_root,
+            &capability_path,
+            &agent_id,
+            &query,
+            fragment.as_ref(),
+        );
         let len = normalized.len();
 
         if len > MAX_URI_LENGTH {
@@ -354,8 +370,13 @@ impl AgentUri {
         // Parse agent ID
         let agent_id = AgentId::parse(agent_id_str).map_err(ParseErrorKind::InvalidAgentId)?;
 
-        let normalized =
-            Self::normalize(&trust_root, &capability_path, &agent_id, &query, fragment.as_ref());
+        let normalized = Self::normalize(
+            &trust_root,
+            &capability_path,
+            &agent_id,
+            &query,
+            fragment.as_ref(),
+        );
 
         Ok(Self {
             trust_root,
@@ -505,7 +526,7 @@ impl PartialOrd for AgentUri {
 
 impl Ord for AgentUri {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.normalized.cmp(&other.normalized)
+        self.canonical().cmp(&other.canonical())
     }
 }
 
@@ -572,8 +593,7 @@ mod tests {
 
     #[test]
     fn parse_wrong_scheme_returns_error() {
-        let result =
-            AgentUri::parse("http://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q");
+        let result = AgentUri::parse("http://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q");
         assert!(matches!(
             result,
             Err(ParseError {
@@ -585,8 +605,7 @@ mod tests {
 
     #[test]
     fn parse_with_query_params() {
-        let input =
-            "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0&ttl=300";
+        let input = "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0&ttl=300";
         let uri = AgentUri::parse(input).unwrap();
 
         assert_eq!(uri.query().version(), Some("2.0"));
@@ -620,8 +639,7 @@ mod tests {
 
     #[test]
     fn canonical_strips_query_and_fragment() {
-        let input =
-            "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0#test";
+        let input = "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0#test";
         let uri = AgentUri::parse(input).unwrap();
         let canonical = uri.canonical();
 
@@ -630,15 +648,25 @@ mod tests {
     }
 
     #[test]
-    fn is_localhost() {
-        let uri = AgentUri::parse(
-            "agent://localhost:8472/test/llm_01h455vb4pex5vsknk084sn02q",
+    fn query_and_fragment_do_not_change_identity_equality() {
+        let base =
+            AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
+        let decorated = AgentUri::parse(
+            "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0#task",
         )
         .unwrap();
+
+        assert_eq!(base, decorated);
+        assert_eq!(base.cmp(&decorated), Ordering::Equal);
+    }
+
+    #[test]
+    fn is_localhost() {
+        let uri =
+            AgentUri::parse("agent://localhost:8472/test/llm_01h455vb4pex5vsknk084sn02q").unwrap();
         assert!(uri.is_localhost());
 
-        let uri =
-            AgentUri::parse("agent://127.0.0.1/test/llm_01h455vb4pex5vsknk084sn02q").unwrap();
+        let uri = AgentUri::parse("agent://127.0.0.1/test/llm_01h455vb4pex5vsknk084sn02q").unwrap();
         assert!(uri.is_localhost());
 
         let uri =
@@ -652,7 +680,9 @@ mod tests {
         assert!(matches!(
             result,
             Err(ParseError {
-                kind: ParseErrorKind::MissingComponent { component: "agent ID" },
+                kind: ParseErrorKind::MissingComponent {
+                    component: "agent ID"
+                },
                 ..
             })
         ));
@@ -671,14 +701,7 @@ mod tests {
         let cap_path = CapabilityPath::parse("assistant/chat").unwrap();
         let agent_id = AgentId::parse("llm_01h455vb4pex5vsknk084sn02q").unwrap();
 
-        let uri = AgentUri::new(
-            trust_root,
-            cap_path,
-            agent_id,
-            QueryParams::new(),
-            None,
-        )
-        .unwrap();
+        let uri = AgentUri::new(trust_root, cap_path, agent_id, QueryParams::new(), None).unwrap();
 
         assert_eq!(uri.trust_root().host_str(), "anthropic.com");
         assert_eq!(uri.capability_path().as_str(), "assistant/chat");

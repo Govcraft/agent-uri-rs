@@ -62,7 +62,10 @@ fn generate_key(home: &TempDir, path: &Path) -> String {
         .expect("runs");
 
     assert_eq!(code(&output), 0, "key generate failed: {}", stderr(&output));
-    json(&output)["public_key"].as_str().expect("a public key").to_string()
+    json(&output)["public_key"]
+        .as_str()
+        .expect("a public key")
+        .to_string()
 }
 
 /// Mints a token through the CLI, returning only what landed on stdout.
@@ -124,7 +127,10 @@ fn key_public_derives_the_same_key_that_generate_reported() {
 fn a_key_generated_at_the_default_path_lands_under_xdg_config_home() {
     let home = TempDir::new().unwrap();
 
-    let output = agent_uri(&home).args(["key", "generate"]).output().expect("runs");
+    let output = agent_uri(&home)
+        .args(["key", "generate"])
+        .output()
+        .expect("runs");
     assert_eq!(code(&output), 0, "{}", stderr(&output));
 
     let expected = home.path().join("agent-uri/keys/issuer.key");
@@ -147,7 +153,14 @@ fn a_key_file_is_written_0600_inside_a_0700_directory() {
 
     let key = home.path().join("agent-uri/keys/issuer.key");
     let key_mode = key.metadata().unwrap().permissions().mode() & 0o777;
-    let dir_mode = key.parent().unwrap().metadata().unwrap().permissions().mode() & 0o777;
+    let dir_mode = key
+        .parent()
+        .unwrap()
+        .metadata()
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777;
 
     assert_eq!(key_mode, 0o600, "key mode was {key_mode:o}");
     assert_eq!(dir_mode, 0o700, "key directory mode was {dir_mode:o}");
@@ -171,9 +184,15 @@ fn a_key_readable_by_others_is_refused() {
         .expect("runs");
 
     assert_eq!(code(&output), 3);
-    assert!(stdout(&output).is_empty(), "a refusal must not write to stdout");
+    assert!(
+        stdout(&output).is_empty(),
+        "a refusal must not write to stdout"
+    );
     assert!(stderr(&output).contains("readable by others"));
-    assert!(stderr(&output).contains("chmod 600"), "must say how to fix it");
+    assert!(
+        stderr(&output).contains("chmod 600"),
+        "must say how to fix it"
+    );
 }
 
 #[test]
@@ -231,8 +250,14 @@ fn generate_never_prints_the_private_key_by_default() {
     let secret = std::fs::read_to_string(&key).unwrap();
     let secret = secret.trim();
 
-    assert!(!stdout(&output).contains(secret), "the private key must never reach stdout");
-    assert!(!stderr(&output).contains(secret), "the private key must never reach stderr");
+    assert!(
+        !stdout(&output).contains(secret),
+        "the private key must never reach stdout"
+    );
+    assert!(
+        !stderr(&output).contains(secret),
+        "the private key must never reach stderr"
+    );
 }
 
 #[test]
@@ -267,7 +292,10 @@ fn a_missing_key_is_an_io_error_not_a_refusal() {
 
     assert_eq!(code(&output), 3);
     assert!(stdout(&output).is_empty());
-    assert!(stderr(&output).contains("key generate"), "must say how to fix it");
+    assert!(
+        stderr(&output).contains("key generate"),
+        "must say how to fix it"
+    );
 }
 
 // ------------------------------------------------------------------- issuing
@@ -307,7 +335,14 @@ fn issue_refuses_an_issuer_that_does_not_own_the_uris_authority() {
     let output = agent_uri(&home)
         .args(["attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", URI, "--capability", "read", "--issuer", "evil.com"])
+        .args([
+            "--agent",
+            URI,
+            "--capability",
+            "workflow/approval/read",
+            "--issuer",
+            "evil.com",
+        ])
         .output()
         .expect("runs");
 
@@ -344,11 +379,20 @@ fn a_custom_ttl_is_honoured() {
     let output = agent_uri(&home)
         .args(["--json", "attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", URI, "--capability", "read", "--ttl", "90d"])
+        .args([
+            "--agent",
+            URI,
+            "--capability",
+            "workflow/approval/read",
+            "--ttl",
+            "90d",
+        ])
         .output()
         .expect("runs");
 
-    let expires_in = json(&output)["claims"]["expires_in_seconds"].as_i64().unwrap();
+    let expires_in = json(&output)["claims"]["expires_in_seconds"]
+        .as_i64()
+        .unwrap();
     let ninety_days = 90 * 24 * 60 * 60;
 
     assert!(
@@ -366,12 +410,17 @@ fn the_default_ttl_is_twenty_four_hours() {
     let output = agent_uri(&home)
         .args(["--json", "attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", URI, "--capability", "read"])
+        .args(["--agent", URI, "--capability", "workflow/approval/read"])
         .output()
         .expect("runs");
 
-    let expires_in = json(&output)["claims"]["expires_in_seconds"].as_i64().unwrap();
-    assert!((86_395..=86_400).contains(&expires_in), "expected ~24h, got {expires_in}s");
+    let expires_in = json(&output)["claims"]["expires_in_seconds"]
+        .as_i64()
+        .unwrap();
+    assert!(
+        (86_395..=86_400).contains(&expires_in),
+        "expected ~24h, got {expires_in}s"
+    );
 }
 
 // --------------------------------------------------------------- verification
@@ -460,7 +509,10 @@ fn a_tampered_token_is_refused_as_a_signature_failure() {
 
     let err = stderr(&output);
     assert!(err.contains("signature"), "got: {err}");
-    assert!(!err.contains("cipher error"), "must not leak the library's wording: {err}");
+    assert!(
+        !err.contains("cipher error"),
+        "must not leak the library's wording: {err}"
+    );
 }
 
 #[test]
@@ -483,8 +535,14 @@ fn a_token_from_an_unsupplied_authority_names_the_missing_root() {
     assert!(stdout(&output).is_empty());
 
     let err = stderr(&output);
-    assert!(err.contains("acme.com"), "must name the token's issuer: {err}");
-    assert!(err.contains("--trust-root acme.com="), "must say how to fix it: {err}");
+    assert!(
+        err.contains("acme.com"),
+        "must name the token's issuer: {err}"
+    );
+    assert!(
+        err.contains("--trust-root acme.com="),
+        "must say how to fix it: {err}"
+    );
 }
 
 #[test]
@@ -492,12 +550,12 @@ fn a_capability_the_token_does_not_cover_is_refused() {
     let home = TempDir::new().unwrap();
     let key = home.path().join("acme.key");
     let public_key = generate_key(&home, &key);
-    let token = issue(&home, &key, URI, "chat/reply");
+    let token = issue(&home, &key, URI, "workflow/approval/read");
 
     let output = agent_uri(&home)
         .args(["attest", "verify", &token, "--trust-root"])
         .arg(format!("acme.com={public_key}"))
-        .args(["--agent", URI, "--capability", "workflow/approval"])
+        .args(["--agent", URI, "--capability", "workflow/approval/write"])
         .output()
         .expect("runs");
 
@@ -512,13 +570,13 @@ fn capability_coverage_is_hierarchical() {
     let key = home.path().join("acme.key");
     let public_key = generate_key(&home, &key);
 
-    // Granting the parent covers the child.
-    let token = issue(&home, &key, URI, "workflow");
+    // Granting the identity path covers its children.
+    let token = issue(&home, &key, URI, "workflow/approval");
 
     let output = agent_uri(&home)
         .args(["attest", "verify", &token, "--trust-root"])
         .arg(format!("acme.com={public_key}"))
-        .args(["--agent", URI, "--capability", "workflow/approval"])
+        .args(["--agent", URI, "--capability", "workflow/approval/read"])
         .output()
         .expect("runs");
 
@@ -581,7 +639,10 @@ fn inspect_decodes_an_expired_token_and_says_it_is_unverified() {
     assert!(stdout(&output).contains(URI));
 
     let err = stderr(&output);
-    assert!(err.contains("UNVERIFIED"), "the banner must be unmissable: {err}");
+    assert!(
+        err.contains("UNVERIFIED"),
+        "the banner must be unmissable: {err}"
+    );
     assert!(err.contains("expired"));
 }
 
@@ -626,10 +687,16 @@ fn inspect_refuses_a_token_that_is_not_a_token() {
 fn uri_validate_prints_the_canonical_form() {
     let home = TempDir::new().unwrap();
 
-    let output = agent_uri(&home).args(["uri", "validate", URI]).output().expect("runs");
+    let output = agent_uri(&home)
+        .args(["uri", "validate", URI])
+        .output()
+        .expect("runs");
 
     assert_eq!(code(&output), 0);
-    assert_eq!(stdout(&output).trim(), AgentUri::parse(URI).unwrap().canonical());
+    assert_eq!(
+        stdout(&output).trim(),
+        AgentUri::parse(URI).unwrap().canonical()
+    );
     assert!(stderr(&output).contains("VALID"));
 }
 
@@ -687,7 +754,14 @@ fn an_unparseable_ttl_is_a_usage_error_not_a_refusal() {
     let output = agent_uri(&home)
         .args(["attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", URI, "--capability", "read", "--ttl", "bogus"])
+        .args([
+            "--agent",
+            URI,
+            "--capability",
+            "workflow/approval/read",
+            "--ttl",
+            "bogus",
+        ])
         .output()
         .expect("runs");
 
@@ -705,12 +779,22 @@ fn a_bare_number_ttl_is_rejected_rather_than_guessed() {
     let output = agent_uri(&home)
         .args(["attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", URI, "--capability", "read", "--ttl", "90"])
+        .args([
+            "--agent",
+            URI,
+            "--capability",
+            "workflow/approval/read",
+            "--ttl",
+            "90",
+        ])
         .output()
         .expect("runs");
 
     assert_eq!(code(&output), 2);
-    assert!(stderr(&output).contains("unit"), "must explain the missing unit");
+    assert!(
+        stderr(&output).contains("unit"),
+        "must explain the missing unit"
+    );
 }
 
 #[test]
@@ -718,7 +802,13 @@ fn a_malformed_trust_root_pair_is_a_usage_error() {
     let home = TempDir::new().unwrap();
 
     let output = agent_uri(&home)
-        .args(["attest", "verify", "v4.public.x", "--trust-root", "acme.com"])
+        .args([
+            "attest",
+            "verify",
+            "v4.public.x",
+            "--trust-root",
+            "acme.com",
+        ])
         .output()
         .expect("runs");
 
@@ -738,12 +828,20 @@ fn json_errors_are_json_on_stderr_and_stdout_stays_empty() {
         .expect("runs");
 
     assert_eq!(code(&output), 1);
-    assert!(output.stdout.is_empty(), "machine output must not carry a diagnostic");
+    assert!(
+        output.stdout.is_empty(),
+        "machine output must not carry a diagnostic"
+    );
 
     let error: Value = serde_json::from_slice(&output.stderr).expect("stderr is JSON");
     assert_eq!(error["error"]["kind"], "invalid_uri");
     assert_eq!(error["error"]["exit_code"], 1);
-    assert!(error["error"]["remedy"].as_str().unwrap().contains("agent://"));
+    assert!(
+        error["error"]["remedy"]
+            .as_str()
+            .unwrap()
+            .contains("agent://")
+    );
 }
 
 #[test]
@@ -776,6 +874,44 @@ fn json_issue_wraps_the_token_with_its_claims() {
 }
 
 #[test]
+fn audience_restricted_token_requires_exact_cli_context() {
+    let home = TempDir::new().unwrap();
+    let key = home.path().join("acme.key");
+    let public_key = generate_key(&home, &key);
+
+    let issued = agent_uri(&home)
+        .args(["--json", "attest", "issue", "--key"])
+        .arg(&key)
+        .args([
+            "--agent",
+            URI,
+            "--capability",
+            "workflow/approval",
+            "--audience",
+            "api.acme.com",
+        ])
+        .output()
+        .expect("runs");
+    let token = json(&issued)["token"].as_str().unwrap().to_string();
+
+    let without_context = agent_uri(&home)
+        .args(["attest", "verify", &token, "--trust-root"])
+        .arg(format!("acme.com={public_key}"))
+        .output()
+        .expect("runs");
+    assert_eq!(code(&without_context), 1);
+    assert!(stderr(&without_context).contains("audience"));
+
+    let with_context = agent_uri(&home)
+        .args(["attest", "verify", &token, "--trust-root"])
+        .arg(format!("acme.com={public_key}"))
+        .args(["--audience", "api.acme.com"])
+        .output()
+        .expect("runs");
+    assert_eq!(code(&with_context), 0, "{}", stderr(&with_context));
+}
+
+#[test]
 fn json_verify_reports_the_checks_it_performed() {
     let home = TempDir::new().unwrap();
     let key = home.path().join("acme.key");
@@ -793,7 +929,11 @@ fn json_verify_reports_the_checks_it_performed() {
     assert_eq!(body["claims"]["agent_uri"], URI);
 
     let checks = body["checks"].as_array().unwrap();
-    assert!(checks.iter().any(|c| c.as_str().unwrap().contains("signature")));
+    assert!(
+        checks
+            .iter()
+            .any(|c| c.as_str().unwrap().contains("signature"))
+    );
 }
 
 #[test]
@@ -805,7 +945,7 @@ fn json_mode_never_narrates_on_stderr() {
     let output = agent_uri(&home)
         .args(["--json", "attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", URI, "--capability", "read"])
+        .args(["--agent", URI, "--capability", "workflow/approval/read"])
         .output()
         .expect("runs");
 
@@ -822,9 +962,15 @@ fn output_is_never_coloured_when_piped() {
     let home = TempDir::new().unwrap();
 
     // assert_cmd pipes both streams, so no TTY is present and colour must be off.
-    let output = agent_uri(&home).args(["uri", "validate", URI]).output().expect("runs");
+    let output = agent_uri(&home)
+        .args(["uri", "validate", URI])
+        .output()
+        .expect("runs");
 
-    assert!(!stderr(&output).contains('\x1b'), "colour must not reach a pipe");
+    assert!(
+        !stderr(&output).contains('\x1b'),
+        "colour must not reach a pipe"
+    );
     assert!(!stdout(&output).contains('\x1b'));
 }
 
@@ -865,7 +1011,10 @@ fn the_man_page_is_roff_on_stdout() {
     let output = agent_uri(&home).arg("man").output().expect("runs");
 
     assert_eq!(code(&output), 0);
-    assert!(stdout(&output).contains(".TH"), "roff man pages start with .TH");
+    assert!(
+        stdout(&output).contains(".TH"),
+        "roff man pages start with .TH"
+    );
     assert!(stdout(&output).contains("agent-uri"));
 }
 
@@ -877,7 +1026,10 @@ fn help_reads_like_a_man_page() {
     let help = stdout(&output);
 
     assert_eq!(code(&output), 0);
-    assert!(help.contains("agent://"), "the overview must introduce the scheme");
+    assert!(
+        help.contains("agent://"),
+        "the overview must introduce the scheme"
+    );
     assert!(help.contains("key"));
     assert!(help.contains("attest"));
     assert!(help.contains("uri"));
@@ -889,7 +1041,10 @@ fn long_help_documents_the_exit_codes_and_every_subcommand_shows_examples() {
 
     let output = agent_uri(&home).arg("--help").output().expect("runs");
     let help = stdout(&output);
-    assert!(help.contains("Exit codes:"), "the contract must be documented");
+    assert!(
+        help.contains("Exit codes:"),
+        "the contract must be documented"
+    );
     assert!(help.contains("stdout carries data, stderr carries prose"));
 
     for command in [

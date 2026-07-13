@@ -27,7 +27,7 @@ use crate::keys::{SigningKey, VerifyingKey};
 /// let uri = AgentUri::parse(
 ///     "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q"
 /// ).unwrap();
-/// let token = issuer.issue(&uri, vec!["workflow.approval.read".into()]).unwrap();
+/// let token = issuer.issue(&uri, vec!["workflow/approval".into()]).unwrap();
 ///
 /// assert!(token.starts_with("v4.public."));
 /// ```
@@ -113,7 +113,7 @@ impl Issuer {
     ///     "agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q"
     /// ).unwrap();
     ///
-    /// let token = issuer.issue(&uri, vec!["read".into(), "write".into()]).unwrap();
+    /// let token = issuer.issue(&uri, vec!["test/read".into(), "test/write".into()]).unwrap();
     /// ```
     pub fn issue(
         &self,
@@ -141,7 +141,7 @@ impl Issuer {
         ttl: Duration,
     ) -> Result<String, AttestationError> {
         let claims = AttestationClaimsBuilder::new()
-            .agent_uri(uri.to_string())
+            .agent_uri(uri.canonical())
             .capabilities(capabilities)
             .issuer(&self.trust_root)
             .ttl(ttl)
@@ -158,6 +158,7 @@ impl Issuer {
     ///
     /// Returns `AttestationError` if token creation fails.
     pub fn issue_claims(&self, claims: &AttestationClaims) -> Result<String, AttestationError> {
+        crate::verification::validate_capability_scope(&claims.agent_uri, &claims.capabilities)?;
         // Build the PASETO key from the signing key
         let dalek_key = self.signing_key.as_dalek();
         let key_bytes = dalek_key.to_keypair_bytes();
@@ -169,14 +170,16 @@ impl Issuer {
         let iat_str = claims.iat.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
 
         // Prepare claims
-        let exp_claim =
-            ExpirationClaim::try_from(exp_str.as_str()).map_err(|e| AttestationError::InvalidClaims {
+        let exp_claim = ExpirationClaim::try_from(exp_str.as_str()).map_err(|e| {
+            AttestationError::InvalidClaims {
                 reason: format!("invalid expiration: {e}"),
-            })?;
-        let iat_claim =
-            IssuedAtClaim::try_from(iat_str.as_str()).map_err(|e| AttestationError::InvalidClaims {
+            }
+        })?;
+        let iat_claim = IssuedAtClaim::try_from(iat_str.as_str()).map_err(|e| {
+            AttestationError::InvalidClaims {
                 reason: format!("invalid issued at: {e}"),
-            })?;
+            }
+        })?;
         let iss_claim = IssuerClaim::from(claims.iss.as_str());
         let agent_uri_claim = CustomClaim::try_from(("agent_uri", claims.agent_uri.as_str()))
             .map_err(|e| AttestationError::InvalidClaims {
@@ -209,9 +212,11 @@ impl Issuer {
         }
 
         // Build and sign the token
-        builder.build(&paseto_key).map_err(|e| AttestationError::InvalidTokenFormat {
-            reason: e.to_string(),
-        })
+        builder
+            .build(&paseto_key)
+            .map_err(|e| AttestationError::InvalidTokenFormat {
+                reason: e.to_string(),
+            })
     }
 }
 
@@ -228,7 +233,7 @@ mod tests {
         let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec!["read".into()]).unwrap();
+        let token = issuer.issue(&uri, vec!["test".into()]).unwrap();
 
         assert!(token.starts_with("v4.public."));
     }
@@ -278,11 +283,7 @@ mod tests {
         let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
         let uri = test_uri();
 
-        let capabilities = vec![
-            "workflow.read".into(),
-            "workflow.write".into(),
-            "workflow.admin".into(),
-        ];
+        let capabilities = vec!["test/read".into(), "test/write".into(), "test/admin".into()];
 
         let token = issuer.issue(&uri, capabilities).unwrap();
 
@@ -296,7 +297,7 @@ mod tests {
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
             .issuer("acme.com")
-            .add_capability("read")
+            .add_capability("test/read")
             .audience("api.acme.com")
             .build()
             .unwrap();

@@ -269,7 +269,7 @@ mod tests {
         AttestationClaims::builder()
             .agent_uri(URI)
             .issuer("acme.com")
-            .add_capability("workflow.approval.read")
+            .add_capability("workflow/approval/read")
             .ttl(Duration::from_hours(24))
             .build()
             .unwrap()
@@ -325,7 +325,7 @@ mod tests {
 
         assert_eq!(json["agent_uri"], URI);
         assert_eq!(json["issuer"], "acme.com");
-        assert_eq!(json["capabilities"][0], "workflow.approval.read");
+        assert_eq!(json["capabilities"][0], "workflow/approval/read");
         assert_eq!(json["issued_at"], "1970-01-01T00:00:00Z");
         assert_eq!(json["expires_at"], "1970-01-02T00:00:00Z");
         assert_eq!(json["audience"], "api.acme.com");
@@ -435,14 +435,17 @@ mod tests {
     #[test]
     fn claims_render_aligned_with_every_capability() {
         let mut claims = claims();
-        claims.capabilities = vec!["workflow.read".into(), "workflow.write".into()];
+        claims.capabilities = vec![
+            "workflow/approval/read".into(),
+            "workflow/approval/write".into(),
+        ];
         let report = Inspected::new(ClaimsView::new(&claims, claims.iat));
         let rendered = render(&report);
 
         assert!(rendered.contains("agent uri     agent://acme.com/"));
         assert!(rendered.contains("issuer        acme.com"));
-        assert!(rendered.contains("capabilities  workflow.read"));
-        assert!(rendered.contains("\n              workflow.write"));
+        assert!(rendered.contains("capabilities  workflow/approval/read"));
+        assert!(rendered.contains("\n              workflow/approval/write"));
         assert!(rendered.contains("expires at    "));
         assert!(rendered.contains("(in 1 day)"));
     }

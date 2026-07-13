@@ -7,7 +7,7 @@ use agent_uri_dht::{Dht, Endpoint, Registration, SimulatedDht, SimulationConfig}
 use serde::{Deserialize, Serialize};
 
 use crate::error::DiscoveryError;
-use crate::metrics::{count_as_f64, PrecisionRecallMetrics};
+use crate::metrics::{PrecisionRecallMetrics, count_as_f64};
 
 /// Configuration for discovery evaluation.
 #[derive(Debug, Clone)]
@@ -109,7 +109,9 @@ impl DiscoveryEvaluator {
             })?;
 
         Ok(Self {
-            dht: SimulatedDht::new(SimulationConfig::default()),
+            // This evaluation isolates indexing semantics. Registration-time
+            // cryptographic verification is covered by DHT integration tests.
+            dht: SimulatedDht::new(SimulationConfig::default().with_verify_attestations(false)),
             trust_root,
             registrations: HashMap::new(),
         })

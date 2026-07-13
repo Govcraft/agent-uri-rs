@@ -23,14 +23,14 @@ fn round_trip_issue_and_verify() {
 
     // Act
     let token = issuer
-        .issue(&uri, vec!["workflow.approval.read".into()])
+        .issue(&uri, vec!["workflow/approval/read".into()])
         .unwrap();
     let claims = verifier.verify(&token).unwrap();
 
     // Assert
     assert_eq!(claims.agent_uri, uri.to_string());
     assert_eq!(claims.iss, "acme.com");
-    assert_eq!(claims.capabilities, vec!["workflow.approval.read"]);
+    assert_eq!(claims.capabilities, vec!["workflow/approval/read"]);
     assert!(!claims.is_expired());
 }
 
@@ -106,7 +106,8 @@ fn rejects_invalid_signature() {
     assert!(
         matches!(
             result,
-            Err(AttestationError::InvalidSignature) | Err(AttestationError::InvalidTokenFormat { .. })
+            Err(AttestationError::InvalidSignature)
+                | Err(AttestationError::InvalidTokenFormat { .. })
         ),
         "Expected InvalidSignature or InvalidTokenFormat, got {:?}",
         result
@@ -169,9 +170,9 @@ fn multiple_capabilities() {
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     let capabilities = vec![
-        "workflow.approval.read".to_string(),
-        "workflow.approval.execute".to_string(),
-        "workflow.approval.admin".to_string(),
+        "workflow/approval/read".to_string(),
+        "workflow/approval/execute".to_string(),
+        "workflow/approval/admin".to_string(),
     ];
 
     let token = issuer.issue(&uri, capabilities.clone()).unwrap();
@@ -222,7 +223,9 @@ fn token_with_audience() {
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-    let verified_claims = verifier.verify(&token).unwrap();
+    let verified_claims = verifier
+        .verify_for_audience(&token, "api.acme.com")
+        .unwrap();
 
     assert_eq!(verified_claims.aud, Some("api.acme.com".to_string()));
 }
@@ -232,7 +235,9 @@ fn issuer_generate_creates_working_issuer() {
     let issuer = Issuer::generate("acme.com", Duration::from_secs(3600));
     let uri = test_uri();
 
-    let token = issuer.issue(&uri, vec!["read".into()]).unwrap();
+    let token = issuer
+        .issue(&uri, vec!["workflow/approval/read".into()])
+        .unwrap();
 
     // Should be able to verify with the issuer's own public key
     let mut verifier = Verifier::new();
@@ -251,8 +256,7 @@ fn multiple_trusted_roots() {
     let issuer2 = Issuer::new("other.com", signing_key2.clone(), Duration::from_secs(3600));
 
     let uri1 = test_uri();
-    let uri2 =
-        AgentUri::parse("agent://other.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
+    let uri2 = AgentUri::parse("agent://other.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("acme.com", signing_key1.verifying_key());

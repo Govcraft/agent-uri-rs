@@ -23,19 +23,9 @@ use proptest::prelude::*;
 // STRATEGY DEFINITIONS
 // ============================================================================
 
-/// Generate valid capability strings per grammar.abnf
-///
-/// Grammar: cap-start cap-char{0,126} [cap-end]
-/// - cap-start = LOWER
-/// - cap-char = LOWER / DIGIT / "." / "-" / "_" / ":"
-/// - cap-end = LOWER / DIGIT
+/// Generate a valid capability-path segment.
 fn capability_strategy() -> impl Strategy<Value = String> {
-    // Generate capabilities with format: lowercase start, valid middle chars, valid end
-    prop::string::string_regex("[a-z][a-z0-9._:-]{0,125}[a-z0-9]?")
-        .expect("valid regex")
-        .prop_filter("capability must be 1-128 chars", |s| {
-            !s.is_empty() && s.len() <= 128
-        })
+    prop::string::string_regex("[a-z][a-z0-9-]{0,30}").expect("valid regex")
 }
 
 /// Generate valid trust root strings per grammar.abnf (simple domains)
@@ -78,7 +68,12 @@ fn valid_agent_uri_strategy() -> impl Strategy<Value = AgentUri> {
     // Agent ID: valid type class + TypeID suffix
     // TypeID suffix: first char 0-7, rest are base32 (excludes i, l, o, u)
     let type_class = prop::sample::select(vec![
-        "llm", "rule", "human", "composite", "sensor", "actuator",
+        "llm",
+        "rule",
+        "human",
+        "composite",
+        "sensor",
+        "actuator",
     ]);
     let suffix =
         prop::string::string_regex("[0-7][0-9a-hjkmnp-tv-z]{25}").expect("valid base32 suffix");
@@ -90,11 +85,7 @@ fn valid_agent_uri_strategy() -> impl Strategy<Value = AgentUri> {
     })
 }
 
-/// Generate optional additional (non-covering) capabilities.
-///
-/// These capabilities use a distinctive prefix ("zzz") that will not
-/// accidentally match typical test URIs, ensuring they don't affect
-/// capability coverage tests.
+/// Generate suffixes used to create descendant capabilities.
 fn noise_capabilities() -> impl Strategy<Value = Vec<String>> {
     prop::collection::vec(
         prop::string::string_regex("zzz[a-z]{2,5}[0-9]{1,2}").expect("valid noise capability"),
@@ -102,34 +93,15 @@ fn noise_capabilities() -> impl Strategy<Value = Vec<String>> {
     )
 }
 
-/// Build a capability list that covers the path at the given prefix depth.
-///
-/// Given a URI with capability path "a/b/c" and prefix_depth=2,
-/// this returns ["a/b"] plus any noise capabilities.
-///
-/// # Arguments
-///
-/// * `uri` - The agent URI whose capability path should be covered
-/// * `prefix_depth` - How many segments of the path to include (1 = root only)
-/// * `noise` - Additional non-covering capabilities to include
-fn build_covering_capabilities(
-    uri: &AgentUri,
-    prefix_depth: usize,
-    noise: Vec<String>,
-) -> Vec<String> {
-    let segments: Vec<&str> = uri
-        .capability_path()
-        .segments()
-        .iter()
-        .map(|s| s.as_str())
-        .collect();
-
-    // Clamp prefix_depth to valid range
-    let depth = prefix_depth.min(segments.len()).max(1);
-    let prefix = segments[..depth].join("/");
-
-    let mut caps = vec![prefix];
-    caps.extend(noise);
+/// Build grants constrained to the URI identity path.
+fn build_scoped_capabilities(uri: &AgentUri, suffixes: Vec<String>) -> Vec<String> {
+    let identity_path = uri.capability_path().as_str();
+    let mut caps = vec![identity_path.to_string()];
+    caps.extend(
+        suffixes
+            .into_iter()
+            .map(|suffix| format!("{identity_path}/{suffix}")),
+    );
     caps
 }
 
@@ -154,38 +126,47 @@ proptest! {
         verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
         // Issue token
-        let token = issuer.issue(&uri, caps.clone()).unwrap();
+        let scoped_caps: Vec<String> = caps
+            .into_iter()
+            .map(|cap| format!("test/service/{cap}"))
+            .collect();
+        let token = issuer.issue(&uri, scoped_caps.clone()).unwrap();
 
         // Verify token starts with correct header (per grammar: paseto-header = "v4.public")
         prop_assert!(token.starts_with("v4.public."), "token must start with v4.public.");
 
         // Verify round-trip
         let claims = verifier.verify(&token).unwrap();
-        prop_assert_eq!(claims.capabilities, caps);
+        let expected = if scoped_caps.is_empty() {
+            vec!["test/service".to_string()]
+        } else {
+            scoped_caps
+        };
+        prop_assert_eq!(claims.capabilities, expected);
     }
 
     /// Capability strings match grammar format
     #[test]
     fn capability_format_matches_grammar(cap in capability_strategy()) {
-        // Per grammar: cap-start cap-char{0,126} [cap-end]
+        // Capability paths use the same segment grammar as URI paths.
         prop_assert!(!cap.is_empty(), "capability must not be empty");
-        prop_assert!(cap.len() <= 128, "capability max 128 chars");
+        prop_assert!(cap.len() <= 64, "capability segment max 64 chars");
 
         // First char must be lowercase letter (cap-start = LOWER)
         let first = cap.chars().next().unwrap();
         prop_assert!(first.is_ascii_lowercase(), "must start with lowercase");
 
-        // All chars must be valid cap-char (LOWER / DIGIT / "." / "-" / "_" / ":")
+        // All chars must be valid path-segment characters.
         for ch in cap.chars() {
             prop_assert!(
                 ch.is_ascii_lowercase() || ch.is_ascii_digit()
-                || ch == '.' || ch == '-' || ch == '_' || ch == ':',
+                || ch == '-',
                 "invalid char in capability: {}", ch
             );
         }
     }
 
-    /// Empty capabilities array is valid per grammar
+    /// Omitting capabilities defaults to the exact identity path.
     #[test]
     fn empty_capabilities_roundtrip(_seed in 0u32..1000) {
         let signing_key = SigningKey::generate();
@@ -200,7 +181,7 @@ proptest! {
         let token = issuer.issue(&uri, vec![]).unwrap();
         let claims = verifier.verify(&token).unwrap();
 
-        prop_assert!(claims.capabilities.is_empty());
+        prop_assert_eq!(claims.capabilities, vec!["test"]);
     }
 
     /// Tokens with audience claim round-trip correctly
@@ -221,7 +202,7 @@ proptest! {
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
-        let verified = verifier.verify(&token).unwrap();
+        let verified = verifier.verify_for_audience(&token, &aud).unwrap();
         prop_assert_eq!(verified.aud, Some(aud));
     }
 
@@ -256,7 +237,7 @@ proptest! {
     #[test]
     fn multiple_capability_formats_roundtrip(
         simple in "[a-z]{3,10}",
-        dotted in "[a-z]{2,8}\\.[a-z]{2,8}\\.[a-z]{2,8}",
+        nested in "[a-z]{2,8}/[a-z]{2,8}/[a-z]{2,8}",
         with_digits in "[a-z]{2,5}[0-9]{1,3}",
     ) {
         let signing_key = SigningKey::generate();
@@ -268,7 +249,11 @@ proptest! {
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
-        let caps = vec![simple, dotted, with_digits];
+        let caps = vec![
+            format!("test/{simple}"),
+            format!("test/{nested}"),
+            format!("test/{with_digits}"),
+        ];
         let token = issuer.issue(&uri, caps.clone()).unwrap();
         let claims = verifier.verify(&token).unwrap();
 
@@ -285,8 +270,7 @@ proptest! {
 fn token_header_format_is_v4_public() {
     let signing_key = SigningKey::generate();
     let issuer = Issuer::new("test.com", signing_key, Duration::from_secs(3600));
-    let uri =
-        AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
+    let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
     let token = issuer.issue(&uri, vec![]).unwrap();
 
@@ -309,8 +293,7 @@ fn token_header_format_is_v4_public() {
 fn timestamp_format_is_iso8601() {
     let signing_key = SigningKey::generate();
     let issuer = Issuer::new("test.com", signing_key.clone(), Duration::from_secs(3600));
-    let uri =
-        AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
+    let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
@@ -338,10 +321,9 @@ fn timestamp_format_is_iso8601() {
 fn agent_uri_field_format() {
     let signing_key = SigningKey::generate();
     let issuer = Issuer::new("test.com", signing_key.clone(), Duration::from_secs(3600));
-    let uri = AgentUri::parse(
-        "agent://test.com/workflow/approval/rule_fsm_01h455vb4pex5vsknk084sn02q",
-    )
-    .unwrap();
+    let uri =
+        AgentUri::parse("agent://test.com/workflow/approval/rule_fsm_01h455vb4pex5vsknk084sn02q")
+            .unwrap();
 
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
@@ -362,14 +344,13 @@ fn agent_uri_field_format() {
 fn max_capabilities_accepted() {
     let signing_key = SigningKey::generate();
     let issuer = Issuer::new("test.com", signing_key.clone(), Duration::from_secs(3600));
-    let uri =
-        AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
+    let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
     // Per grammar: 64 items practical limit
-    let caps: Vec<String> = (0..64).map(|i| format!("cap{i}")).collect();
+    let caps: Vec<String> = (0..64).map(|i| format!("test/cap{i}")).collect();
 
     let token = issuer.issue(&uri, caps.clone()).unwrap();
     let claims = verifier.verify(&token).unwrap();
@@ -382,23 +363,19 @@ fn max_capabilities_accepted() {
 fn capability_string_edge_cases() {
     let signing_key = SigningKey::generate();
     let issuer = Issuer::new("test.com", signing_key.clone(), Duration::from_secs(3600));
-    let uri =
-        AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
+    let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
-    // Test various valid capability formats per grammar
+    // Every grant is either the identity path or one of its descendants.
     let caps = vec![
-        "a".to_string(),                           // Minimum: single lowercase
-        "read".to_string(),                        // Simple word
-        "workflow.approval.read".to_string(),      // Dotted namespace
-        "admin:users:write".to_string(),           // Colon-separated
-        "file-upload".to_string(),                 // Hyphenated
-        "task_queue".to_string(),                  // Underscored
-        "v2".to_string(),                          // Letter + digit
-        "cap123".to_string(),                      // Letters + digits
-        "a.b.c.d.e.f.g".to_string(),               // Deep nesting
+        "test".to_string(),
+        "test/read".to_string(),
+        "test/workflow/approval/read".to_string(),
+        "test/file-upload".to_string(),
+        "test/v2".to_string(),
+        "test/cap123".to_string(),
     ];
 
     let token = issuer.issue(&uri, caps.clone()).unwrap();
@@ -412,10 +389,9 @@ fn capability_string_edge_cases() {
 fn token_payload_is_base64url() {
     let signing_key = SigningKey::generate();
     let issuer = Issuer::new("test.com", signing_key, Duration::from_secs(3600));
-    let uri =
-        AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
+    let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
-    let token = issuer.issue(&uri, vec!["read".into()]).unwrap();
+    let token = issuer.issue(&uri, vec!["test/read".into()]).unwrap();
 
     // Extract payload (third dot-separated part)
     let parts: Vec<&str> = token.split('.').collect();
@@ -439,10 +415,8 @@ fn token_payload_is_base64url() {
 fn issuer_equals_trust_root() {
     let signing_key = SigningKey::generate();
     let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
-    let uri = AgentUri::parse(
-        "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
-    )
-    .unwrap();
+    let uri = AgentUri::parse("agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q")
+        .unwrap();
 
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -459,11 +433,13 @@ fn issuer_equals_trust_root() {
 #[test]
 fn localhost_with_port_trust_root() {
     let signing_key = SigningKey::generate();
-    let issuer = Issuer::new("localhost:8472", signing_key.clone(), Duration::from_secs(3600));
-    let uri = AgentUri::parse(
-        "agent://localhost:8472/debug/test/llm_01h455vb4pex5vsknk084sn02q",
-    )
-    .unwrap();
+    let issuer = Issuer::new(
+        "localhost:8472",
+        signing_key.clone(),
+        Duration::from_secs(3600),
+    );
+    let uri = AgentUri::parse("agent://localhost:8472/debug/test/llm_01h455vb4pex5vsknk084sn02q")
+        .unwrap();
 
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("localhost:8472", signing_key.verifying_key());
@@ -530,16 +506,11 @@ proptest! {
     #[test]
     fn integration_roundtrip_with_coverage(
         uri in valid_agent_uri_strategy(),
-        prefix_depth in 1usize..=4,
         noise in noise_capabilities(),
     ) {
         let signing_key = SigningKey::generate();
         let trust_root = uri.trust_root().as_str().to_string();
-        let depth = uri.capability_path().depth();
-
-        // Clamp prefix_depth to valid range for this URI
-        let actual_depth = prefix_depth.min(depth);
-        let capabilities = build_covering_capabilities(&uri, actual_depth, noise);
+        let capabilities = build_scoped_capabilities(&uri, noise);
 
         let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
         let token = issuer.issue(&uri, capabilities.clone()).unwrap();
@@ -561,12 +532,7 @@ proptest! {
         prop_assert_eq!(cap_claims.iss, trust_root);
     }
 
-    /// Verifies capability coverage at each prefix depth.
-    ///
-    /// For a path like "a/b/c", tests coverage with:
-    /// - depth 1: "a" covers "a/b/c"
-    /// - depth 2: "a/b" covers "a/b/c"
-    /// - depth 3: "a/b/c" covers "a/b/c" (exact match)
+    /// Verifies that an identity-path grant covers descendants.
     #[test]
     fn prefix_coverage_all_depths(uri in valid_agent_uri_strategy()) {
         let signing_key = SigningKey::generate();
@@ -575,26 +541,23 @@ proptest! {
         let mut verifier = Verifier::new();
         verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
 
-        let segments: Vec<&str> = uri
-            .capability_path()
-            .segments()
-            .iter()
-            .map(|s| s.as_str())
-            .collect();
-
-        // Test each prefix depth
-        for prefix_depth in 1..=segments.len() {
-            let prefix = segments[..prefix_depth].join("/");
+        for depth in 0..=4 {
+            let identity_path = uri.capability_path().as_str();
             let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
-            let token = issuer.issue(&uri, vec![prefix]).unwrap();
+            let token = issuer.issue(&uri, vec![identity_path.to_string()]).unwrap();
 
-            // Must succeed - prefix always covers path
-            let required = uri.capability_path().clone();
+            let suffix = std::iter::repeat("child").take(depth).collect::<Vec<_>>().join("/");
+            let required_path = if suffix.is_empty() {
+                identity_path.to_string()
+            } else {
+                format!("{identity_path}/{suffix}")
+            };
+            let required = agent_uri::CapabilityPath::parse(&required_path).unwrap();
             let result = verifier.verify_for_capability(&token, &uri, &required);
             prop_assert!(
                 result.is_ok(),
-                "Prefix depth {} should cover path: {:?}",
-                prefix_depth,
+                "Identity path should cover descendant depth {}: {:?}",
+                depth,
                 result
             );
         }
@@ -602,9 +565,7 @@ proptest! {
 
     /// Verifies that non-covering capabilities are rejected.
     ///
-    /// Properties:
-    /// - Token issuance and basic verify succeed
-    /// - verify_for_capability fails with InsufficientCapabilities
+    /// Such grants are invalid at issuance, before a token can be signed.
     #[test]
     fn non_covering_capabilities_rejected(uri in valid_agent_uri_strategy()) {
         let signing_key = SigningKey::generate();
@@ -612,20 +573,10 @@ proptest! {
 
         // Issue with unrelated capability
         let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
-        let token = issuer.issue(&uri, vec!["zzz-unrelated".to_string()]).unwrap();
-
-        let mut verifier = Verifier::new();
-        verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
-
-        // Basic verify succeeds
-        prop_assert!(verifier.verify(&token).is_ok());
-
-        // But capability check fails
-        let required = uri.capability_path().clone();
-        let result = verifier.verify_for_capability(&token, &uri, &required);
+        let result = issuer.issue(&uri, vec!["zzz-unrelated".to_string()]);
         prop_assert!(
-            matches!(result, Err(AttestationError::InsufficientCapabilities { .. })),
-            "Expected InsufficientCapabilities, got: {:?}",
+            matches!(result, Err(AttestationError::CapabilityOutsideIdentity { .. })),
+            "Expected CapabilityOutsideIdentity, got: {:?}",
             result
         );
     }
