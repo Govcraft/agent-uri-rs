@@ -161,8 +161,7 @@ impl std::hash::Hash for Registration {
 #[cfg(feature = "serde")]
 fn system_time_to_millis(time: SystemTime) -> u64 {
     time.duration_since(SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
 }
 
 #[cfg(feature = "serde")]
@@ -193,8 +192,6 @@ impl<'de> serde::Deserialize<'de> for Registration {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::de::Deserialize;
-
         #[derive(serde::Deserialize)]
         struct RegistrationData {
             agent_uri: String,
@@ -304,5 +301,26 @@ mod tests {
         let registration1 = Registration::new(uri1, vec![test_endpoint()]);
         let registration2 = Registration::new(uri2, vec![test_endpoint()]);
         assert_ne!(registration1, registration2);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn pre_epoch_time_serializes_to_zero_millis() {
+        let time = SystemTime::UNIX_EPOCH - Duration::from_secs(1);
+        assert_eq!(system_time_to_millis(time), 0);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn far_future_time_saturates_instead_of_wrapping() {
+        let time = SystemTime::UNIX_EPOCH + Duration::from_secs(u64::MAX / 1000 + 1);
+        assert_eq!(system_time_to_millis(time), u64::MAX);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn millis_round_trip_preserves_time() {
+        let time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        assert_eq!(millis_to_system_time(system_time_to_millis(time)), time);
     }
 }

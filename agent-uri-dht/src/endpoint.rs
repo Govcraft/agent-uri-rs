@@ -125,8 +125,6 @@ impl<'de> serde::Deserialize<'de> for Endpoint {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::de::Deserialize;
-
         #[derive(serde::Deserialize)]
         struct EndpointData {
             protocol: String,

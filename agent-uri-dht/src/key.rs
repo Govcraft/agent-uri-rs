@@ -209,7 +209,12 @@ impl serde::Serialize for DhtKey {
         S: serde::Serializer,
     {
         // Serialize as hex string
-        let hex: String = self.0.iter().map(|b| format!("{b:02x}")).collect();
+        use core::fmt::Write as _;
+
+        let mut hex = String::with_capacity(self.0.len() * 2);
+        for byte in &self.0 {
+            let _ = write!(&mut hex, "{byte:02x}");
+        }
         serializer.serialize_str(&hex)
     }
 }
@@ -220,7 +225,6 @@ impl<'de> serde::Deserialize<'de> for DhtKey {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::de::Deserialize;
         let hex = String::deserialize(deserializer)?;
         if hex.len() != 64 {
             return Err(serde::de::Error::custom(
