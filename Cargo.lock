@@ -55,7 +55,6 @@ dependencies = [
  "agent-uri",
  "agent-uri-attestation",
  "criterion 0.8.1",
- "proptest",
  "serde",
  "sha2",
 ]
