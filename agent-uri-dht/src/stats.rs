@@ -104,23 +104,6 @@ impl MigrationResult {
         }
     }
 
-    /// Creates a failed migration result.
-    #[must_use]
-    pub fn failure(
-        agent_uri: impl Into<String>,
-        old_endpoints: Vec<Endpoint>,
-        new_endpoints: Vec<Endpoint>,
-        update_latency: Duration,
-    ) -> Self {
-        Self {
-            agent_uri: agent_uri.into(),
-            old_endpoints,
-            new_endpoints,
-            update_latency,
-            success: false,
-        }
-    }
-
     /// Returns true if the migration succeeded.
     #[must_use]
     pub const fn is_success(&self) -> bool {
@@ -186,19 +169,5 @@ mod tests {
         assert_eq!(result.old_endpoints(), &old);
         assert_eq!(result.new_endpoints(), &new);
         assert_eq!(result.update_latency(), Duration::from_millis(50));
-    }
-
-    #[test]
-    fn failed_migration() {
-        let old = vec![Endpoint::https("old.example.com")];
-        let new = vec![Endpoint::https("new.example.com")];
-        let result = MigrationResult::failure(
-            "agent://example.com/test/agent_123",
-            old,
-            new,
-            Duration::from_millis(100),
-        );
-
-        assert!(!result.is_success());
     }
 }
