@@ -6,7 +6,7 @@ license.workspace = true
 description = "Command-line tool for the agent:// identity scheme: key ceremony, attestation minting, verification, and inspection"
 repository = "https://github.com/Govcraft/agent-uri-rs"
 homepage = "https://github.com/Govcraft/agent-uri-rs"
-documentation = "https://docs.rs/agent-uri-cli"
+documentation = "https://github.com/Govcraft/agent-uri-rs/tree/main/agent-uri-cli"
 readme = "README.md"
 keywords = ["agent", "uri", "attestation", "paseto", "cli"]
 categories = ["command-line-utilities", "authentication", "cryptography"]
@@ -14,6 +14,7 @@ categories = ["command-line-utilities", "authentication", "cryptography"]
 [[bin]]
 name = "agent-uri"
 path = "src/main.rs"
+doc = false
 
 [dependencies]
 agent-uri = { version = "0.5.0", path = "../agent-uri" }
