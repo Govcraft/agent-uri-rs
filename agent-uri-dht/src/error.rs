@@ -27,13 +27,6 @@ pub enum DhtError {
         /// Reason the attestation is invalid
         reason: String,
     },
-    /// The capability path does not match the attestation.
-    CapabilityMismatch {
-        /// The claimed capability path
-        claimed: String,
-        /// The attested capability path
-        attested: String,
-    },
     /// An existing agent identifier was presented under a different capability path.
     IdentityCapabilityConflict {
         /// Stable trust-root and agent-ID identity key
@@ -52,11 +45,6 @@ pub enum DhtError {
     },
     /// The endpoints list is empty.
     NoEndpoints,
-    /// Internal error (should not happen in production).
-    Internal {
-        /// Error message
-        message: String,
-    },
 }
 
 impl fmt::Display for DhtError {
@@ -83,12 +71,6 @@ impl fmt::Display for DhtError {
             Self::InvalidAttestation { agent_uri, reason } => {
                 write!(f, "invalid attestation for agent '{agent_uri}': {reason}")
             }
-            Self::CapabilityMismatch { claimed, attested } => {
-                write!(
-                    f,
-                    "capability mismatch: claimed path '{claimed}' is not covered by attested path '{attested}'"
-                )
-            }
             Self::IdentityCapabilityConflict {
                 identity,
                 existing_path,
@@ -108,9 +90,6 @@ impl fmt::Display for DhtError {
             }
             Self::NoEndpoints => {
                 write!(f, "registration must have at least one endpoint")
-            }
-            Self::Internal { message } => {
-                write!(f, "internal DHT error: {message}")
             }
         }
     }
@@ -152,29 +131,12 @@ impl DhtError {
         }
     }
 
-    /// Creates a `CapabilityMismatch` error.
-    #[must_use]
-    pub fn capability_mismatch(claimed: impl Into<String>, attested: impl Into<String>) -> Self {
-        Self::CapabilityMismatch {
-            claimed: claimed.into(),
-            attested: attested.into(),
-        }
-    }
-
     /// Creates a `KeyCapacityExceeded` error.
     #[must_use]
     pub fn key_capacity_exceeded(key: impl Into<String>, max: usize) -> Self {
         Self::KeyCapacityExceeded {
             key: key.into(),
             max,
-        }
-    }
-
-    /// Creates an `Internal` error.
-    #[must_use]
-    pub fn internal(message: impl Into<String>) -> Self {
-        Self::Internal {
-            message: message.into(),
         }
     }
 
