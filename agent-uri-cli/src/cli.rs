@@ -319,7 +319,7 @@ EXAMPLES:
         #[arg(value_name = "TOKEN")]
         token: String,
 
-        /// A trusted root, as <root>=<public-key-hex>. Repeat to trust several.
+        /// A trusted root, as `<root>=<public-key-hex>`. Repeat to trust several.
         ///
         /// The public key is the 64 hex characters printed by 'agent-uri key public'.
         #[arg(long, value_name = "ROOT=HEX", required = true)]
