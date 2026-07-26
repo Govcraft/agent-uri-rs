@@ -61,12 +61,20 @@ pub enum CliError {
 
 impl CliError {
     /// Builds a refusal (exit 1).
-    pub fn refused(kind: &'static str, message: impl Into<String>, remedy: impl Into<String>) -> Self {
+    pub fn refused(
+        kind: &'static str,
+        message: impl Into<String>,
+        remedy: impl Into<String>,
+    ) -> Self {
         Self::Refused(Diagnosis::new(kind, message, remedy))
     }
 
     /// Builds a fault (exit 3).
-    pub fn fault(kind: &'static str, message: impl Into<String>, remedy: impl Into<String>) -> Self {
+    pub fn fault(
+        kind: &'static str,
+        message: impl Into<String>,
+        remedy: impl Into<String>,
+    ) -> Self {
         Self::Fault(Diagnosis::new(kind, message, remedy))
     }
 

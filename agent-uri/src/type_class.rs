@@ -122,9 +122,15 @@ mod tests {
         assert_eq!("llm".parse::<TypeClass>().unwrap(), TypeClass::Llm);
         assert_eq!("rule".parse::<TypeClass>().unwrap(), TypeClass::Rule);
         assert_eq!("human".parse::<TypeClass>().unwrap(), TypeClass::Human);
-        assert_eq!("composite".parse::<TypeClass>().unwrap(), TypeClass::Composite);
+        assert_eq!(
+            "composite".parse::<TypeClass>().unwrap(),
+            TypeClass::Composite
+        );
         assert_eq!("sensor".parse::<TypeClass>().unwrap(), TypeClass::Sensor);
-        assert_eq!("actuator".parse::<TypeClass>().unwrap(), TypeClass::Actuator);
+        assert_eq!(
+            "actuator".parse::<TypeClass>().unwrap(),
+            TypeClass::Actuator
+        );
         assert_eq!("hybrid".parse::<TypeClass>().unwrap(), TypeClass::Hybrid);
     }
 

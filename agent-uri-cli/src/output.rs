@@ -285,7 +285,11 @@ mod tests {
     #[test]
     fn errors_go_to_stderr_leaving_stdout_empty() {
         let mut output = capture(Format::Human, false);
-        output.emit_error(&CliError::refused("token_expired", "expired at T", "re-issue it"));
+        output.emit_error(&CliError::refused(
+            "token_expired",
+            "expired at T",
+            "re-issue it",
+        ));
 
         let (out, err) = streams(output);
         assert!(out.is_empty(), "a failure must not put anything on stdout");
@@ -296,7 +300,11 @@ mod tests {
     #[test]
     fn json_errors_are_json_on_stderr() {
         let mut output = capture(Format::Json, false);
-        output.emit_error(&CliError::refused("token_expired", "expired at T", "re-issue it"));
+        output.emit_error(&CliError::refused(
+            "token_expired",
+            "expired at T",
+            "re-issue it",
+        ));
 
         let (out, err) = streams(output);
         assert!(out.is_empty());

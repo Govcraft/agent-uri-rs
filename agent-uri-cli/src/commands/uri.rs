@@ -14,7 +14,10 @@ use crate::reports::UriValidated;
 /// # Errors
 ///
 /// Returns [`CliError::Refused`] when the URI does not parse.
-pub fn run<O: Write, E: Write>(command: &UriCommand, out: &mut Output<O, E>) -> Result<(), CliError> {
+pub fn run<O: Write, E: Write>(
+    command: &UriCommand,
+    out: &mut Output<O, E>,
+) -> Result<(), CliError> {
     match command {
         UriCommand::Validate { uri } => validate(uri, out),
     }

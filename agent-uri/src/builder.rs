@@ -645,10 +645,7 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(
-            uri.fragment().map(Fragment::as_str),
-            Some("summarization")
-        );
+        assert_eq!(uri.fragment().map(Fragment::as_str), Some("summarization"));
     }
 
     #[test]

@@ -91,7 +91,10 @@ pub fn decode(text: &str, path: &Path) -> Result<SigningKey, CliError> {
     SigningKey::from_bytes(&seed).map_err(|source| {
         CliError::fault(
             "malformed_key",
-            format!("key file '{}' is not a valid Ed25519 key: {source}", path.display()),
+            format!(
+                "key file '{}' is not a valid Ed25519 key: {source}",
+                path.display()
+            ),
             "regenerate the key with 'agent-uri key generate'",
         )
     })
@@ -143,7 +146,8 @@ pub fn load(path: &Path) -> Result<SigningKey, CliError> {
 
     enforce_permissions(&metadata, path)?;
 
-    let text = fs::read_to_string(path).map_err(|source| CliError::io(path, "read key file", &source))?;
+    let text =
+        fs::read_to_string(path).map_err(|source| CliError::io(path, "read key file", &source))?;
     decode(&text, path)
 }
 
@@ -191,14 +195,19 @@ pub fn store(path: &Path, key: &SigningKey, force: bool) -> Result<(), CliError>
         fs::remove_file(path).map_err(|source| CliError::io(path, "replace key file", &source))?;
     }
 
-    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         create_private_dir(parent)?;
     }
 
     let mut file = private_file(path)?;
     // Newline included so the file behaves under `cat`, `read`, and text editors.
-    writeln!(file, "{}", encode(key)).map_err(|source| CliError::io(path, "write key file", &source))?;
-    file.flush().map_err(|source| CliError::io(path, "write key file", &source))?;
+    writeln!(file, "{}", encode(key))
+        .map_err(|source| CliError::io(path, "write key file", &source))?;
+    file.flush()
+        .map_err(|source| CliError::io(path, "write key file", &source))?;
 
     Ok(())
 }

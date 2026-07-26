@@ -363,7 +363,10 @@ impl fmt::Display for AgentPrefixError {
                 write!(f, "prefix must end with a letter, found '{found}'")
             }
             Self::ContainsDigit { position } => {
-                write!(f, "prefix cannot contain digits (found at position {position})")
+                write!(
+                    f,
+                    "prefix cannot contain digits (found at position {position})"
+                )
             }
         }
     }
@@ -408,8 +411,15 @@ impl fmt::Display for QueryError {
             Self::InvalidParamName { name, reason } => {
                 write!(f, "invalid parameter name '{name}': {reason}")
             }
-            Self::InvalidParamValue { name, value, reason } => {
-                write!(f, "invalid value '{value}' for parameter '{name}': {reason}")
+            Self::InvalidParamValue {
+                name,
+                value,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "invalid value '{value}' for parameter '{name}': {reason}"
+                )
             }
             Self::DuplicateParam { name } => {
                 write!(f, "duplicate parameter '{name}'")

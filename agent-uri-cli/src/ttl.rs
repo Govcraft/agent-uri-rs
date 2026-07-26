@@ -73,7 +73,10 @@ pub enum TtlError {
 impl fmt::Display for TtlError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Empty => write!(f, "duration is empty; try a value like '90d', '12h', or '1h30m'"),
+            Self::Empty => write!(
+                f,
+                "duration is empty; try a value like '90d', '12h', or '1h30m'"
+            ),
             Self::MissingUnit => write!(
                 f,
                 "duration is missing a unit; write '90d' or '90s', not a bare number"
@@ -178,7 +181,13 @@ impl fmt::Display for Ttl {
         let mut remaining = self.as_secs();
 
         // A TTL is never zero, so at least one term is always written.
-        for (unit, size) in [('w', WEEK), ('d', DAY), ('h', HOUR), ('m', MINUTE), ('s', 1)] {
+        for (unit, size) in [
+            ('w', WEEK),
+            ('d', DAY),
+            ('h', HOUR),
+            ('m', MINUTE),
+            ('s', 1),
+        ] {
             let count = remaining / size;
             if count > 0 {
                 write!(f, "{count}{unit}")?;
@@ -207,7 +216,10 @@ mod tests {
     fn parses_compound_terms() {
         assert_eq!("1h30m".parse::<Ttl>().unwrap().as_secs(), 5_400);
         assert_eq!("2h 30m".parse::<Ttl>().unwrap().as_secs(), 9_000);
-        assert_eq!("1w2d3h".parse::<Ttl>().unwrap().as_secs(), WEEK + 2 * DAY + 3 * HOUR);
+        assert_eq!(
+            "1w2d3h".parse::<Ttl>().unwrap().as_secs(),
+            WEEK + 2 * DAY + 3 * HOUR
+        );
     }
 
     #[test]
@@ -249,7 +261,10 @@ mod tests {
     #[test]
     fn rejects_overflow() {
         // Too many digits to be a u64 at all.
-        assert_eq!("99999999999999999999w".parse::<Ttl>(), Err(TtlError::Overflow));
+        assert_eq!(
+            "99999999999999999999w".parse::<Ttl>(),
+            Err(TtlError::Overflow)
+        );
         // Fits in a u64, but overflows once multiplied out to seconds.
         assert_eq!("99999999999999w".parse::<Ttl>(), Err(TtlError::Overflow));
     }
@@ -258,7 +273,10 @@ mod tests {
     fn a_representable_but_absurd_duration_is_too_long_rather_than_overflowing() {
         // 9999999999 weeks is representable in seconds; it is simply far past the
         // one-year ceiling, and the operator deserves to be told that, not "overflow".
-        assert!(matches!("9999999999w".parse::<Ttl>(), Err(TtlError::TooLong(_))));
+        assert!(matches!(
+            "9999999999w".parse::<Ttl>(),
+            Err(TtlError::TooLong(_))
+        ));
     }
 
     #[test]

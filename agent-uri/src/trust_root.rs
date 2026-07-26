@@ -112,7 +112,10 @@ impl TrustRoot {
             Host::Domain(d) => d,
             Host::Ipv4(_) => {
                 // Use the normalized form, split by colon
-                self.normalized.split(':').next().unwrap_or(&self.normalized)
+                self.normalized
+                    .split(':')
+                    .next()
+                    .unwrap_or(&self.normalized)
             }
             Host::Ipv6(_) => {
                 // Extract from [addr] format
@@ -226,16 +229,20 @@ impl TrustRoot {
     }
 
     fn parse_ipv6_literal(input: &str) -> Result<Self, TrustRootError> {
-        let closing_bracket = input.find(']').ok_or_else(|| TrustRootError::InvalidIpAddress {
-            value: input.to_string(),
-            reason: "missing closing bracket for IPv6 literal",
-        })?;
+        let closing_bracket = input
+            .find(']')
+            .ok_or_else(|| TrustRootError::InvalidIpAddress {
+                value: input.to_string(),
+                reason: "missing closing bracket for IPv6 literal",
+            })?;
 
         let ipv6_str = &input[1..closing_bracket];
-        let ipv6: Ipv6Addr = ipv6_str.parse().map_err(|_| TrustRootError::InvalidIpAddress {
-            value: ipv6_str.to_string(),
-            reason: "invalid IPv6 address",
-        })?;
+        let ipv6: Ipv6Addr = ipv6_str
+            .parse()
+            .map_err(|_| TrustRootError::InvalidIpAddress {
+                value: ipv6_str.to_string(),
+                reason: "invalid IPv6 address",
+            })?;
 
         let port = if input.len() > closing_bracket + 1 {
             if input.as_bytes().get(closing_bracket + 1) != Some(&b':') {
@@ -245,10 +252,14 @@ impl TrustRoot {
                 });
             }
             let port_str = &input[closing_bracket + 2..];
-            Some(port_str.parse::<u16>().map_err(|_| TrustRootError::InvalidPort {
-                value: port_str.to_string(),
-                reason: "port must be 0-65535",
-            })?)
+            Some(
+                port_str
+                    .parse::<u16>()
+                    .map_err(|_| TrustRootError::InvalidPort {
+                        value: port_str.to_string(),
+                        reason: "port must be 0-65535",
+                    })?,
+            )
         } else {
             None
         };

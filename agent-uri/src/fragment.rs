@@ -31,7 +31,10 @@ impl Fragment {
     pub fn parse(input: &str) -> Result<Self, FragmentError> {
         for (i, c) in input.chars().enumerate() {
             if !Self::is_valid_char(c) {
-                return Err(FragmentError::InvalidChar { char: c, position: i });
+                return Err(FragmentError::InvalidChar {
+                    char: c,
+                    position: i,
+                });
             }
         }
         Ok(Self(input.to_string()))
@@ -163,12 +166,24 @@ mod tests {
     #[test]
     fn parse_invalid_char_fails() {
         let result = Fragment::parse("test@value");
-        assert!(matches!(result, Err(FragmentError::InvalidChar { char: '@', position: 4 })));
+        assert!(matches!(
+            result,
+            Err(FragmentError::InvalidChar {
+                char: '@',
+                position: 4
+            })
+        ));
     }
 
     #[test]
     fn parse_space_fails() {
         let result = Fragment::parse("test value");
-        assert!(matches!(result, Err(FragmentError::InvalidChar { char: ' ', position: 4 })));
+        assert!(matches!(
+            result,
+            Err(FragmentError::InvalidChar {
+                char: ' ',
+                position: 4
+            })
+        ));
     }
 }

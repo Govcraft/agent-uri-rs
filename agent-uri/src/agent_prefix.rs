@@ -88,18 +88,22 @@ impl AgentPrefix {
                 return Err(AgentPrefixError::ContainsDigit { position: i });
             }
             if !c.is_ascii_lowercase() && c != '_' {
-                return Err(AgentPrefixError::InvalidChar { char: c, position: i });
+                return Err(AgentPrefixError::InvalidChar {
+                    char: c,
+                    position: i,
+                });
             }
         }
 
         // Split into class and modifiers
         let parts: Vec<&str> = input.split('_').collect();
-        let type_class = parts[0].parse::<TypeClass>().map_err(|_| {
-            AgentPrefixError::InvalidChar {
-                char: parts[0].chars().next().unwrap_or(' '),
-                position: 0,
-            }
-        })?;
+        let type_class =
+            parts[0]
+                .parse::<TypeClass>()
+                .map_err(|_| AgentPrefixError::InvalidChar {
+                    char: parts[0].chars().next().unwrap_or(' '),
+                    position: 0,
+                })?;
 
         let modifiers = parts[1..].iter().map(|s| (*s).to_string()).collect();
 
@@ -242,18 +246,27 @@ mod tests {
     #[test]
     fn parse_uppercase_fails() {
         let result = AgentPrefix::parse("LLM");
-        assert!(matches!(result, Err(AgentPrefixError::MustStartWithLetter { found: 'L' })));
+        assert!(matches!(
+            result,
+            Err(AgentPrefixError::MustStartWithLetter { found: 'L' })
+        ));
     }
 
     #[test]
     fn parse_ends_with_underscore_fails() {
         let result = AgentPrefix::parse("llm_");
-        assert!(matches!(result, Err(AgentPrefixError::MustEndWithLetter { found: '_' })));
+        assert!(matches!(
+            result,
+            Err(AgentPrefixError::MustEndWithLetter { found: '_' })
+        ));
     }
 
     #[test]
     fn parse_starts_with_underscore_fails() {
         let result = AgentPrefix::parse("_llm");
-        assert!(matches!(result, Err(AgentPrefixError::MustStartWithLetter { found: '_' })));
+        assert!(matches!(
+            result,
+            Err(AgentPrefixError::MustStartWithLetter { found: '_' })
+        ));
     }
 }

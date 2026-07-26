@@ -145,9 +145,7 @@ impl PathGenerator {
 
         // Generate some top-level categories
         let num_categories = (count / 100).clamp(5, 50);
-        let categories: Vec<String> = (0..num_categories)
-            .map(|_| self.random_segment())
-            .collect();
+        let categories: Vec<String> = (0..num_categories).map(|_| self.random_segment()).collect();
 
         for _ in 0..count {
             // Pick a random category as prefix

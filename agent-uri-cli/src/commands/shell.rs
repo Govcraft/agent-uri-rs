@@ -21,7 +21,10 @@ const BINARY: &str = "agent-uri";
 /// # Errors
 ///
 /// Returns [`CliError::Fault`] when stdout cannot be written.
-pub fn completions<O: Write, E: Write>(shell: Shell, out: &mut Output<O, E>) -> Result<(), CliError> {
+pub fn completions<O: Write, E: Write>(
+    shell: Shell,
+    out: &mut Output<O, E>,
+) -> Result<(), CliError> {
     reject_json(out, "completions")?;
 
     let mut command = Cli::command();

@@ -40,7 +40,11 @@ fn main() -> ExitCode {
     // clap exits 2 by itself on a malformed command line.
     let cli = Cli::parse();
 
-    let format = if cli.json { Format::Json } else { Format::Human };
+    let format = if cli.json {
+        Format::Json
+    } else {
+        Format::Human
+    };
 
     // Color is a courtesy to a human at a terminal and an obstacle to everyone
     // else: a pipe, a log file, a CI job, or an operator who asked for quiet with

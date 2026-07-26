@@ -201,7 +201,10 @@ impl fmt::Display for CorpusError {
                 )
             }
             Self::InvalidDirectory { path } => {
-                write!(f, "invalid directory: '{path}' is not a directory or does not exist")
+                write!(
+                    f,
+                    "invalid directory: '{path}' is not a directory or does not exist"
+                )
             }
             Self::NoFilesFound { directory } => {
                 write!(f, "no JSON files found in directory '{directory}'")

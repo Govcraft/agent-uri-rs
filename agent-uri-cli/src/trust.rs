@@ -64,7 +64,9 @@ impl FromStr for TrustedRoot {
     type Err = TrustedRootError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let (root, hex_key) = input.split_once('=').ok_or(TrustedRootError::MissingSeparator)?;
+        let (root, hex_key) = input
+            .split_once('=')
+            .ok_or(TrustedRootError::MissingSeparator)?;
 
         let root = root.trim();
         if root.is_empty() {
@@ -76,7 +78,8 @@ impl FromStr for TrustedRoot {
             return Err(TrustedRootError::BadLength(hex_key.len()));
         }
 
-        let bytes = hex::decode(hex_key).map_err(|source| TrustedRootError::NotHex(source.to_string()))?;
+        let bytes =
+            hex::decode(hex_key).map_err(|source| TrustedRootError::NotHex(source.to_string()))?;
         let bytes: [u8; 32] = bytes
             .try_into()
             .map_err(|_| TrustedRootError::BadLength(hex_key.len()))?;
@@ -132,7 +135,10 @@ mod tests {
     #[test]
     fn rejects_an_empty_root() {
         let input = format!("={}", public_hex());
-        assert_eq!(input.parse::<TrustedRoot>(), Err(TrustedRootError::EmptyRoot));
+        assert_eq!(
+            input.parse::<TrustedRoot>(),
+            Err(TrustedRootError::EmptyRoot)
+        );
     }
 
     #[test]

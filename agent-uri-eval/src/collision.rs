@@ -111,7 +111,7 @@ pub fn detect_collisions(results: &[MappingResult]) -> CollisionReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mapping::{map_tools_batch, MappingConfig};
+    use crate::mapping::{MappingConfig, map_tools_batch};
     use crate::tool_def::{ToolDef, ToolSource};
 
     #[test]

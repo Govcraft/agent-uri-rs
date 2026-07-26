@@ -231,10 +231,11 @@ impl QueryParams {
                         value: value.to_string(),
                     });
                 }
-                let byte =
-                    u8::from_str_radix(&hex, 16).map_err(|_| QueryError::InvalidPercentEncoding {
+                let byte = u8::from_str_radix(&hex, 16).map_err(|_| {
+                    QueryError::InvalidPercentEncoding {
                         value: value.to_string(),
-                    })?;
+                    }
+                })?;
                 decoded.push(byte as char);
             } else if c.is_ascii_alphanumeric() || "-_.".contains(c) {
                 decoded.push(c);
@@ -387,7 +388,10 @@ mod tests {
     #[test]
     fn parse_invalid_encoding_fails() {
         let result = QueryParams::parse("name=%GG");
-        assert!(matches!(result, Err(QueryError::InvalidPercentEncoding { .. })));
+        assert!(matches!(
+            result,
+            Err(QueryError::InvalidPercentEncoding { .. })
+        ));
     }
 
     #[test]

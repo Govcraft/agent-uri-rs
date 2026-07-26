@@ -251,7 +251,8 @@ pub fn stddev(values: &[f64]) -> f64 {
         return 0.0;
     }
     let m = mean(values);
-    let variance = values.iter().map(|v| (v - m).powi(2)).sum::<f64>() / count_as_f64(values.len() - 1);
+    let variance =
+        values.iter().map(|v| (v - m).powi(2)).sum::<f64>() / count_as_f64(values.len() - 1);
     variance.sqrt()
 }
 

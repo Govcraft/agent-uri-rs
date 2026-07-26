@@ -114,20 +114,20 @@ pub mod tool_def;
 // Re-exports
 pub use collision::{Collision, CollisionEntry, CollisionReport};
 pub use corpus::{
-    load_corpus_directory, load_corpus_file, parse_tool_source, CorpusFile, CorpusMetadata,
-    LoadedCorpus, RawToolDef, RawToolParameter,
+    CorpusFile, CorpusMetadata, LoadedCorpus, RawToolDef, RawToolParameter, load_corpus_directory,
+    load_corpus_file, parse_tool_source,
 };
 pub use discovery::{
-    aggregate_results, DiscoveryConfig, DiscoveryEvaluator, DiscoveryResults, MatchMode,
-    QueryResult,
+    DiscoveryConfig, DiscoveryEvaluator, DiscoveryResults, MatchMode, QueryResult,
+    aggregate_results,
 };
 pub use error::{CorpusError, DiscoveryError, EvalError, MappingError};
 pub use expressiveness::{
-    evaluate_expressiveness, evaluate_flat_namespace, CriteriaResults, CriterionStatus,
-    DepthDistribution, ExpressivenessResults,
+    CriteriaResults, CriterionStatus, DepthDistribution, ExpressivenessResults,
+    evaluate_expressiveness, evaluate_flat_namespace,
 };
 pub use generator::{AgentIdGenerator, PathGenerator, TreeConfig};
-pub use mapping::{map_tool_to_path, map_tools_batch, MappingConfig, MappingResult};
-pub use metrics::{mean, stddev, CoverageMetrics, Histogram, PrecisionRecallMetrics};
+pub use mapping::{MappingConfig, MappingResult, map_tool_to_path, map_tools_batch};
+pub use metrics::{CoverageMetrics, Histogram, PrecisionRecallMetrics, mean, stddev};
 pub use report::{EvaluationReport, EvaluationSummary, ReportMetadata};
 pub use tool_def::{ToolDef, ToolSource};

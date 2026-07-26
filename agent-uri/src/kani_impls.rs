@@ -75,7 +75,10 @@ impl kani::Arbitrary for PathSegment {
 
         // The string should be valid by construction, but assume to constrain search
         kani::assume(!s.is_empty() && s.len() <= 64);
-        kani::assume(s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'));
+        kani::assume(
+            s.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+        );
 
         PathSegment::parse(&s).expect("valid segment by construction")
     }
@@ -175,8 +178,14 @@ impl kani::Arbitrary for AgentUri {
         let capability_path: CapabilityPath = kani::any();
         let agent_id: AgentId = kani::any();
 
-        AgentUri::new(trust_root, capability_path, agent_id, QueryParams::new(), None)
-            .expect("valid URI by construction")
+        AgentUri::new(
+            trust_root,
+            capability_path,
+            agent_id,
+            QueryParams::new(),
+            None,
+        )
+        .expect("valid URI by construction")
     }
 }
 
@@ -235,7 +244,11 @@ fn proof_from_segments_equivalent_to_parse() {
     let from_segments =
         CapabilityPath::from_segments(segments.clone()).expect("valid by construction");
 
-    let joined: String = segments.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("/");
+    let joined: String = segments
+        .iter()
+        .map(|s| s.as_str())
+        .collect::<Vec<_>>()
+        .join("/");
 
     let parsed = CapabilityPath::parse(&joined).expect("joined string should parse");
 

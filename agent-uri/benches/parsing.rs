@@ -2,7 +2,7 @@
 //!
 //! These benchmarks support Evaluation 5 (Scalability) in the academic paper.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 
 use agent_uri::{AgentId, AgentUri, AgentUriBuilder, CapabilityPath, TrustRoot};
 

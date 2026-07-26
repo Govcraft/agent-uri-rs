@@ -17,11 +17,16 @@ use crate::trust;
 /// # Errors
 ///
 /// Returns [`CliError::Fault`] when a key cannot be written, found, or read.
-pub fn run<O: Write, E: Write>(command: &KeyCommand, out: &mut Output<O, E>) -> Result<(), CliError> {
+pub fn run<O: Write, E: Write>(
+    command: &KeyCommand,
+    out: &mut Output<O, E>,
+) -> Result<(), CliError> {
     match command {
-        KeyCommand::Generate { out: path, force, stdout } => {
-            generate(path.clone(), *force, *stdout, out)
-        }
+        KeyCommand::Generate {
+            out: path,
+            force,
+            stdout,
+        } => generate(path.clone(), *force, *stdout, out),
         KeyCommand::Public { key } => public(key.clone(), out),
     }
 }
@@ -79,7 +84,10 @@ fn generate<O: Write, E: Write>(
 }
 
 /// Prints the public half of a stored key.
-fn public<O: Write, E: Write>(path: Option<PathBuf>, out: &mut Output<O, E>) -> Result<(), CliError> {
+fn public<O: Write, E: Write>(
+    path: Option<PathBuf>,
+    out: &mut Output<O, E>,
+) -> Result<(), CliError> {
     let path = match path {
         Some(path) => path,
         None => keyfile::default_path()?,

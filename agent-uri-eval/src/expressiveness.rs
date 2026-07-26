@@ -2,9 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::collision::{detect_collisions, CollisionReport};
-use crate::mapping::{map_tools_batch, MappingConfig, MappingResult};
-use crate::metrics::{count_as_f64, mean, stddev, CoverageMetrics, Histogram};
+use crate::collision::{CollisionReport, detect_collisions};
+use crate::mapping::{MappingConfig, MappingResult, map_tools_batch};
+use crate::metrics::{CoverageMetrics, Histogram, count_as_f64, mean, stddev};
 use crate::tool_def::ToolDef;
 
 /// Complete results for capability expressiveness evaluation.
@@ -54,11 +54,7 @@ impl CriterionStatus {
 
 impl From<bool> for CriterionStatus {
     fn from(met: bool) -> Self {
-        if met {
-            Self::Met
-        } else {
-            Self::NotMet
-        }
+        if met { Self::Met } else { Self::NotMet }
     }
 }
 

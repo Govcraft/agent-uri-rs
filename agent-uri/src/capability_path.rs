@@ -526,7 +526,10 @@ mod tests {
         let result = CapabilityPath::parse(&segments);
         assert!(matches!(
             result,
-            Err(CapabilityPathError::TooManySegments { max: 32, actual: 33 })
+            Err(CapabilityPathError::TooManySegments {
+                max: 32,
+                actual: 33
+            })
         ));
     }
 
@@ -577,18 +580,16 @@ mod tests {
 
     #[test]
     fn from_segments_max_segments_succeeds() {
-        let segments: Vec<PathSegment> = (0..32)
-            .map(|_| PathSegment::parse("a").unwrap())
-            .collect();
+        let segments: Vec<PathSegment> =
+            (0..32).map(|_| PathSegment::parse("a").unwrap()).collect();
         let path = CapabilityPath::from_segments(segments).unwrap();
         assert_eq!(path.depth(), 32);
     }
 
     #[test]
     fn from_segments_too_many_segments_returns_error() {
-        let segments: Vec<PathSegment> = (0..33)
-            .map(|_| PathSegment::parse("a").unwrap())
-            .collect();
+        let segments: Vec<PathSegment> =
+            (0..33).map(|_| PathSegment::parse("a").unwrap()).collect();
         let result = CapabilityPath::from_segments(segments);
         assert!(matches!(
             result,

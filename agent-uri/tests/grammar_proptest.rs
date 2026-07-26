@@ -6,9 +6,9 @@
 use proptest::prelude::*;
 
 use agent_uri::{
-    AgentId, AgentPrefix, AgentUri, AgentUriBuilder, CapabilityPath, PathSegment, TrustRoot,
-    AGENT_SUFFIX_LENGTH, MAX_AGENT_PREFIX_LENGTH, MAX_CAPABILITY_PATH_LENGTH, MAX_PATH_SEGMENTS,
-    MAX_PATH_SEGMENT_LENGTH, MAX_TRUST_ROOT_LENGTH, MAX_URI_LENGTH,
+    AGENT_SUFFIX_LENGTH, AgentId, AgentPrefix, AgentUri, AgentUriBuilder, CapabilityPath,
+    MAX_AGENT_PREFIX_LENGTH, MAX_CAPABILITY_PATH_LENGTH, MAX_PATH_SEGMENT_LENGTH,
+    MAX_PATH_SEGMENTS, MAX_TRUST_ROOT_LENGTH, MAX_URI_LENGTH, PathSegment, TrustRoot,
 };
 
 /// Strategies for generating valid grammar-conformant inputs.
@@ -128,7 +128,9 @@ mod strategies {
             1 => ipv4_with_port,
             1 => ipv6_with_port,
         ]
-        .prop_filter("trust root too long", |tr| tr.len() <= MAX_TRUST_ROOT_LENGTH)
+        .prop_filter("trust root too long", |tr| {
+            tr.len() <= MAX_TRUST_ROOT_LENGTH
+        })
     }
 
     /// Generate a valid path segment (1-16 chars to keep paths reasonably sized)
@@ -136,11 +138,8 @@ mod strategies {
     pub fn path_segment() -> impl Strategy<Value = String> {
         // Use 1-16 to keep capability paths within 256 char limit more reliably
         (1..=16usize).prop_flat_map(|len| {
-            prop::collection::vec(
-                prop::sample::select(PATH_SEGMENT_CHARS.to_vec()),
-                len..=len,
-            )
-            .prop_map(|chars| chars.into_iter().map(|c| c as char).collect())
+            prop::collection::vec(prop::sample::select(PATH_SEGMENT_CHARS.to_vec()), len..=len)
+                .prop_map(|chars| chars.into_iter().map(|c| c as char).collect())
         })
     }
 

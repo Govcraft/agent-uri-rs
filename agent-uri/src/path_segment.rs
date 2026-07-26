@@ -50,7 +50,10 @@ impl PathSegment {
 
         for (i, c) in input.chars().enumerate() {
             if !Self::is_valid_char(c) {
-                return Err(PathSegmentError::InvalidChar { char: c, position: i });
+                return Err(PathSegmentError::InvalidChar {
+                    char: c,
+                    position: i,
+                });
             }
         }
 
@@ -171,18 +174,36 @@ mod tests {
     fn parse_too_long_fails() {
         let long = "a".repeat(65);
         let result = PathSegment::parse(&long);
-        assert!(matches!(result, Err(PathSegmentError::TooLong { max: 64, actual: 65 })));
+        assert!(matches!(
+            result,
+            Err(PathSegmentError::TooLong {
+                max: 64,
+                actual: 65
+            })
+        ));
     }
 
     #[test]
     fn parse_uppercase_fails() {
         let result = PathSegment::parse("Chat");
-        assert!(matches!(result, Err(PathSegmentError::InvalidChar { char: 'C', position: 0 })));
+        assert!(matches!(
+            result,
+            Err(PathSegmentError::InvalidChar {
+                char: 'C',
+                position: 0
+            })
+        ));
     }
 
     #[test]
     fn parse_underscore_fails() {
         let result = PathSegment::parse("code_interpreter");
-        assert!(matches!(result, Err(PathSegmentError::InvalidChar { char: '_', position: 4 })));
+        assert!(matches!(
+            result,
+            Err(PathSegmentError::InvalidChar {
+                char: '_',
+                position: 4
+            })
+        ));
     }
 }

@@ -13,16 +13,41 @@
 //! are intentionally excluded as they are implementation details.
 
 pub use crate::{
+    // Constants
+    AGENT_SUFFIX_LENGTH,
     // Core types
-    AgentId, AgentPrefix, AgentUri, CapabilityPath, ExtensionClass, Fragment, Host, PathSegment,
-    QueryParams, TrustRoot, TypeClass,
+    AgentId,
+    // Errors
+    AgentIdError,
+    AgentPrefix,
+    AgentPrefixError,
+    AgentUri,
     // Builder
     AgentUriBuilder,
-    // Errors
-    AgentIdError, AgentPrefixError, BuilderError, CapabilityPathError, FragmentError, ParseError,
-    ParseErrorKind, PathSegmentError, QueryError, TrustRootError,
-    // Constants
-    AGENT_SUFFIX_LENGTH, MAX_AGENT_ID_LENGTH, MAX_AGENT_PREFIX_LENGTH, MAX_CAPABILITY_PATH_LENGTH,
-    MAX_DNS_DOMAIN_LENGTH, MAX_DNS_LABEL_LENGTH, MAX_PATH_SEGMENTS, MAX_PATH_SEGMENT_LENGTH,
-    MAX_TRUST_ROOT_LENGTH, MAX_URI_LENGTH, SCHEME,
+    BuilderError,
+    CapabilityPath,
+    CapabilityPathError,
+    ExtensionClass,
+    Fragment,
+    FragmentError,
+    Host,
+    MAX_AGENT_ID_LENGTH,
+    MAX_AGENT_PREFIX_LENGTH,
+    MAX_CAPABILITY_PATH_LENGTH,
+    MAX_DNS_DOMAIN_LENGTH,
+    MAX_DNS_LABEL_LENGTH,
+    MAX_PATH_SEGMENT_LENGTH,
+    MAX_PATH_SEGMENTS,
+    MAX_TRUST_ROOT_LENGTH,
+    MAX_URI_LENGTH,
+    ParseError,
+    ParseErrorKind,
+    PathSegment,
+    PathSegmentError,
+    QueryError,
+    QueryParams,
+    SCHEME,
+    TrustRoot,
+    TrustRootError,
+    TypeClass,
 };
