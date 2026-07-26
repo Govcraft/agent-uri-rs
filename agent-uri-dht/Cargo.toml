@@ -26,7 +26,6 @@ optional = true
 
 [dev-dependencies]
 criterion = "0.8.1"
-proptest = "1.5"
 
 [[bench]]
 name = "dht_bench"
