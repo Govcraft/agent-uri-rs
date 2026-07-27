@@ -387,6 +387,13 @@ impl std::error::Error for AgentPrefixError {}
 /// Errors for query string parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryError {
+    /// Input exceeds maximum length
+    TooLong {
+        /// Maximum allowed length
+        max: usize,
+        /// Actual length
+        actual: usize,
+    },
     /// Invalid parameter name
     InvalidParamName {
         /// The invalid name
@@ -423,6 +430,9 @@ pub enum QueryError {
 impl fmt::Display for QueryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::TooLong { max, actual } => {
+                write!(f, "query string length {actual} exceeds maximum {max}")
+            }
             Self::InvalidParamName { name, reason } => {
                 write!(f, "invalid parameter name '{name}': {reason}")
             }
@@ -454,6 +464,13 @@ impl std::error::Error for QueryError {}
 /// Errors for fragment parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FragmentError {
+    /// Input exceeds maximum length
+    TooLong {
+        /// Maximum allowed length
+        max: usize,
+        /// Actual length
+        actual: usize,
+    },
     /// Invalid character in fragment
     InvalidChar {
         /// The invalid character
@@ -466,6 +483,9 @@ pub enum FragmentError {
 impl fmt::Display for FragmentError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::TooLong { max, actual } => {
+                write!(f, "fragment length {actual} exceeds maximum {max}")
+            }
             Self::InvalidChar { char, position } => {
                 write!(
                     f,
