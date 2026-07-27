@@ -554,6 +554,7 @@ impl<'de> serde::Deserialize<'de> for AgentUri {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::TrustRootError;
 
     #[test]
     fn parse_valid_uri() {
@@ -705,5 +706,18 @@ mod tests {
 
         assert_eq!(uri.trust_root().host_str(), "anthropic.com");
         assert_eq!(uri.capability_path().as_str(), "assistant/chat");
+    }
+
+    #[test]
+    fn ipv4_shaped_trust_root_with_out_of_range_octet_is_rejected() {
+        let result = AgentUri::parse("agent://256.1.1.1/test/llm_01h455vb4pex5vsknk084sn02q");
+
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                kind: ParseErrorKind::InvalidTrustRoot(TrustRootError::InvalidIpAddress { .. }),
+                ..
+            })
+        ));
     }
 }
