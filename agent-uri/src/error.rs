@@ -478,6 +478,8 @@ pub enum FragmentError {
         /// Position in the input
         position: usize,
     },
+    /// The fragment is empty; a bare '#' carries no fragment.
+    Empty,
 }
 
 impl fmt::Display for FragmentError {
@@ -492,6 +494,7 @@ impl fmt::Display for FragmentError {
                     "invalid character '{char}' at position {position}; allowed: alphanumeric, hyphen, underscore, dot, slash"
                 )
             }
+            Self::Empty => write!(f, "fragment must not be empty; omit the '#' instead"),
         }
     }
 }
