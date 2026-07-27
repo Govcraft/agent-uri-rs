@@ -319,6 +319,13 @@ pub enum AgentPrefixError {
         /// Actual length
         actual: usize,
     },
+    /// The leading type class is not a valid core or extension class
+    InvalidTypeClass {
+        /// The rejected type-class text
+        class: String,
+        /// Reason for invalidity
+        reason: &'static str,
+    },
     /// Invalid character (not lowercase letter or underscore)
     InvalidChar {
         /// The invalid character
@@ -349,6 +356,9 @@ impl fmt::Display for AgentPrefixError {
             Self::Empty => write!(f, "prefix cannot be empty"),
             Self::TooLong { max, actual } => {
                 write!(f, "prefix length {actual} exceeds maximum {max}")
+            }
+            Self::InvalidTypeClass { class, reason } => {
+                write!(f, "invalid type class '{class}': {reason}")
             }
             Self::InvalidChar { char, position } => {
                 write!(
@@ -478,6 +488,8 @@ pub enum BuilderError {
         /// Actual length
         actual: usize,
     },
+    /// The components could not be assembled into a valid URI
+    InvalidUri(ParseError),
 }
 
 impl fmt::Display for BuilderError {
@@ -490,8 +502,16 @@ impl fmt::Display for BuilderError {
                      consider shorter component values"
                 )
             }
+            Self::InvalidUri(e) => write!(f, "cannot build agent URI: {e}"),
         }
     }
 }
 
-impl std::error::Error for BuilderError {}
+impl std::error::Error for BuilderError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidUri(e) => Some(e),
+            Self::UriTooLong { .. } => None,
+        }
+    }
+}
