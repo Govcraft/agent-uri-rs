@@ -235,6 +235,34 @@ mod strategies {
             },
         )
     }
+
+    /// Generate a short arbitrary UTF-8 query value.
+    pub fn query_value() -> impl Strategy<Value = String> {
+        prop::string::string_regex(".{0,16}").unwrap()
+    }
+
+    /// Generate a short arbitrary sequence of query value octets.
+    pub fn query_octets() -> impl Strategy<Value = Vec<u8>> {
+        prop::collection::vec(any::<u8>(), 0..=16)
+    }
+
+    /// Percent-encode every byte of a UTF-8 string using uppercase hexadecimal.
+    pub fn percent_encode_str(value: &str) -> String {
+        percent_encode_bytes(value.as_bytes())
+    }
+
+    /// Percent-encode every byte using uppercase hexadecimal.
+    pub fn percent_encode_bytes(bytes: &[u8]) -> String {
+        const HEX_DIGITS: &[u8; 16] = b"0123456789ABCDEF";
+
+        let mut encoded = String::with_capacity(bytes.len() * 3);
+        for &byte in bytes {
+            encoded.push('%');
+            encoded.push(char::from(HEX_DIGITS[usize::from(byte >> 4)]));
+            encoded.push(char::from(HEX_DIGITS[usize::from(byte & 0x0f)]));
+        }
+        encoded
+    }
 }
 
 mod trust_root_tests {
@@ -384,6 +412,74 @@ mod full_uri_tests {
             // Agent ID accessible
             let _ = parsed.agent_id().prefix();
             let _ = parsed.agent_id().suffix();
+        }
+    }
+}
+
+/// Issue #22 regression properties: percent-decoded bytes were historically
+/// pushed as Latin-1 `char`s, mangling every multi-byte sequence and accepting
+/// invalid UTF-8.
+mod query_properties {
+    use agent_uri::{AgentUri, QueryError, QueryParams};
+    use proptest::prelude::*;
+
+    use super::strategies::{percent_encode_bytes, percent_encode_str, query_octets, query_value};
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(500))]
+
+        #[test]
+        fn arbitrary_utf8_values_round_trip_through_percent_encoding(original in query_value()) {
+            let encoded = percent_encode_str(&original);
+            let params = QueryParams::parse(&format!("v={encoded}")).unwrap();
+
+            prop_assert_eq!(params.get("v"), Some(original.as_str()));
+        }
+
+        #[test]
+        fn decoded_values_are_rejected_exactly_when_the_octets_are_not_utf8(
+            bytes in query_octets()
+        ) {
+            let encoded = percent_encode_bytes(&bytes);
+            let result = QueryParams::parse(&format!("v={encoded}"));
+
+            if let Ok(expected) = String::from_utf8(bytes.clone()) {
+                prop_assert!(result.is_ok());
+                let params = result.unwrap();
+                prop_assert_eq!(params.get("v"), Some(expected.as_str()));
+            } else {
+                prop_assert!(
+                    matches!(result, Err(QueryError::InvalidUtf8 { .. })),
+                    "invalid octets must report QueryError::InvalidUtf8"
+                );
+            }
+        }
+
+        #[test]
+        fn display_output_reparses_to_the_same_params(original in query_value()) {
+            let encoded = percent_encode_str(&original);
+            let params = QueryParams::parse(&format!("v={encoded}")).unwrap();
+            let rendered = params.to_string();
+            let reparsed = QueryParams::parse(&rendered).unwrap();
+
+            prop_assert_eq!(reparsed, params);
+        }
+
+        #[test]
+        fn uri_with_encoded_query_round_trips(original in query_value()) {
+            let encoded = percent_encode_str(&original);
+            let uri = format!(
+                "agent://example.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?v={encoded}"
+            );
+            let parsed_result = AgentUri::parse(&uri);
+
+            prop_assert!(parsed_result.is_ok());
+            let parsed = parsed_result.unwrap();
+            prop_assert_eq!(parsed.query().get("v"), Some(original.as_str()));
+
+            let reparsed_result = AgentUri::parse(parsed.as_str());
+            prop_assert!(reparsed_result.is_ok());
+            prop_assert_eq!(reparsed_result.unwrap(), parsed);
         }
     }
 }
