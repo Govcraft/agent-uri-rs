@@ -6,9 +6,10 @@
 use proptest::prelude::*;
 
 use agent_uri::{
-    AGENT_SUFFIX_LENGTH, AgentId, AgentPrefix, AgentUri, AgentUriBuilder, CapabilityPath,
+    AGENT_SUFFIX_LENGTH, AgentId, AgentPrefix, AgentUri, AgentUriBuilder, CapabilityPath, Host,
     MAX_AGENT_PREFIX_LENGTH, MAX_CAPABILITY_PATH_LENGTH, MAX_PATH_SEGMENT_LENGTH,
     MAX_PATH_SEGMENTS, MAX_TRUST_ROOT_LENGTH, MAX_URI_LENGTH, PathSegment, TrustRoot,
+    TrustRootError,
 };
 
 /// Strategies for generating valid grammar-conformant inputs.
@@ -73,6 +74,15 @@ mod strategies {
         prop::collection::vec(dns_label(), 1..=4).prop_filter_map(
             "domain too long or invalid",
             |labels| {
+                // Issue #24: four all-numeric labels are parsed only as an IPv4 address.
+                if labels.len() == 4
+                    && labels
+                        .iter()
+                        .all(|label| label.bytes().all(|byte| byte.is_ascii_digit()))
+                {
+                    return None;
+                }
+
                 let domain = labels.join(".");
                 if domain.len() <= 253 && !domain.is_empty() {
                     Some(domain)
@@ -87,6 +97,63 @@ mod strategies {
     pub fn ipv4() -> impl Strategy<Value = String> {
         (0u8..=255, 0u8..=255, 0u8..=255, 0u8..=255)
             .prop_map(|(a, b, c, d)| format!("{a}.{b}.{c}.{d}"))
+    }
+
+    /// Generate an IPv4-shaped host with one out-of-range octet.
+    pub fn ipv4_with_out_of_range_octet() -> impl Strategy<Value = String> {
+        (prop::array::uniform4(0u16..=255), 256u16..=999, 0usize..4).prop_map(
+            |(mut octets, invalid_octet, index)| {
+                octets[index] = invalid_octet;
+                octets
+                    .iter()
+                    .map(u16::to_string)
+                    .collect::<Vec<_>>()
+                    .join(".")
+            },
+        )
+    }
+
+    /// Generate an IPv4-shaped host with one zero-padded octet.
+    pub fn ipv4_with_leading_zero_octet() -> impl Strategy<Value = String> {
+        (prop::array::uniform4(0u16..=255), 0usize..4).prop_map(|(mut octets, index)| {
+            octets[index] %= 100;
+            octets
+                .iter()
+                .enumerate()
+                .map(|(position, octet)| {
+                    if position == index {
+                        format!("{octet:03}")
+                    } else {
+                        octet.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(".")
+        })
+    }
+
+    /// Generate four numeric labels that are not a valid IPv4 address.
+    pub fn invalid_ipv4_shaped_host() -> impl Strategy<Value = String> {
+        prop::collection::vec(prop::string::string_regex("[0-9]{1,20}").unwrap(), 4..=4)
+            .prop_map(|labels| labels.join("."))
+            .prop_filter("host must not be valid IPv4", |host| {
+                host.parse::<std::net::Ipv4Addr>().is_err()
+            })
+    }
+
+    /// Generate numeric domains whose label count is not IPv4-shaped.
+    pub fn non_ipv4_numeric_domain() -> impl Strategy<Value = String> {
+        prop_oneof![
+            prop::collection::vec(0u16..=999, 3..=3),
+            prop::collection::vec(0u16..=999, 5..=5),
+        ]
+        .prop_map(|labels| {
+            labels
+                .iter()
+                .map(u16::to_string)
+                .collect::<Vec<_>>()
+                .join(".")
+        })
     }
 
     /// Generate a valid IPv6 address (simplified: full form only)
@@ -295,6 +362,116 @@ mod trust_root_tests {
         fn valid_trust_roots_parse(tr in trust_root()) {
             let result = TrustRoot::parse(&tr);
             prop_assert!(result.is_ok(), "Failed to parse trust root: {}", tr);
+        }
+
+        #[test]
+        fn out_of_range_ipv4_octet_is_rejected(host in ipv4_with_out_of_range_octet()) {
+            let result = TrustRoot::parse(&host);
+
+            prop_assert!(
+                matches!(
+                    &result,
+                    Err(TrustRootError::InvalidIpAddress { value, reason })
+                        if value == &host && *reason == "IPv4 octets must be 0-255"
+                ),
+                "out-of-range IPv4-shaped host `{}` must report InvalidIpAddress with the \
+                 out-of-range reason; got {:?}",
+                host,
+                result
+            );
+        }
+
+        #[test]
+        fn leading_zero_ipv4_octet_is_rejected(host in ipv4_with_leading_zero_octet()) {
+            let result = TrustRoot::parse(&host);
+
+            prop_assert!(
+                matches!(
+                    &result,
+                    Err(TrustRootError::InvalidIpAddress { value, reason })
+                        if value == &host
+                            && *reason == "IPv4 octets must not have leading zeros"
+                ),
+                "zero-padded IPv4-shaped host `{}` must report InvalidIpAddress with the \
+                 leading-zero reason; got {:?}",
+                host,
+                result
+            );
+        }
+
+        #[test]
+        fn invalid_ipv4_shaped_hosts_are_never_domains(host in invalid_ipv4_shaped_host()) {
+            let result = TrustRoot::parse(&host);
+
+            prop_assert!(
+                !matches!(&result, Ok(root) if matches!(root.host(), Host::Domain(_))),
+                "invalid IPv4-shaped host `{}` must never parse as a domain; got {:?}",
+                host,
+                result
+            );
+            prop_assert!(
+                !matches!(
+                    &result,
+                    Err(
+                        TrustRootError::InvalidDomain { .. }
+                            | TrustRootError::InvalidChar { .. }
+                            | TrustRootError::LabelTooLong { .. }
+                    )
+                ),
+                "invalid IPv4-shaped host `{}` must not report a domain error; got {:?}",
+                host,
+                result
+            );
+            prop_assert!(
+                matches!(&result, Err(TrustRootError::InvalidIpAddress { .. })),
+                "invalid IPv4-shaped host `{}` must report InvalidIpAddress; got {:?}",
+                host,
+                result
+            );
+        }
+
+        #[test]
+        fn valid_ipv4_still_round_trips(ip in ipv4()) {
+            let result = TrustRoot::parse(&ip);
+
+            prop_assert!(
+                result.is_ok(),
+                "valid IPv4 host `{}` must parse successfully; got {:?}",
+                ip,
+                result
+            );
+            let root = result.unwrap();
+            prop_assert_eq!(
+                root.as_str(),
+                ip.as_str(),
+                "valid IPv4 host `{}` must round-trip unchanged",
+                ip
+            );
+            prop_assert!(
+                matches!(root.host(), Host::Ipv4(_)),
+                "valid IPv4 host `{}` must parse as Host::Ipv4; got {:?}",
+                ip,
+                root.host()
+            );
+        }
+
+        #[test]
+        fn non_ipv4_numeric_shapes_stay_domains(host in non_ipv4_numeric_domain()) {
+            let result = TrustRoot::parse(&host);
+
+            prop_assert!(
+                result.is_ok(),
+                "numeric host with three or five labels `{}` must parse successfully; got {:?}",
+                host,
+                result
+            );
+            let root = result.unwrap();
+            prop_assert!(
+                matches!(root.host(), Host::Domain(domain) if domain == &host),
+                "numeric host with three or five labels `{}` must parse as Host::Domain; got {:?}",
+                host,
+                root.host()
+            );
         }
 
         #[test]

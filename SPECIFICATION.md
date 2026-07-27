@@ -1,6 +1,6 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.5.1
+**Version:** 0.5.2
 **Status:** Draft
 **Last Updated:** 2026-07-27
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
@@ -154,6 +154,7 @@ label      = 1*63( ALPHA / DIGIT / "-" )
 2. Domain labels MUST NOT start or end with a hyphen.
 3. The trust root MUST publish verification keys at a well-known endpoint (see [Section 7.2](#72-key-publication)).
 4. DNS trust roots are case-insensitive and MUST be normalized to lowercase. IPv4 addresses use dotted-decimal form and IPv6 literals use RFC 5952 canonical text in brackets. An explicit port is preserved; no default port is inferred or stripped.
+5. A host consisting of exactly four dot-separated labels that each contain only digits MUST be parsed as an `ipv4-address`, never as a `domain`. Such a host MUST be rejected when it is not a valid dotted-decimal address: every octet MUST be in the range 0-255 and MUST NOT carry a leading zero, per the `dec-octet` rule in [Appendix A](#appendix-a-abnf-grammar). Hosts with any other number of labels, or with a non-numeric label, remain subject to the `domain` rule.
 
 **Examples:**
 
@@ -1047,6 +1048,7 @@ Covered: YES (second capability covers)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.5.2 | 2026-07-27 | Four dot-separated all-numeric host labels defined as an ipv4-address rather than a domain; hosts of that shape whose octets are outside 0-255 or carry a leading zero are rejected |
 | 0.5.1 | 2026-07-27 | Query parameter percent-decoding defined as UTF-8 octet decoding; values whose decoded octets are not valid UTF-8 are rejected; serializing a query parameter value re-encodes non-unreserved octets as uppercase %XX |
 | 0.5.0 | 2026-07-13 | Capability path made constitutive identity material; lowercase path and Agent ID inputs are rejected rather than normalized; URI-scoped capability claims and ancestor-key registration defined |
 | 0.4.0 | 2026-01-20 | Initial draft specification |

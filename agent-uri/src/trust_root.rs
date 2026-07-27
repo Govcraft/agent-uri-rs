@@ -11,6 +11,9 @@
 //! label      = 1*63( ALPHA / DIGIT / "-" )
 //! ```
 //!
+//! `ipv4-address` takes precedence over `domain` for hosts shaped as exactly four
+//! dotted numeric labels.
+//!
 //! Maximum trust root length: 128 characters (including port).
 
 use std::cmp::Ordering;
@@ -68,7 +71,9 @@ impl TrustRoot {
     /// - The input is empty
     /// - The input exceeds 128 characters
     /// - The domain contains invalid characters or labels
-    /// - The IP address is malformed
+    /// - A host of exactly four dotted numeric labels has an IPv4 octet outside
+    ///   0-255 or an octet with a leading zero; this shape is parsed as IPv4 and
+    ///   is never treated as a domain
     /// - The port is invalid (not numeric or out of range)
     pub fn parse(input: &str) -> Result<Self, TrustRootError> {
         if input.is_empty() {
@@ -218,14 +223,50 @@ impl TrustRoot {
     }
 
     fn parse_host(host_str: &str) -> Result<Host, TrustRootError> {
-        // Try IPv4 first
         if let Ok(ip) = host_str.parse::<Ipv4Addr>() {
             return Ok(Host::Ipv4(ip));
         }
 
-        // Must be a domain name
+        // Four dotted numeric labels are an ipv4-address by grammar shape;
+        // they must not fall through to domain validation (issue #24).
+        if Self::is_ipv4_shaped(host_str) {
+            return Err(TrustRootError::InvalidIpAddress {
+                value: host_str.to_string(),
+                reason: Self::ipv4_rejection_reason(host_str),
+            });
+        }
+
         Self::validate_domain(host_str)?;
         Ok(Host::Domain(host_str.to_lowercase()))
+    }
+
+    /// Returns `true` if the host is syntactically four dot-separated,
+    /// non-empty, all-ASCII-digit labels — the shape of `ipv4-address`
+    /// in the grammar, regardless of whether the octet values are valid.
+    fn is_ipv4_shaped(host: &str) -> bool {
+        let mut labels = 0usize;
+        for label in host.split('.') {
+            labels += 1;
+            if labels > 4 || label.is_empty() || !label.bytes().all(|b| b.is_ascii_digit()) {
+                return false;
+            }
+        }
+        labels == 4
+    }
+
+    /// Explains why an IPv4-shaped host is not a valid dotted-decimal address.
+    ///
+    /// Callers must only invoke this for hosts that satisfy `is_ipv4_shaped`
+    /// and that `Ipv4Addr` rejected; for such hosts the only failure modes are
+    /// an out-of-range octet and a leading zero.
+    fn ipv4_rejection_reason(host: &str) -> &'static str {
+        for label in host.split('.') {
+            match label.parse::<u64>() {
+                Ok(value) if value <= 255 => {}
+                _ => return "IPv4 octets must be 0-255",
+            }
+        }
+        "IPv4 octets must not have leading zeros"
     }
 
     fn parse_ipv6_literal(input: &str) -> Result<Self, TrustRootError> {
@@ -535,5 +576,87 @@ mod tests {
     fn parse_label_with_hyphen_start_fails() {
         let result = TrustRoot::parse("-invalid.com");
         assert!(matches!(result, Err(TrustRootError::InvalidDomain { .. })));
+    }
+
+    #[test]
+    fn ipv4_shaped_host_with_out_of_range_octet_is_rejected() {
+        let result = TrustRoot::parse("256.1.1.1");
+
+        assert!(matches!(
+            result,
+            Err(TrustRootError::InvalidIpAddress {
+                reason: "IPv4 octets must be 0-255",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn ipv4_shaped_host_with_port_and_out_of_range_octet_is_rejected() {
+        let result = TrustRoot::parse("256.1.1.1:8080");
+
+        assert!(matches!(
+            result,
+            Err(TrustRootError::InvalidIpAddress {
+                reason: "IPv4 octets must be 0-255",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn ipv4_shaped_host_with_leading_zero_is_rejected() {
+        let result = TrustRoot::parse("192.168.001.1");
+
+        assert!(matches!(
+            result,
+            Err(TrustRootError::InvalidIpAddress { .. })
+        ));
+    }
+
+    #[test]
+    fn ipv4_shaped_host_with_large_octet_is_rejected() {
+        let result = TrustRoot::parse("1.2.3.99999");
+
+        assert!(matches!(
+            result,
+            Err(TrustRootError::InvalidIpAddress { .. })
+        ));
+    }
+
+    #[test]
+    fn ipv4_shaped_host_with_all_octets_out_of_range_is_rejected() {
+        let result = TrustRoot::parse("999.999.999.999");
+
+        assert!(matches!(
+            result,
+            Err(TrustRootError::InvalidIpAddress { .. })
+        ));
+    }
+
+    #[test]
+    fn valid_ipv4_hosts_parse_as_ipv4() {
+        for input in ["192.168.1.1", "127.0.0.1", "0.0.0.0", "255.255.255.255"] {
+            let root = TrustRoot::parse(input).unwrap();
+
+            assert!(matches!(root.host(), Host::Ipv4(_)));
+        }
+    }
+
+    #[test]
+    fn valid_ipv4_host_with_port_parses_as_ipv4() {
+        let root = TrustRoot::parse("192.168.1.1:8080").unwrap();
+
+        assert!(matches!(root.host(), Host::Ipv4(_)));
+        assert_eq!(root.port(), Some(8080));
+    }
+
+    #[test]
+    fn hosts_without_exactly_four_numeric_labels_parse_as_domains() {
+        for input in ["1.2.3", "1.2.3.4.5", "1a.2.3.4", "256.1.1.1.example.com"] {
+            let root = TrustRoot::parse(input).unwrap();
+
+            assert!(matches!(root.host(), Host::Domain(domain) if domain == input));
+        }
     }
 }

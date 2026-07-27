@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "name": "Agent URI Test Vectors",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Canonical test vectors for agent:// URI scheme implementations. All conforming implementations MUST pass these tests.",
   "generated": "2026-07-27",
   "sections": {
@@ -612,6 +612,13 @@
       "input": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?name=%FF",
       "error_type": "invalid_query",
       "error_message": "Percent-encoded query value must decode to valid UTF-8"
+    },
+    {
+      "id": "invalid-034",
+      "description": "IPv4 octet with leading zero",
+      "input": "agent://192.168.001.1/test/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_ipv4",
+      "error_message": "IPv4 octets must not have leading zeros"
     }
   ],
 
