@@ -7,7 +7,6 @@ use std::marker::PhantomData;
 
 use crate::agent_id::AgentId;
 use crate::capability_path::CapabilityPath;
-use crate::constants::MAX_URI_LENGTH;
 use crate::error::{
     AgentIdError, BuilderError, CapabilityPathError, FragmentError, ParseErrorKind, QueryError,
     TrustRootError,
@@ -300,7 +299,9 @@ impl AgentUriBuilder<Ready> {
     /// # Errors
     ///
     /// Returns [`BuilderError::UriTooLong`] if the resulting URI would exceed
-    /// the maximum allowed length of 512 characters.
+    /// the maximum allowed length of 512 characters. Returns
+    /// [`BuilderError::InvalidUri`] with the underlying parse error if the
+    /// components cannot be assembled for any other reason.
     ///
     /// # Panics
     ///
@@ -341,13 +342,14 @@ impl AgentUriBuilder<Ready> {
             self.query,
             self.fragment,
         )
-        .map_err(|e| match e.kind {
-            ParseErrorKind::TooLong { max, actual } => BuilderError::UriTooLong { max, actual },
-            // Other variants shouldn't occur with pre-validated components
-            _ => BuilderError::UriTooLong {
-                max: MAX_URI_LENGTH,
-                actual: 0,
+        // `InvalidUri` is currently unreachable because `AgentUri::new` only returns `TooLong`;
+        // it preserves future failure modes instead of masking them as length errors.
+        .map_err(|e| match &e.kind {
+            ParseErrorKind::TooLong { max, actual } => BuilderError::UriTooLong {
+                max: *max,
+                actual: *actual,
             },
+            _ => BuilderError::InvalidUri(e),
         })
     }
 }
@@ -695,7 +697,11 @@ mod tests {
             .query(query)
             .build();
 
-        assert!(matches!(result, Err(BuilderError::UriTooLong { .. })));
+        let Err(BuilderError::UriTooLong { max, actual }) = result else {
+            panic!("expected BuilderError::UriTooLong");
+        };
+        assert_eq!(max, 512);
+        assert!(actual > 512);
     }
 
     #[test]

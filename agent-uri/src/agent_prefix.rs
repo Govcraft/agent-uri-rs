@@ -54,6 +54,7 @@ impl AgentPrefix {
     /// - The prefix doesn't start with a letter
     /// - The prefix doesn't end with a letter
     /// - The prefix contains digits
+    /// - The leading type class is not a valid core class or extension class
     pub fn parse(input: &str) -> Result<Self, AgentPrefixError> {
         if input.is_empty() {
             return Err(AgentPrefixError::Empty);
@@ -100,9 +101,9 @@ impl AgentPrefix {
         let type_class =
             parts[0]
                 .parse::<TypeClass>()
-                .map_err(|_| AgentPrefixError::InvalidChar {
-                    char: parts[0].chars().next().unwrap_or(' '),
-                    position: 0,
+                .map_err(|reason| AgentPrefixError::InvalidTypeClass {
+                    class: parts[0].to_string(),
+                    reason,
                 })?;
 
         let modifiers = parts[1..].iter().map(|s| (*s).to_string()).collect();
@@ -218,6 +219,46 @@ mod tests {
         let prefix = AgentPrefix::parse("llm_chat_streaming").unwrap();
         assert_eq!(prefix.type_class().as_str(), "llm");
         assert_eq!(prefix.modifiers(), &["chat", "streaming"]);
+    }
+
+    #[test]
+    fn parse_one_letter_type_class_reports_the_type_class_reason() {
+        let result = AgentPrefix::parse("a_b");
+
+        // Previously this reported InvalidChar { char: 'a', position: 0 } for a valid character.
+        assert!(matches!(
+            result,
+            Err(AgentPrefixError::InvalidTypeClass {
+                class,
+                reason: "extension class name must be at least 2 characters",
+            }) if class == "a"
+        ));
+    }
+
+    #[test]
+    fn parse_single_letter_prefix_reports_the_type_class_reason() {
+        let result = AgentPrefix::parse("a");
+
+        assert!(matches!(
+            result,
+            Err(AgentPrefixError::InvalidTypeClass {
+                class,
+                reason: "extension class name must be at least 2 characters",
+            }) if class == "a"
+        ));
+    }
+
+    #[test]
+    fn parse_invalid_character_still_reports_invalid_char() {
+        let result = AgentPrefix::parse("llm-chat");
+
+        assert!(matches!(
+            result,
+            Err(AgentPrefixError::InvalidChar {
+                char: '-',
+                position: 3,
+            })
+        ));
     }
 
     #[test]
