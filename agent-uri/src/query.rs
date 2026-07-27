@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
+use crate::constants::MAX_URI_LENGTH;
 use crate::error::QueryError;
 
 /// Query parameters from an agent URI.
@@ -42,11 +43,22 @@ impl QueryParams {
     /// Rendering with [`fmt::Display`] re-encodes every value octet outside the
     /// ASCII alphanumeric, `-`, `_`, and `.` set as uppercase `%XX`, preserving
     /// values across parse-display-parse round trips.
+    /// This standalone entry point enforces the same total-URI byte limit that
+    /// [`crate::AgentUri::parse`] applies.
     ///
     /// # Errors
     ///
-    /// Returns `QueryError` if any parameter is invalid.
+    /// Input longer than 512 bytes ([`crate::MAX_URI_LENGTH`]) is rejected with
+    /// [`QueryError::TooLong`]. Other invalid parameters return their
+    /// corresponding `QueryError` variant.
     pub fn parse(input: &str) -> Result<Self, QueryError> {
+        if input.len() > MAX_URI_LENGTH {
+            return Err(QueryError::TooLong {
+                max: MAX_URI_LENGTH,
+                actual: input.len(),
+            });
+        }
+
         if input.is_empty() {
             return Ok(Self::new());
         }
@@ -381,6 +393,57 @@ mod tests {
     fn parse_empty() {
         let params = QueryParams::parse("").unwrap();
         assert!(params.is_empty());
+    }
+
+    #[test]
+    fn query_at_maximum_length_parses() {
+        let input = format!("v={}", "a".repeat(MAX_URI_LENGTH - 2));
+
+        let params = QueryParams::parse(&input).unwrap();
+
+        assert_eq!(input.len(), MAX_URI_LENGTH);
+        assert_eq!(params.get("v").unwrap().len(), MAX_URI_LENGTH - 2);
+    }
+
+    #[test]
+    fn query_over_maximum_length_reports_limit_and_actual_length() {
+        let input = format!("v={}", "a".repeat(MAX_URI_LENGTH - 1));
+
+        let error = QueryParams::parse(&input).unwrap_err();
+        let QueryError::TooLong { max, actual } = error else {
+            panic!("expected QueryError::TooLong");
+        };
+
+        assert_eq!(max, MAX_URI_LENGTH);
+        assert_eq!(actual, input.len());
+    }
+
+    #[test]
+    fn query_length_cap_precedes_character_validation() {
+        let input = format!("v={}", "@".repeat(MAX_URI_LENGTH));
+
+        assert!(matches!(
+            QueryParams::parse(&input),
+            Err(QueryError::TooLong {
+                max: MAX_URI_LENGTH,
+                actual
+            }) if actual == input.len()
+        ));
+    }
+
+    #[test]
+    fn whole_uri_length_cap_still_precedes_query_parsing() {
+        let base = "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q?v=";
+        let input = format!("{base}{}", "a".repeat(MAX_URI_LENGTH + 1 - base.len()));
+
+        let error = crate::AgentUri::parse(&input).unwrap_err();
+        let crate::ParseErrorKind::TooLong { max, actual } = error.kind else {
+            panic!("expected ParseErrorKind::TooLong");
+        };
+
+        assert_eq!(input.len(), MAX_URI_LENGTH + 1);
+        assert_eq!(max, MAX_URI_LENGTH);
+        assert_eq!(actual, input.len());
     }
 
     #[test]

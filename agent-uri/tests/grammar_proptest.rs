@@ -677,6 +677,70 @@ mod query_properties {
     }
 }
 
+mod length_cap_properties {
+    use agent_uri::{Fragment, FragmentError, QueryError, QueryParams};
+    use proptest::prelude::*;
+
+    const FRAGMENT_CHARACTERS: &[u8] =
+        b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./:";
+
+    fn fragment_character_string(
+        min_length: usize,
+        max_length: usize,
+    ) -> impl Strategy<Value = String> {
+        (min_length..=max_length).prop_flat_map(|length| {
+            prop::collection::vec(
+                prop::sample::select(FRAGMENT_CHARACTERS.to_vec()),
+                length..=length,
+            )
+            .prop_map(|characters| characters.into_iter().map(char::from).collect())
+        })
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn over_length_inputs_report_exact_lengths(
+            input in fragment_character_string(agent_uri::MAX_URI_LENGTH + 1, 600)
+        ) {
+            let input_length = input.len();
+
+            match QueryParams::parse(&input) {
+                Err(QueryError::TooLong { max, actual }) => {
+                    prop_assert_eq!(max, agent_uri::MAX_URI_LENGTH);
+                    prop_assert_eq!(actual, input_length);
+                }
+                result => {
+                    prop_assert!(false, "expected QueryError::TooLong, got {result:?}");
+                }
+            }
+
+            match Fragment::parse(&input) {
+                Err(FragmentError::TooLong { max, actual }) => {
+                    prop_assert_eq!(max, agent_uri::MAX_URI_LENGTH);
+                    prop_assert_eq!(actual, input_length);
+                }
+                result => {
+                    prop_assert!(false, "expected FragmentError::TooLong, got {result:?}");
+                }
+            }
+        }
+
+        #[test]
+        fn inputs_within_limit_never_report_too_long(
+            input in fragment_character_string(0, agent_uri::MAX_URI_LENGTH)
+        ) {
+            let query_result = QueryParams::parse(&input);
+            let query_is_too_long =
+                matches!(query_result, Err(QueryError::TooLong { .. }));
+
+            prop_assert!(!query_is_too_long);
+            prop_assert!(Fragment::parse(&input).is_ok());
+        }
+    }
+}
+
 mod length_constraint_tests {
     use super::*;
 

@@ -5,6 +5,7 @@ use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
 
+use crate::constants::MAX_URI_LENGTH;
 use crate::error::FragmentError;
 
 /// A validated fragment from an agent URI.
@@ -27,8 +28,17 @@ impl Fragment {
     ///
     /// # Errors
     ///
-    /// Returns `FragmentError` if the fragment contains invalid characters.
+    /// Input longer than 512 bytes ([`crate::MAX_URI_LENGTH`]) is rejected with
+    /// [`FragmentError::TooLong`]. A fragment within the length limit returns
+    /// [`FragmentError::InvalidChar`] if it contains invalid characters.
     pub fn parse(input: &str) -> Result<Self, FragmentError> {
+        if input.len() > MAX_URI_LENGTH {
+            return Err(FragmentError::TooLong {
+                max: MAX_URI_LENGTH,
+                actual: input.len(),
+            });
+        }
+
         for (i, c) in input.chars().enumerate() {
             if !Self::is_valid_char(c) {
                 return Err(FragmentError::InvalidChar {
@@ -161,6 +171,41 @@ mod tests {
         // Empty fragments are valid (stripped by URI parser)
         let frag = Fragment::parse("").unwrap();
         assert_eq!(frag.as_str(), "");
+    }
+
+    #[test]
+    fn fragment_at_maximum_length_parses() {
+        let input = "a".repeat(MAX_URI_LENGTH);
+
+        let fragment = Fragment::parse(&input).unwrap();
+
+        assert_eq!(fragment.as_str().len(), MAX_URI_LENGTH);
+    }
+
+    #[test]
+    fn fragment_over_maximum_length_reports_limit_and_actual_length() {
+        let input = "a".repeat(MAX_URI_LENGTH + 1);
+
+        let error = Fragment::parse(&input).unwrap_err();
+        let FragmentError::TooLong { max, actual } = error else {
+            panic!("expected FragmentError::TooLong");
+        };
+
+        assert_eq!(max, MAX_URI_LENGTH);
+        assert_eq!(actual, input.len());
+    }
+
+    #[test]
+    fn fragment_length_cap_precedes_character_validation() {
+        let input = format!("@{}", "a".repeat(MAX_URI_LENGTH));
+
+        assert!(matches!(
+            Fragment::parse(&input),
+            Err(FragmentError::TooLong {
+                max: MAX_URI_LENGTH,
+                actual
+            }) if actual == input.len()
+        ));
     }
 
     #[test]
