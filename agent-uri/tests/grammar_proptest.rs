@@ -479,7 +479,10 @@ mod query_properties {
 
             let reparsed_result = AgentUri::parse(parsed.as_str());
             prop_assert!(reparsed_result.is_ok());
-            prop_assert_eq!(reparsed_result.unwrap(), parsed);
+            let reparsed = reparsed_result.unwrap();
+            // `AgentUri: PartialEq` ignores query parameters, so compare them explicitly.
+            prop_assert_eq!(reparsed.query(), parsed.query());
+            prop_assert_eq!(reparsed, parsed);
         }
     }
 }
