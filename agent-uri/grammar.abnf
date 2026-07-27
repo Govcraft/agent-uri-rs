@@ -292,6 +292,9 @@ param-name      = 1*( ALPHA / DIGIT / "-" / "_" )
 param-value     = *( ALPHA / DIGIT / "-" / "_" / "." / pct-encoded )
 
 pct-encoded     = "%" HEXDIG HEXDIG
+; Percent-encoded octets in param-value are decoded as a byte sequence which
+; MUST be valid UTF-8; invalid sequences are rejected rather than replaced.
+; Serializing a param-value uses uppercase hex digits.
 
 fragment        = *( ALPHA / DIGIT / "-" / "_" / "." / "/" )
 

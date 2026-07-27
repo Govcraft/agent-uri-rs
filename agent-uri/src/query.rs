@@ -10,7 +10,11 @@ use crate::error::QueryError;
 /// Query parameters from an agent URI.
 ///
 /// Stores key-value pairs from the query string, sorted lexicographically
-/// by key for consistent normalization.
+/// by key for consistent normalization. Percent escapes in values decode to
+/// octets, and the complete decoded sequence must be valid UTF-8. Invalid UTF-8
+/// is rejected rather than replaced. [`fmt::Display`] re-encodes every value
+/// octet outside the ASCII alphanumeric, `-`, `_`, and `.` set using uppercase
+/// `%XX`, so its output parses to the same values.
 ///
 /// # Reserved Parameters
 ///
@@ -31,6 +35,12 @@ impl QueryParams {
     }
 
     /// Parses query parameters from a query string (without leading '?').
+    ///
+    /// Percent escapes decode to octets, and the complete decoded sequence must
+    /// be valid UTF-8. Invalid sequences are rejected rather than replaced.
+    /// Rendering with [`fmt::Display`] re-encodes every value octet outside the
+    /// ASCII alphanumeric, `-`, `_`, and `.` set as uppercase `%XX`, preserving
+    /// values across parse-display-parse round trips.
     ///
     /// # Errors
     ///
@@ -220,35 +230,72 @@ impl QueryParams {
     }
 
     fn decode_value(name: &str, value: &str) -> Result<String, QueryError> {
-        let mut decoded = String::with_capacity(value.len());
-        let mut chars = value.chars().peekable();
+        let encoded = value.as_bytes();
+        let mut decoded = Vec::with_capacity(value.len());
+        let mut index = 0;
 
-        while let Some(c) = chars.next() {
-            if c == '%' {
-                let hex: String = chars.by_ref().take(2).collect();
-                if hex.len() != 2 {
-                    return Err(QueryError::InvalidPercentEncoding {
+        while let Some(&byte) = encoded.get(index) {
+            match byte {
+                b'%' => {
+                    let digits = encoded
+                        .get(index + 1)
+                        .copied()
+                        .and_then(Self::hex_digit)
+                        .zip(encoded.get(index + 2).copied().and_then(Self::hex_digit));
+                    let Some((high, low)) = digits else {
+                        return Err(QueryError::InvalidPercentEncoding {
+                            value: value.to_string(),
+                        });
+                    };
+                    decoded.push((high << 4) | low);
+                    index += 3;
+                }
+                byte if Self::is_unreserved(byte) => {
+                    decoded.push(byte);
+                    index += 1;
+                }
+                _ => {
+                    return Err(QueryError::InvalidParamValue {
+                        name: name.to_string(),
                         value: value.to_string(),
+                        reason: "contains invalid unencoded character",
                     });
                 }
-                let byte = u8::from_str_radix(&hex, 16).map_err(|_| {
-                    QueryError::InvalidPercentEncoding {
-                        value: value.to_string(),
-                    }
-                })?;
-                decoded.push(byte as char);
-            } else if c.is_ascii_alphanumeric() || "-_.".contains(c) {
-                decoded.push(c);
-            } else {
-                return Err(QueryError::InvalidParamValue {
-                    name: name.to_string(),
-                    value: value.to_string(),
-                    reason: "contains invalid unencoded character",
-                });
             }
         }
 
-        Ok(decoded)
+        String::from_utf8(decoded).map_err(|_| QueryError::InvalidUtf8 {
+            value: value.to_string(),
+        })
+    }
+
+    fn encode_value(value: &str) -> String {
+        const HEX_DIGITS: &[u8; 16] = b"0123456789ABCDEF";
+
+        let mut encoded = String::with_capacity(value.len());
+        for &byte in value.as_bytes() {
+            if Self::is_unreserved(byte) {
+                encoded.push(char::from(byte));
+            } else {
+                encoded.push('%');
+                encoded.push(char::from(HEX_DIGITS[usize::from(byte >> 4)]));
+                encoded.push(char::from(HEX_DIGITS[usize::from(byte & 0x0f)]));
+            }
+        }
+        encoded
+    }
+
+    const fn hex_digit(byte: u8) -> Option<u8> {
+        match byte {
+            b'0'..=b'9' => Some(byte - b'0'),
+            b'A'..=b'F' => Some(byte - b'A' + 10),
+            b'a'..=b'f' => Some(byte - b'a' + 10),
+            _ => None,
+        }
+    }
+
+    const fn is_unreserved(byte: u8) -> bool {
+        byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.')
     }
 }
 
@@ -261,7 +308,8 @@ impl fmt::Display for QueryParams {
                 if v.is_empty() {
                     k.clone()
                 } else {
-                    format!("{k}={v}")
+                    let encoded_value = Self::encode_value(v);
+                    format!("{k}={encoded_value}")
                 }
             })
             .collect();
@@ -350,9 +398,33 @@ mod tests {
     }
 
     #[test]
-    fn parse_percent_encoded() {
+    fn ascii_percent_escapes_still_decode() {
         let params = QueryParams::parse("name=%41%42%43").unwrap();
         assert_eq!(params.get("name"), Some("ABC"));
+    }
+
+    #[test]
+    fn percent_decoded_multibyte_sequences_are_utf8() {
+        // The old code pushed each decoded byte as a char (Latin-1), producing "Ã©".
+        let acute = QueryParams::parse("name=%C3%A9").unwrap();
+        let euro = QueryParams::parse("name=%E2%82%AC").unwrap();
+        let crab = QueryParams::parse("name=%F0%9F%A6%80").unwrap();
+
+        assert_eq!(acute.get("name"), Some("é"));
+        assert_eq!(euro.get("name"), Some("€"));
+        assert_eq!(crab.get("name"), Some("🦀"));
+    }
+
+    #[test]
+    fn invalid_utf8_percent_escapes_are_rejected() {
+        for input in ["name=%FF", "name=%80", "name=%C3", "name=%ED%A0%80"] {
+            let result = QueryParams::parse(input);
+
+            assert!(
+                matches!(result, Err(QueryError::InvalidUtf8 { .. })),
+                "expected invalid UTF-8 error for {input}"
+            );
+        }
     }
 
     #[test]
@@ -386,12 +458,15 @@ mod tests {
     }
 
     #[test]
-    fn parse_invalid_encoding_fails() {
-        let result = QueryParams::parse("name=%GG");
-        assert!(matches!(
-            result,
-            Err(QueryError::InvalidPercentEncoding { .. })
-        ));
+    fn malformed_percent_escapes_still_report_encoding_error() {
+        for input in ["name=%GG", "name=%4"] {
+            let result = QueryParams::parse(input);
+
+            assert!(
+                matches!(result, Err(QueryError::InvalidPercentEncoding { .. })),
+                "expected invalid percent encoding error for {input}"
+            );
+        }
     }
 
     #[test]
@@ -405,6 +480,29 @@ mod tests {
         let params = QueryParams::parse("z=1&a=2").unwrap();
         // BTreeMap sorts by key
         assert_eq!(params.to_string(), "a=2&z=1");
+    }
+
+    #[test]
+    fn display_reencodes_non_unreserved_octets() {
+        let unicode = QueryParams::parse("name=%C3%A9").unwrap();
+        let space = QueryParams::parse("name=%20").unwrap();
+
+        assert_eq!(unicode.to_string(), "name=%C3%A9");
+        assert_eq!(space.to_string(), "name=%20");
+    }
+
+    #[test]
+    fn uri_with_encoded_query_round_trips() {
+        let uri = crate::AgentUri::parse(
+            "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q?name=%C3%A9",
+        )
+        .unwrap();
+
+        assert_eq!(uri.query().get("name"), Some("é"));
+
+        let reparsed = crate::AgentUri::parse(uri.as_str()).unwrap();
+        assert_eq!(reparsed.query().get("name"), Some("é"));
+        assert_eq!(reparsed.query().to_string(), uri.query().to_string());
     }
 
     #[test]

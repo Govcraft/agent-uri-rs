@@ -403,6 +403,11 @@ pub enum QueryError {
         /// The invalid value
         value: String,
     },
+    /// Percent-decoded octets did not form valid UTF-8
+    InvalidUtf8 {
+        /// The offending value, as written in the URI
+        value: String,
+    },
 }
 
 impl fmt::Display for QueryError {
@@ -426,6 +431,9 @@ impl fmt::Display for QueryError {
             }
             Self::InvalidPercentEncoding { value } => {
                 write!(f, "invalid percent encoding in '{value}'")
+            }
+            Self::InvalidUtf8 { value } => {
+                write!(f, "percent-encoded value '{value}' is not valid UTF-8")
             }
         }
     }

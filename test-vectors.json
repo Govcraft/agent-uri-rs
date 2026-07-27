@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "name": "Agent URI Test Vectors",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Canonical test vectors for agent:// URI scheme implementations. All conforming implementations MUST pass these tests.",
-  "generated": "2026-07-13",
+  "generated": "2026-07-27",
   "sections": {
     "parsing": "Valid URIs with expected component extraction",
     "invalid": "Invalid URIs that MUST be rejected",
@@ -358,6 +358,25 @@
         "query": null,
         "fragment": null
       }
+    },
+    {
+      "id": "parse-019",
+      "description": "Query value with multi-byte UTF-8 percent-encoding",
+      "input": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?name=%C3%A9",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "anthropic.com",
+        "host": "anthropic.com",
+        "port": null,
+        "capability_path": "assistant/chat",
+        "capability_segments": ["assistant", "chat"],
+        "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": "name=%C3%A9",
+        "fragment": null
+      }
     }
   ],
 
@@ -586,6 +605,13 @@
       "error_type": "case_sensitivity",
       "error_message": "Agent ID suffix must be lowercase",
       "note": "Only the scheme and trust-root authority are case-insensitive"
+    },
+    {
+      "id": "invalid-033",
+      "description": "Query value whose percent-decoded octets are not valid UTF-8",
+      "input": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?name=%FF",
+      "error_type": "invalid_query",
+      "error_message": "Percent-encoded query value must decode to valid UTF-8"
     }
   ],
 
