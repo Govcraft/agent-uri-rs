@@ -281,7 +281,7 @@ query = *( pchar / "/" / "?" )
 3. Query parameters MUST be stripped for normalization and DHT key derivation.
 4. Percent-encoded octets in a query parameter value MUST be decoded as a byte sequence, and the decoded byte sequence MUST be valid UTF-8.
 5. A value whose decoded octets are not valid UTF-8 MUST be rejected. Implementations MUST NOT substitute U+FFFD, decode lossily, or interpret the octets as Latin-1.
-6. In canonical form, any octet in a query parameter value outside the unreserved set (`ALPHA` / `DIGIT` / `-` / `_` / `.`) MUST be rendered as `%` followed by two uppercase hexadecimal digits.
+6. When serializing a query parameter value, any octet outside the unreserved set (`ALPHA` / `DIGIT` / `-` / `_` / `.`) MUST be rendered as `%` followed by two uppercase hexadecimal digits.
 
 ### 4.5 Fragment
 
@@ -1047,7 +1047,7 @@ Covered: YES (second capability covers)
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 0.5.1 | 2026-07-27 | Query parameter percent-decoding defined as UTF-8 octet decoding; values whose decoded octets are not valid UTF-8 are rejected; canonical query values re-encode non-unreserved octets as uppercase %XX |
+| 0.5.1 | 2026-07-27 | Query parameter percent-decoding defined as UTF-8 octet decoding; values whose decoded octets are not valid UTF-8 are rejected; serializing a query parameter value re-encodes non-unreserved octets as uppercase %XX |
 | 0.5.0 | 2026-07-13 | Capability path made constitutive identity material; lowercase path and Agent ID inputs are rejected rather than normalized; URI-scoped capability claims and ancestor-key registration defined |
 | 0.4.0 | 2026-01-20 | Initial draft specification |
 
