@@ -466,6 +466,19 @@ mod query_properties {
         }
 
         #[test]
+        fn programmatically_built_values_round_trip_through_display(original in query_value()) {
+            let params_result = QueryParams::new().with_param("v", &original);
+            prop_assert!(params_result.is_ok());
+            let params = params_result.unwrap();
+            let rendered = params.to_string();
+            let reparsed_result = QueryParams::parse(&rendered);
+            prop_assert!(reparsed_result.is_ok());
+            let reparsed = reparsed_result.unwrap();
+
+            prop_assert_eq!(reparsed.get("v"), Some(original.as_str()));
+        }
+
+        #[test]
         fn uri_with_encoded_query_round_trips(original in query_value()) {
             let encoded = percent_encode_str(&original);
             let uri = format!(
