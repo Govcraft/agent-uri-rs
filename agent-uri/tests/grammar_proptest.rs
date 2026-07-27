@@ -6,8 +6,8 @@
 use proptest::prelude::*;
 
 use agent_uri::{
-    AGENT_SUFFIX_LENGTH, AgentId, AgentPrefix, AgentUri, AgentUriBuilder, CapabilityPath, Host,
-    MAX_AGENT_PREFIX_LENGTH, MAX_CAPABILITY_PATH_LENGTH, MAX_PATH_SEGMENT_LENGTH,
+    AGENT_SUFFIX_LENGTH, AgentId, AgentPrefix, AgentUri, AgentUriBuilder, CapabilityPath, Fragment,
+    Host, MAX_AGENT_PREFIX_LENGTH, MAX_CAPABILITY_PATH_LENGTH, MAX_PATH_SEGMENT_LENGTH,
     MAX_PATH_SEGMENTS, MAX_TRUST_ROOT_LENGTH, MAX_URI_LENGTH, PathSegment, TrustRoot,
     TrustRootError,
 };
@@ -30,6 +30,10 @@ mod strategies {
 
     /// Valid characters for path segments (lowercase + digits + hyphen)
     const PATH_SEGMENT_CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789-";
+
+    /// Valid characters for fragments
+    const FRAGMENT_CHARS: &[u8] =
+        b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./:";
 
     /// Generate a valid DNS label (1-20 chars for reasonable generation, alphanumeric + hyphen)
     /// Note: DNS spec allows up to 63 chars, but we use shorter labels to reduce rejection rate.
@@ -226,6 +230,14 @@ mod strategies {
                     }
                 },
             )
+        })
+    }
+
+    /// Generate a valid non-empty fragment (1-32 chars).
+    pub fn fragment() -> impl Strategy<Value = String> {
+        (1..=32usize).prop_flat_map(|len| {
+            prop::collection::vec(prop::sample::select(FRAGMENT_CHARS.to_vec()), len..=len)
+                .prop_map(|chars| chars.into_iter().map(|c| c as char).collect())
         })
     }
 
@@ -736,7 +748,13 @@ mod length_cap_properties {
                 matches!(query_result, Err(QueryError::TooLong { .. }));
 
             prop_assert!(!query_is_too_long);
-            prop_assert!(Fragment::parse(&input).is_ok());
+
+            // The empty string is rejected as `FragmentError::Empty`, never as
+            // `TooLong`, so assert the length property rather than success.
+            let fragment_is_too_long =
+                matches!(Fragment::parse(&input), Err(FragmentError::TooLong { .. }));
+
+            prop_assert!(!fragment_is_too_long);
         }
     }
 }
@@ -923,6 +941,83 @@ mod roundtrip_tests {
                 prop_assert_eq!(uri.capability_path().as_str(), reparsed.capability_path().as_str());
             }
             // If build fails due to length, that's expected behavior
+        }
+    }
+}
+
+mod fragment_properties {
+    use super::strategies::*;
+    use super::*;
+    use agent_uri::{FragmentError, ParseError, ParseErrorKind};
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(500))]
+
+        #[test]
+        fn fragment_survives_uri_roundtrip(
+            tr in trust_root(),
+            path in capability_path(),
+            prefix in agent_prefix(),
+            frag in fragment()
+        ) {
+            let trust_root = TrustRoot::parse(&tr).unwrap();
+            let capability_path = CapabilityPath::parse(&path).unwrap();
+            let agent_id = AgentId::try_new(&prefix).unwrap();
+
+            let uri = AgentUriBuilder::new()
+                .trust_root(trust_root)
+                .capability_path(capability_path)
+                .agent_id(agent_id)
+                .try_fragment(&frag)
+                .unwrap()
+                .build();
+
+            if let Ok(uri) = uri {
+                let expected_suffix = format!("#{frag}");
+                prop_assert!(uri.as_str().ends_with(&expected_suffix));
+
+                let reparsed = AgentUri::parse(uri.as_str()).unwrap();
+                prop_assert_eq!(
+                    reparsed.fragment().map(Fragment::as_str),
+                    Some(frag.as_str())
+                );
+                prop_assert_eq!(reparsed.as_str(), uri.as_str());
+            }
+        }
+
+        #[test]
+        fn empty_fragment_is_always_rejected_but_bare_hash_uri_parses(
+            tr in trust_root(),
+            path in capability_path(),
+            prefix in agent_prefix()
+        ) {
+            let trust_root = TrustRoot::parse(&tr).unwrap();
+            let capability_path = CapabilityPath::parse(&path).unwrap();
+            let agent_id = AgentId::try_new(&prefix).unwrap();
+
+            let uri = AgentUriBuilder::new()
+                .trust_root(trust_root)
+                .capability_path(capability_path)
+                .agent_id(agent_id)
+                .build();
+
+            if let Ok(uri) = uri {
+                prop_assert!(matches!(
+                    Fragment::parse(""),
+                    Err(FragmentError::Empty)
+                ));
+                prop_assert!(matches!(
+                    uri.with_fragment_str(""),
+                    Err(ParseError {
+                        kind: ParseErrorKind::InvalidFragment(FragmentError::Empty),
+                        ..
+                    })
+                ), "empty URI fragments must report FragmentError::Empty");
+
+                let reparsed = AgentUri::parse(&format!("{}#", uri.as_str())).unwrap();
+                prop_assert!(reparsed.fragment().is_none());
+                prop_assert!(!reparsed.as_str().ends_with('#'));
+            }
         }
     }
 }

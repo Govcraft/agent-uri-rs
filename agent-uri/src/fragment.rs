@@ -11,6 +11,8 @@ use crate::error::FragmentError;
 /// A validated fragment from an agent URI.
 ///
 /// The fragment addresses sub-agent functionality or capability subsets.
+/// A `Fragment` is always non-empty because a URI ending in a bare `#` has no
+/// fragment.
 ///
 /// # Examples
 ///
@@ -28,10 +30,15 @@ impl Fragment {
     ///
     /// # Errors
     ///
-    /// Input longer than 512 bytes ([`crate::MAX_URI_LENGTH`]) is rejected with
+    /// Returns [`FragmentError::Empty`] if the input is empty. Input longer than
+    /// 512 bytes ([`crate::MAX_URI_LENGTH`]) is rejected with
     /// [`FragmentError::TooLong`]. A fragment within the length limit returns
     /// [`FragmentError::InvalidChar`] if it contains invalid characters.
     pub fn parse(input: &str) -> Result<Self, FragmentError> {
+        if input.is_empty() {
+            return Err(FragmentError::Empty);
+        }
+
         if input.len() > MAX_URI_LENGTH {
             return Err(FragmentError::TooLong {
                 max: MAX_URI_LENGTH,
@@ -167,10 +174,18 @@ mod tests {
     }
 
     #[test]
-    fn parse_empty_fragment() {
-        // Empty fragments are valid (stripped by URI parser)
-        let frag = Fragment::parse("").unwrap();
-        assert_eq!(frag.as_str(), "");
+    fn parse_empty_fragment_is_rejected() {
+        assert!(matches!(Fragment::parse(""), Err(FragmentError::Empty)));
+    }
+
+    #[test]
+    fn from_str_empty_fragment_is_rejected() {
+        assert!(matches!("".parse::<Fragment>(), Err(FragmentError::Empty)));
+    }
+
+    #[test]
+    fn try_from_empty_fragment_is_rejected() {
+        assert!(matches!(Fragment::try_from(""), Err(FragmentError::Empty)));
     }
 
     #[test]

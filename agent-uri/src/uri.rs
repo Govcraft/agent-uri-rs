@@ -393,7 +393,8 @@ impl AgentUri {
             let rest = &input[..hash_idx];
             let frag_str = &input[hash_idx + 1..];
             if frag_str.is_empty() {
-                Ok((rest, None)) // Empty fragment is stripped
+                // Handle this case here because `Fragment::parse` rejects an empty fragment.
+                Ok((rest, None))
             } else {
                 let fragment =
                     Fragment::parse(frag_str).map_err(ParseErrorKind::InvalidFragment)?;
@@ -554,7 +555,7 @@ impl<'de> serde::Deserialize<'de> for AgentUri {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::TrustRootError;
+    use crate::error::{FragmentError, TrustRootError};
 
     #[test]
     fn parse_valid_uri() {
@@ -636,6 +637,51 @@ mod tests {
         let input = "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q#";
         let uri = AgentUri::parse(input).unwrap();
         assert!(uri.fragment().is_none());
+    }
+
+    #[test]
+    fn with_fragment_str_rejects_empty_fragment() {
+        let uri =
+            AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
+
+        let result = uri.with_fragment_str("");
+
+        assert!(matches!(
+            result,
+            Err(ParseError {
+                kind: ParseErrorKind::InvalidFragment(FragmentError::Empty),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn uri_with_fragment_round_trips_through_as_str() {
+        let uri = AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q")
+            .unwrap()
+            .with_fragment_str("sub/task:v2")
+            .unwrap();
+
+        assert!(uri.as_str().ends_with("#sub/task:v2"));
+
+        let reparsed = AgentUri::parse(uri.as_str()).unwrap();
+        assert_eq!(
+            reparsed.fragment().map(Fragment::as_str),
+            Some("sub/task:v2")
+        );
+        assert_eq!(reparsed.as_str(), uri.as_str());
+    }
+
+    #[test]
+    fn parsed_uri_never_renders_a_bare_hash() {
+        let uri =
+            AgentUri::parse("agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q#").unwrap();
+
+        assert!(uri.fragment().is_none());
+        assert!(!uri.as_str().ends_with('#'));
+
+        let reparsed = AgentUri::parse(uri.as_str()).unwrap();
+        assert_eq!(reparsed.as_str(), uri.as_str());
     }
 
     #[test]
