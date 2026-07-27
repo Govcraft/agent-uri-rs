@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Weekly re-check so newly published advisories surface without a push.
+    - cron: '17 6 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -101,3 +104,24 @@ jobs:
         run: cargo doc --workspace --no-deps --all-features
         env:
           RUSTDOCFLAGS: -D warnings
+
+  supply-chain:
+    name: supply chain
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+      # Advisories, licenses, duplicate versions, and crate sources.
+      # Policy and its documented exceptions live in deny.toml.
+      - name: cargo-deny
+        run: cargo deny check
+      # Second opinion from the RustSec advisory database; its exception list
+      # lives in .cargo/audit.toml and mirrors deny.toml.
+      - name: cargo-audit
+        run: cargo audit
