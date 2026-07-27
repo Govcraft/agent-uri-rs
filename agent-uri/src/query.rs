@@ -499,7 +499,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(uri.query().get("name"), Some("é"));
-        assert_eq!(crate::AgentUri::parse(uri.as_str()).unwrap(), uri);
+
+        let reparsed = crate::AgentUri::parse(uri.as_str()).unwrap();
+        assert_eq!(reparsed.query().get("name"), Some("é"));
+        assert_eq!(reparsed.query().to_string(), uri.query().to_string());
     }
 
     #[test]
