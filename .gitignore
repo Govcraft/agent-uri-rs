@@ -2,6 +2,7 @@
 .*
 !.gitignore
 !.github/
+!.cargo/
 
 # Text and markdown files (except README.md and SPECIFICATION.md)
 *.txt

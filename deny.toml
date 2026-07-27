@@ -1,0 +1,57 @@
+# cargo-deny supply-chain policy for agent-uri-rs.
+#
+# Run locally with `task deny` (or `cargo deny check`); CI enforces it in the
+# `supply chain` job of .github/workflows/ci.yml.
+#
+# Every exception below must name a reason and, where the fix is tracked, the
+# issue that will remove it. Do not add an undocumented entry.
+
+[graph]
+# Check the full feature graph so optional `serde`/`kani` dependencies are
+# covered by the same policy as the default build.
+all-features = true
+
+[advisories]
+ignore = [
+    # `time` 0.3.45 (DoS via stack exhaustion, medium 6.8) enters through
+    # rusty_paseto 0.9, a runtime dependency of agent-uri-attestation and the
+    # CLI. Fixed by upgrading rusty_paseto to 0.10 — tracked in issue #17.
+    # Remove this entry when #17 lands. Mirrored in .cargo/audit.toml.
+    { id = "RUSTSEC-2026-0009", reason = "time 0.3.45 via rusty_paseto 0.9; fix tracked in issue #17" },
+]
+
+[licenses]
+# The workspace itself is `MIT OR Apache-2.0`. Everything below is the minimal
+# set needed by the dependency graph; each non-obvious entry names its cause.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    # ed25519-dalek, curve25519-dalek, subtle, sha1_smol — no alternative offered.
+    "BSD-3-Clause",
+    # ring (`Apache-2.0 AND ISC`) and untrusted (`ISC`), via rusty_paseto.
+    "ISC",
+    # unicode-ident (`(MIT OR Apache-2.0) AND Unicode-3.0`).
+    "Unicode-3.0",
+]
+confidence-threshold = 0.8
+
+[bans]
+# Duplicate versions are a deliberate error: each one must be justified below,
+# so that a new duplicate shows up as a CI failure instead of silent drift.
+multiple-versions = "deny"
+wildcards = "deny"
+skip = [
+    # ring 0.17 (via rusty_paseto) pins windows-sys 0.52 while clap pulls 0.61.
+    # Windows-only; expected to collapse when issue #17 upgrades rusty_paseto.
+    { crate = "windows-sys@0.52.0", reason = "ring 0.17 via rusty_paseto 0.9; revisit with issue #17" },
+    # ed25519-dalek 2.x requires rand_core 0.6, which requires getrandom 0.2,
+    # while newer crates in the graph use rand_core 0.9 / getrandom 0.3.
+    { crate = "getrandom@0.2.17", reason = "rand_core 0.6 chain required by ed25519-dalek 2.x" },
+    { crate = "rand_core@0.6.4", reason = "ed25519-dalek 2.x pins rand_core 0.6" },
+]
+
+[sources]
+# Only crates.io; no git or vendored registries are permitted.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

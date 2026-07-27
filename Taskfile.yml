@@ -82,6 +82,22 @@ tasks:
     cmds:
       - cargo fmt --all -- --check
 
+  deny:
+    desc: Run cargo-deny checks (advisories, licenses, bans, sources)
+    cmds:
+      - cargo deny check
+
+  audit:
+    desc: Run cargo-audit against the RustSec advisory database
+    cmds:
+      - cargo audit
+
+  security:
+    desc: Run all supply-chain checks (cargo-deny + cargo-audit)
+    cmds:
+      - task: deny
+      - task: audit
+
   # CI tasks
   ci:
     desc: Run all CI checks (fmt, clippy, test)
