@@ -12,9 +12,10 @@ use crate::error::QueryError;
 /// Stores key-value pairs from the query string, sorted lexicographically
 /// by key for consistent normalization. Percent escapes in values decode to
 /// octets, and the complete decoded sequence must be valid UTF-8. Invalid UTF-8
-/// is rejected rather than replaced. [`fmt::Display`] re-encodes every value
-/// octet outside the ASCII alphanumeric, `-`, `_`, and `.` set using uppercase
-/// `%XX`, so its output parses to the same values.
+/// is rejected rather than replaced. Programmatically constructed values may
+/// contain any characters. [`fmt::Display`] re-encodes every value octet outside
+/// the ASCII alphanumeric, `-`, `_`, and `.` set using uppercase `%XX`, so its
+/// output parses to the same values.
 ///
 /// # Reserved Parameters
 ///
@@ -121,9 +122,12 @@ impl QueryParams {
 
     /// Returns a new query with the given parameter added or updated.
     ///
+    /// The value may contain any characters. [`fmt::Display`] percent-encodes
+    /// every UTF-8 octet outside the ASCII alphanumeric, `-`, `_`, and `.` set.
+    ///
     /// # Errors
     ///
-    /// Returns `QueryError` if the key or value is invalid.
+    /// Returns `QueryError` if the parameter name is invalid.
     ///
     /// # Examples
     ///
@@ -133,19 +137,18 @@ impl QueryParams {
     /// let query = QueryParams::new();
     /// let updated = query.with_param("version", "2.0").unwrap();
     /// assert_eq!(updated.get("version"), Some("2.0"));
+    ///
+    /// let with_filter = updated.with_param("filter", "&b=c").unwrap();
+    /// assert_eq!(with_filter.get("filter"), Some("&b=c"));
+    /// let rendered = with_filter.to_string();
+    /// assert!(rendered.contains("filter=%26b%3Dc"));
+    /// assert_eq!(
+    ///     QueryParams::parse(&rendered).unwrap().get("filter"),
+    ///     Some("&b=c")
+    /// );
     /// ```
     pub fn with_param(&self, key: &str, value: &str) -> Result<Self, QueryError> {
         Self::validate_param_name(key)?;
-        // Validate value doesn't contain invalid characters
-        for c in value.chars() {
-            if !c.is_ascii_alphanumeric() && !"-_.".contains(c) {
-                return Err(QueryError::InvalidParamValue {
-                    name: key.to_string(),
-                    value: value.to_string(),
-                    reason: "value contains invalid character",
-                });
-            }
-        }
 
         let mut params = self.params.clone();
         params.insert(key.to_string(), value.to_string());
@@ -175,7 +178,9 @@ impl QueryParams {
     ///
     /// # Errors
     ///
-    /// Returns `QueryError` if the version string is invalid.
+    /// The return type is retained for API stability. This helper currently
+    /// cannot fail because its fixed parameter name is valid and values may
+    /// contain any characters.
     ///
     /// # Examples
     ///
@@ -194,7 +199,9 @@ impl QueryParams {
     ///
     /// # Errors
     ///
-    /// Returns `QueryError` if the resulting query would be invalid.
+    /// The return type is retained for API stability. This helper currently
+    /// cannot fail because its fixed parameter name and generated value are
+    /// valid.
     ///
     /// # Examples
     ///
@@ -489,6 +496,70 @@ mod tests {
 
         assert_eq!(unicode.to_string(), "name=%C3%A9");
         assert_eq!(space.to_string(), "name=%20");
+    }
+
+    #[test]
+    fn reserved_delimiters_survive_the_display_round_trip() {
+        let params = QueryParams::parse("a=%26b%3Dc").unwrap();
+        assert_eq!(params.get("a"), Some("&b=c"));
+        assert_eq!(params.len(), 1);
+
+        let rendered = params.to_string();
+        assert_eq!(rendered, "a=%26b%3Dc");
+
+        // A consumer that stores the canonical string and re-parses it must not
+        // see attacker-controlled parameter splitting.
+        let reparsed = QueryParams::parse(&rendered).unwrap();
+        assert_eq!(reparsed.get("a"), Some("&b=c"));
+        assert_eq!(reparsed.len(), 1);
+    }
+
+    #[test]
+    fn with_param_accepts_values_that_parse_accepts() {
+        for value in ["&b=c", "é", "a b", "?x=1", "100%"] {
+            let params = QueryParams::new().with_param("v", value).unwrap();
+            assert_eq!(params.get("v"), Some(value));
+        }
+    }
+
+    #[test]
+    fn with_param_values_round_trip_through_display() {
+        for value in ["&b=c", "é", "a b", "?x=1", "100%"] {
+            let params = QueryParams::new().with_param("v", value).unwrap();
+            let rendered = params.to_string();
+            let reparsed = QueryParams::parse(&rendered).unwrap();
+
+            assert_eq!(reparsed.get("v"), Some(value));
+            assert_eq!(reparsed.len(), 1);
+        }
+    }
+
+    #[test]
+    fn with_param_still_rejects_invalid_names() {
+        let invalid_space = QueryParams::new().with_param("bad name", "1");
+        let empty = QueryParams::new().with_param("", "1");
+
+        assert!(matches!(
+            invalid_space,
+            Err(QueryError::InvalidParamName { .. })
+        ));
+        assert!(matches!(empty, Err(QueryError::InvalidParamName { .. })));
+    }
+
+    #[test]
+    fn oversized_query_values_are_still_rejected_at_the_uri_boundary() {
+        let params = QueryParams::new()
+            .with_param("v", &"&".repeat(300))
+            .unwrap();
+        let uri = crate::AgentUri::parse("agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q")
+            .unwrap();
+
+        let error = uri.with_query(params).unwrap_err();
+        assert!(matches!(
+            error.kind,
+            crate::ParseErrorKind::TooLong { max, actual }
+                if max == crate::MAX_URI_LENGTH && actual > max
+        ));
     }
 
     #[test]
