@@ -92,6 +92,10 @@ trust-root      = host [ ":" port ]
 
 host            = domain / ip-literal / ipv4-address
 
+; ipv4-address takes precedence over domain: exactly four dot-separated
+; all-numeric labels are an ipv4-address and MUST be rejected if any octet is
+; outside 0-255 or has a leading zero; they MUST NOT be reinterpreted as domain.
+
 domain          = label *( "." label )
                   ; Total domain length MUST NOT exceed 253 characters (DNS limit)
                   
