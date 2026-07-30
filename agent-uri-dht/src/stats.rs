@@ -16,6 +16,14 @@ pub struct DhtStats {
     /// Number of unique trust roots.
     pub unique_trust_roots: usize,
     /// Maximum registrations at any single key.
+    ///
+    /// This counts materialized copies, so the largest bucket is ordinarily an
+    /// ancestor key holding a whole subtree. It is an observation and not a
+    /// limit: nothing bounds it, and it routinely exceeds
+    /// [`SimulationConfig::max_registrations_per_capability`], which bounds
+    /// only the key an agent registers at.
+    ///
+    /// [`SimulationConfig::max_registrations_per_capability`]: crate::SimulationConfig::max_registrations_per_capability
     pub max_registrations_per_key: usize,
     /// Average registrations per key.
     pub avg_registrations_per_key: f64,
@@ -51,6 +59,9 @@ impl DhtStats {
     }
 
     /// Returns the maximum registrations at any key.
+    ///
+    /// See [`DhtStats::max_registrations_per_key`] for why this is not bounded
+    /// by the configured capacity.
     #[must_use]
     pub const fn max_registrations_per_key(&self) -> usize {
         self.max_registrations_per_key

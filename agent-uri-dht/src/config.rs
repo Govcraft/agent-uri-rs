@@ -8,11 +8,23 @@ use std::time::Duration;
 /// Controls behavior such as replication factor, TTL, paging, and verification.
 #[derive(Debug, Clone)]
 pub struct SimulationConfig {
-    /// Maximum registrations per DHT key.
+    /// Maximum registrations at one capability path.
     ///
-    /// In Kademlia, this corresponds to the replication factor k.
+    /// This bounds the key an agent registers at, and only that key. A record
+    /// is materialized at every ancestor key as well, but it appears there
+    /// because of the path it chose rather than by choosing that key, so an
+    /// ancestor's occupancy is not charged to it. Bounding ancestors instead
+    /// would let whoever fills a popular top-level prefix decide whether an
+    /// unrelated agent may register anywhere beneath it (issue #54).
+    ///
+    /// An ancestor key therefore holds whatever its subtree holds, which is
+    /// the direct model's premise: it applies where one store owns the
+    /// namespace and a stored value has no practical size bound. A store that
+    /// does bound a value is required to shard instead, per SPECIFICATION.md
+    /// §6.2.
+    ///
     /// Default: 1000
-    pub max_registrations_per_key: usize,
+    pub max_registrations_per_capability: usize,
 
     /// Default TTL for registrations.
     ///
@@ -50,7 +62,7 @@ pub struct SimulationConfig {
 impl Default for SimulationConfig {
     fn default() -> Self {
         Self {
-            max_registrations_per_key: 1000,
+            max_registrations_per_capability: 1000,
             default_ttl: Duration::from_hours(1),
             verify_attestations: true,
             replication_factor: NonZeroUsize::new(1).unwrap(),
@@ -67,10 +79,10 @@ impl SimulationConfig {
         Self::default()
     }
 
-    /// Sets the maximum registrations per key.
+    /// Sets the maximum registrations at one capability path.
     #[must_use]
-    pub const fn with_max_registrations_per_key(mut self, max: usize) -> Self {
-        self.max_registrations_per_key = max;
+    pub const fn with_max_registrations_per_capability(mut self, max: usize) -> Self {
+        self.max_registrations_per_capability = max;
         self
     }
 
@@ -117,7 +129,7 @@ mod tests {
     #[test]
     fn default_config() {
         let config = SimulationConfig::default();
-        assert_eq!(config.max_registrations_per_key, 1000);
+        assert_eq!(config.max_registrations_per_capability, 1000);
         assert_eq!(config.default_ttl, Duration::from_hours(1));
         assert!(config.verify_attestations);
         assert_eq!(config.replication_factor.get(), 1);
@@ -128,13 +140,13 @@ mod tests {
     #[test]
     fn builder_pattern() {
         let config = SimulationConfig::new()
-            .with_max_registrations_per_key(10)
+            .with_max_registrations_per_capability(10)
             .with_default_ttl(Duration::from_mins(30))
             .with_verify_attestations(true)
             .with_page_size(NonZeroUsize::new(8).unwrap())
             .with_auto_expire(false);
 
-        assert_eq!(config.max_registrations_per_key, 10);
+        assert_eq!(config.max_registrations_per_capability, 10);
         assert_eq!(config.default_ttl, Duration::from_mins(30));
         assert!(config.verify_attestations);
         assert_eq!(config.page_size.get(), 8);
