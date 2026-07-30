@@ -444,50 +444,85 @@ fn try_verify_with_key(
     Ok(claims)
 }
 
+/// Names a JSON value's type, for claim-shape diagnostics.
+fn json_type_name(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "a boolean",
+        serde_json::Value::Number(_) => "a number",
+        serde_json::Value::String(_) => "a string",
+        serde_json::Value::Array(_) => "an array",
+        serde_json::Value::Object(_) => "an object",
+    }
+}
+
+/// Reads a required string claim, distinguishing absent from wrong-typed.
+///
+/// The distinction matters for diagnosis: a claim nobody set and a claim set to
+/// the wrong JSON type are different faults on the issuing side, and reporting
+/// the second as "missing" sends the reader looking for the wrong bug. Both are
+/// rejections either way — a claim this crate cannot read is never guessed at.
+///
+/// `null` counts as absent, so an explicitly-nulled claim reads the same as an
+/// omitted one.
+fn required_str_claim<'a>(
+    json: &'a serde_json::Value,
+    name: &str,
+) -> Result<&'a str, AttestationError> {
+    match json.get(name) {
+        None | Some(serde_json::Value::Null) => Err(AttestationError::InvalidClaims {
+            reason: format!("missing {name} claim"),
+        }),
+        Some(value) => value
+            .as_str()
+            .ok_or_else(|| AttestationError::InvalidClaims {
+                reason: format!(
+                    "{name} claim must be a string, but is {}",
+                    json_type_name(value)
+                ),
+            }),
+    }
+}
+
+/// Parses an RFC 3339 timestamp claim.
+fn timestamp_claim(
+    json: &serde_json::Value,
+    name: &str,
+) -> Result<chrono::DateTime<Utc>, AttestationError> {
+    let raw = required_str_claim(json, name)?;
+    Ok(chrono::DateTime::parse_from_rfc3339(raw)
+        .map_err(|e| AttestationError::InvalidClaims {
+            reason: format!("invalid {name} format: {e}"),
+        })?
+        .with_timezone(&Utc))
+}
+
 /// Extract `AttestationClaims` from parsed JSON value.
 fn extract_claims(json: &serde_json::Value) -> Result<AttestationClaims, AttestationError> {
-    let agent_uri = json["agent_uri"]
-        .as_str()
-        .ok_or_else(|| AttestationError::InvalidClaims {
-            reason: "missing agent_uri claim".to_string(),
-        })?
-        .to_string();
+    let agent_uri = required_str_claim(json, "agent_uri")?.to_string();
+    let iss = required_str_claim(json, "iss")?.to_string();
+    let iat = timestamp_claim(json, "iat")?;
+    let exp = timestamp_claim(json, "exp")?;
 
-    let capabilities: Vec<String> = json
-        .get("capabilities")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    // A malformed `capabilities` claim must not decay into an empty list: that
+    // would surface downstream as `MissingField`, which describes a token that
+    // granted nothing rather than one whose grant could not be read.
+    let capabilities: Vec<String> = match json.get("capabilities") {
+        None | Some(serde_json::Value::Null) => Vec::new(),
+        Some(value) => {
+            serde_json::from_value(value.clone()).map_err(|e| AttestationError::InvalidClaims {
+                reason: format!("capabilities claim must be an array of strings: {e}"),
+            })?
+        }
+    };
 
-    let iss = json["iss"]
-        .as_str()
-        .ok_or_else(|| AttestationError::InvalidClaims {
-            reason: "missing iss claim".to_string(),
-        })?
-        .to_string();
-
-    let iat = json["iat"]
-        .as_str()
-        .ok_or_else(|| AttestationError::InvalidClaims {
-            reason: "missing iat claim".to_string(),
-        })?;
-    let iat = chrono::DateTime::parse_from_rfc3339(iat)
-        .map_err(|e| AttestationError::InvalidClaims {
-            reason: format!("invalid iat format: {e}"),
-        })?
-        .with_timezone(&Utc);
-
-    let exp = json["exp"]
-        .as_str()
-        .ok_or_else(|| AttestationError::InvalidClaims {
-            reason: "missing exp claim".to_string(),
-        })?;
-    let exp = chrono::DateTime::parse_from_rfc3339(exp)
-        .map_err(|e| AttestationError::InvalidClaims {
-            reason: format!("invalid exp format: {e}"),
-        })?
-        .with_timezone(&Utc);
-
-    let aud = json.get("aud").and_then(|v| v.as_str()).map(String::from);
+    // An `aud` of the wrong type must not read as absent either: silently
+    // dropping it would widen an audience-restricted token into an
+    // unrestricted one.
+    let aud = match json.get("aud") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(_) => Some(required_str_claim(json, "aud")?.to_string()),
+    };
 
     Ok(AttestationClaims {
         agent_uri,
@@ -509,6 +544,60 @@ mod tests {
 
     fn test_uri() -> AgentUri {
         AgentUri::parse("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap()
+    }
+
+    /// Signs an arbitrary JSON payload, bypassing the claim-shape checks the
+    /// high-level builder applies.
+    ///
+    /// [`Issuer`] cannot mint a token whose `exp` is a number or whose `iss` is
+    /// an array, so the only way to put one in front of the verifier is to sign
+    /// the payload directly. The signature is genuine and the key is trusted:
+    /// these tests are about what happens *after* authentication succeeds,
+    /// which is precisely where a claim reader can be too trusting.
+    fn sign_raw_payload(signing_key: &SigningKey, payload: &str) -> String {
+        let key_bytes = signing_key.as_dalek().to_keypair_bytes();
+        let key_wrapper = Key::<64>::from(&key_bytes);
+        let private_key = PasetoAsymmetricPrivateKey::<V4, Public>::from(&key_wrapper);
+
+        Paseto::<V4, Public>::builder()
+            .set_payload(rusty_paseto::core::Payload::from(payload))
+            .try_sign(&private_key)
+            .expect("raw payload should sign")
+    }
+
+    /// A claim set that verifies cleanly, for tests to spoil one claim at a time.
+    fn valid_claims_value() -> serde_json::Value {
+        let now = Utc::now();
+        serde_json::json!({
+            "agent_uri": test_uri().canonical(),
+            "capabilities": ["test"],
+            "iss": "acme.com",
+            "iat": now.to_rfc3339(),
+            "exp": (now + chrono::Duration::hours(1)).to_rfc3339(),
+        })
+    }
+
+    /// Signs the valid claim set with `name` replaced by `value`.
+    fn token_with_claim(signing_key: &SigningKey, name: &str, value: serde_json::Value) -> String {
+        let mut claims = valid_claims_value();
+        claims[name] = value;
+        sign_raw_payload(signing_key, &claims.to_string())
+    }
+
+    /// Signs the valid claim set with `name` removed entirely.
+    fn token_without_claim(signing_key: &SigningKey, name: &str) -> String {
+        let mut claims = valid_claims_value();
+        claims
+            .as_object_mut()
+            .expect("claims are an object")
+            .remove(name);
+        sign_raw_payload(signing_key, &claims.to_string())
+    }
+
+    fn verifier_trusting(signing_key: &SigningKey) -> Verifier {
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+        verifier
     }
 
     #[test]
@@ -747,15 +836,13 @@ mod tests {
 
         let result = verifier.verify(&token);
 
-        // Wrong key should result in either InvalidSignature or InvalidTokenFormat
-        // (depending on how PASETO reports the error)
+        // The token is structurally sound; only the signature fails to check
+        // out. Since errors are classified by cause, that is exactly
+        // InvalidSignature, and accepting InvalidTokenFormat here would let a
+        // structural regression pass unnoticed.
         assert!(
-            matches!(
-                result,
-                Err(AttestationError::InvalidSignature
-                    | AttestationError::InvalidTokenFormat { .. })
-            ),
-            "Expected InvalidSignature or InvalidTokenFormat, got {result:?}",
+            matches!(result, Err(AttestationError::InvalidSignature)),
+            "Expected InvalidSignature, got {result:?}",
         );
     }
 
@@ -1093,5 +1180,198 @@ mod tests {
             verifier.verify(&token),
             Err(AttestationError::TokenTooLong { .. })
         ));
+    }
+
+    #[test]
+    fn raw_signed_token_with_valid_claims_verifies() {
+        // Guards every test below: if the raw-signing helper produced something
+        // the verifier rejects for its own reasons, the negative tests would
+        // pass without exercising what they claim to.
+        let signing_key = SigningKey::generate();
+        let token = sign_raw_payload(&signing_key, &valid_claims_value().to_string());
+
+        let claims = verifier_trusting(&signing_key).verify(&token).unwrap();
+
+        assert_eq!(claims.iss, "acme.com");
+        assert_eq!(claims.capabilities, vec!["test".to_string()]);
+    }
+
+    #[test]
+    fn other_paseto_versions_and_purposes_are_rejected_as_malformed() {
+        // Header confusion: a token for a different version or purpose must be
+        // refused on shape, never routed into v4.public verification.
+        let signing_key = SigningKey::generate();
+        let verifier = verifier_trusting(&signing_key);
+        let token = sign_raw_payload(&signing_key, &valid_claims_value().to_string());
+        let body = token
+            .strip_prefix("v4.public.")
+            .expect("issued token carries the v4.public header");
+
+        for header in [
+            "v4.local",
+            "v3.public",
+            "v2.public",
+            "v1.local",
+            "v4.publik",
+        ] {
+            let confused = format!("{header}.{body}");
+            let result = verifier.verify(&confused);
+            assert!(
+                matches!(result, Err(AttestationError::InvalidTokenFormat { .. })),
+                "Expected InvalidTokenFormat for header '{header}', got {result:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn a_bare_payload_with_no_header_is_rejected_as_malformed() {
+        let signing_key = SigningKey::generate();
+        let token = sign_raw_payload(&signing_key, &valid_claims_value().to_string());
+        let body = token.strip_prefix("v4.public.").unwrap().to_string();
+
+        assert!(matches!(
+            verifier_trusting(&signing_key).verify(&body),
+            Err(AttestationError::InvalidTokenFormat { .. })
+        ));
+    }
+
+    #[test]
+    fn wrong_typed_claims_are_rejected_and_named_as_wrong_typed() {
+        let signing_key = SigningKey::generate();
+        let verifier = verifier_trusting(&signing_key);
+
+        let cases = [
+            ("exp", serde_json::json!(1_924_991_999_i64), "a number"),
+            ("iss", serde_json::json!(["acme.com"]), "an array"),
+            ("iat", serde_json::json!(true), "a boolean"),
+            (
+                "agent_uri",
+                serde_json::json!({"uri": "agent://a/b/c"}),
+                "an object",
+            ),
+        ];
+
+        for (name, value, type_name) in cases {
+            let token = token_with_claim(&signing_key, name, value);
+            match verifier.verify(&token) {
+                Err(AttestationError::InvalidClaims { reason }) => {
+                    assert!(
+                        reason.contains(name) && reason.contains(type_name),
+                        "Expected '{name}' and '{type_name}' in reason, got: {reason}",
+                    );
+                    assert!(
+                        !reason.contains("missing"),
+                        "A wrong-typed '{name}' must not be reported as missing: {reason}",
+                    );
+                }
+                other => panic!("Expected InvalidClaims for '{name}', got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn absent_claims_are_reported_as_missing() {
+        let signing_key = SigningKey::generate();
+        let verifier = verifier_trusting(&signing_key);
+
+        for name in ["exp", "iss", "iat", "agent_uri"] {
+            let token = token_without_claim(&signing_key, name);
+            match verifier.verify(&token) {
+                Err(AttestationError::InvalidClaims { reason }) => assert!(
+                    reason.contains("missing") && reason.contains(name),
+                    "Expected a missing-'{name}' reason, got: {reason}",
+                ),
+                other => panic!("Expected InvalidClaims for absent '{name}', got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn null_claims_read_as_absent() {
+        let signing_key = SigningKey::generate();
+        let token = token_with_claim(&signing_key, "iss", serde_json::Value::Null);
+
+        match verifier_trusting(&signing_key).verify(&token) {
+            Err(AttestationError::InvalidClaims { reason }) => {
+                assert!(reason.contains("missing iss"), "got: {reason}");
+            }
+            other => panic!("Expected InvalidClaims, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn malformed_capabilities_is_distinct_from_absent_capabilities() {
+        let signing_key = SigningKey::generate();
+        let verifier = verifier_trusting(&signing_key);
+
+        // Present but unreadable: the grant could not be parsed, which is not
+        // the same as a token that granted nothing.
+        for value in [
+            serde_json::json!("test"),
+            serde_json::json!(["test", 5]),
+            serde_json::json!(42),
+            serde_json::json!({"cap": "test"}),
+        ] {
+            let token = token_with_claim(&signing_key, "capabilities", value.clone());
+            let result = verifier.verify(&token);
+            assert!(
+                matches!(result, Err(AttestationError::InvalidClaims { .. })),
+                "Expected InvalidClaims for capabilities {value}, got {result:?}",
+            );
+        }
+
+        // Absent: MissingField is the accurate report here, and it stays.
+        let token = token_without_claim(&signing_key, "capabilities");
+        assert!(matches!(
+            verifier.verify(&token),
+            Err(AttestationError::MissingField {
+                field: "capabilities"
+            })
+        ));
+    }
+
+    #[test]
+    fn a_wrong_typed_audience_does_not_widen_the_token() {
+        // `aud` used to be read with `as_str()`, so a non-string silently read
+        // as None — turning an audience-restricted token into one any verifier
+        // would accept. It must fail closed instead.
+        let signing_key = SigningKey::generate();
+        let verifier = verifier_trusting(&signing_key);
+
+        for value in [
+            serde_json::json!(42),
+            serde_json::json!(["api.acme.com"]),
+            serde_json::json!(true),
+        ] {
+            let token = token_with_claim(&signing_key, "aud", value.clone());
+            let result = verifier.verify(&token);
+            assert!(
+                matches!(result, Err(AttestationError::InvalidClaims { .. })),
+                "Expected InvalidClaims for aud {value}, got {result:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn a_null_audience_leaves_the_token_unrestricted() {
+        let signing_key = SigningKey::generate();
+        let token = token_with_claim(&signing_key, "aud", serde_json::Value::Null);
+
+        let claims = verifier_trusting(&signing_key).verify(&token).unwrap();
+
+        assert_eq!(claims.aud, None);
+    }
+
+    #[test]
+    fn an_unparseable_timestamp_is_named_as_a_format_fault() {
+        let signing_key = SigningKey::generate();
+        let token = token_with_claim(&signing_key, "exp", serde_json::json!("not-a-timestamp"));
+
+        match verifier_trusting(&signing_key).verify(&token) {
+            Err(AttestationError::InvalidClaims { reason }) => {
+                assert!(reason.contains("invalid exp format"), "got: {reason}");
+            }
+            other => panic!("Expected InvalidClaims, got {other:?}"),
+        }
     }
 }
