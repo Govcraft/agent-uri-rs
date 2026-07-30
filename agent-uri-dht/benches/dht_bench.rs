@@ -14,6 +14,7 @@
 //! | SimulatedDht register | Fast | Single agent registration |
 //! | SimulatedDht lookup_exact | Fast | From populated DHT |
 //! | SimulatedDht lookup_prefix | Scales | With result count |
+//! | SimulatedDht expire_stale | Flat | Costs what is due, not what is stored |
 
 use std::sync::OnceLock;
 
@@ -385,6 +386,45 @@ fn bench_simulated_dht_lookup_prefix(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmarks `SimulatedDht::expire_stale()` over stores of varying size with
+/// nothing due.
+///
+/// Expected: flat across store size. The sweep reads the soonest deadline and
+/// stops, so a store where nothing has lapsed costs one comparison however
+/// much it holds. The measurement that matters here is the shape of the curve
+/// rather than any single number: this used to walk every materialized copy,
+/// which made a periodic sweep more expensive the longer a simulation ran
+/// (issue #55).
+fn bench_simulated_dht_expire_stale(c: &mut Criterion) {
+    let mut group = c.benchmark_group("simulated_dht/expire_stale");
+
+    for size in [100, 1000, 10_000] {
+        // Populated once and swept repeatedly: with hour-long TTLs nothing is
+        // ever due, so the sweep leaves the store exactly as it found it.
+        let dht = benchmark_dht();
+        let registrations: Vec<(Registration, MutationProof)> = (0..size)
+            .map(|i| {
+                let registration = Registration::new(
+                    make_agent_uri(i),
+                    benchmark_agent_key(),
+                    vec![Endpoint::https(format!("agent{i}.anthropic.com"))],
+                );
+                let proof = signed(&registration);
+                (registration, proof)
+            })
+            .collect();
+        dht.register_batch(registrations).expect("batch succeeds");
+
+        group.bench_with_input(BenchmarkId::new("dht_size", size), &size, |b, _| {
+            b.iter(|| {
+                assert_eq!(dht.expire_stale(), 0, "nothing here has lapsed");
+            });
+        });
+    }
+
+    group.finish();
+}
+
 // ============================================================================
 // Memory Benchmarks
 // ============================================================================
@@ -468,6 +508,7 @@ criterion_group!(
     bench_simulated_dht_register,
     bench_simulated_dht_lookup_exact,
     bench_simulated_dht_lookup_prefix,
+    bench_simulated_dht_expire_stale,
     bench_memory_per_registration,
     bench_dht_memory_scaling,
 );

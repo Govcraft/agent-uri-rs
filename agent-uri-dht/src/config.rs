@@ -53,7 +53,15 @@ pub struct SimulationConfig {
     /// Default: 64
     pub page_size: NonZeroUsize,
 
-    /// Whether to automatically remove expired registrations.
+    /// Whether expiry happens without being asked.
+    ///
+    /// When set, lookups omit lapsed records and writes evict them, so a store
+    /// in use stays clean without anyone calling
+    /// [`SimulatedDht::expire_stale`]. When clear, lapsed records stay visible
+    /// and stay stored until that call, which is what an evaluation measuring
+    /// how much of a namespace has gone stale needs.
+    ///
+    /// [`SimulatedDht::expire_stale`]: crate::SimulatedDht::expire_stale
     ///
     /// Default: true
     pub auto_expire: bool,

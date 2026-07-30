@@ -182,6 +182,7 @@
 mod config;
 mod endpoint;
 mod error;
+mod expiration;
 mod key;
 mod node;
 mod options;
