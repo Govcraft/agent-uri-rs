@@ -39,7 +39,11 @@ pub enum DhtError {
         /// New conflicting capability path
         requested_path: String,
     },
-    /// Maximum registrations per key exceeded.
+    /// Too many agents already hold the capability path being registered.
+    ///
+    /// The key named is the one the registration derives from its own path.
+    /// A crowded ancestor never produces this: an agent is charged for the key
+    /// it chose, not for the subtree it happens to fall inside.
     KeyCapacityExceeded {
         /// The DHT key that is at capacity
         key: String,

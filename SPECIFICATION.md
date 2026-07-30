@@ -1,6 +1,6 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.6.0
+**Version:** 0.7.0
 **Status:** Draft
 **Last Updated:** 2026-07-30
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
@@ -541,6 +541,12 @@ ShardDescriptor {
     NOT treat either as evidence of anything about an agent. See requirement 3
     of [Section 6.3](#63-lookup-protocol) and
     [Section 8.10](#810-pointer-injection).
+15. A node that bounds how many registrations a key may hold MUST charge a
+    registration against the key derived from its own capability path, and MUST
+    NOT refuse it for the occupancy of an ancestor key. In the direct model an
+    ancestor holds its entire subtree, so charging it would make the population
+    under a prefix decide whether an unrelated agent may register beneath it.
+    See [Section 8.4](#84-capability-squatting).
 
 ### 6.3 Lookup Protocol
 
@@ -950,6 +956,15 @@ Agents interacting with multiple specific parties MAY hold multiple attestations
 **Threat:** Early registrants claim broad capability paths, blocking legitimate agents.
 
 **Mitigation:** Trust roots SHOULD implement governance for their namespace. DHT nodes MAY enforce attestation requirements before accepting registrations.
+
+**Subtree lockout:** A node that bounds a key's occupancy turns squatting into
+something cheaper and broader if it charges a registration against ancestor
+keys. In the direct model an ancestor holds its whole subtree, so filling one
+shallow prefix refuses every path beneath it, including paths nobody has
+claimed and paths the squatter never named. The attacker does not have to guess
+which capability a competitor will want; a top-level prefix covers all of them.
+Requirement 15 of [Section 6.2](#62-registration-protocol) forbids the
+accounting that allows this.
 
 ### 8.5 Query Privacy
 
@@ -1516,6 +1531,7 @@ sharding removes it, because only sharding adds keys.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.7.0 | 2026-07-30 | Mutation proofs required to cover the `expires_at` the write results in, and nodes required to store that value rather than derive one, closing the rewritable expiry described in §6.6; per-key capacity required to be charged to the registering path's own key and not to an ancestor, with the resulting subtree lockout added to §8.4 |
 | 0.6.0 | 2026-07-30 | Direct and sharded record models distinguished; sharded key derivation, pointer pages, and shard descriptors defined normatively; prefix lookup no longer claimed to be one exact-key read; §6.2 requirement 6 restated as a protocol ceiling rather than a provisioning matter; pointer injection added as §8.10; placeholder key vectors in B.4 replaced with computed digests |
 | 0.5.2 | 2026-07-27 | Four dot-separated all-numeric host labels defined as an ipv4-address rather than a domain; hosts of that shape whose octets are outside 0-255 or carry a leading zero are rejected |
 | 0.5.1 | 2026-07-27 | Query parameter percent-decoding defined as UTF-8 octet decoding; values whose decoded octets are not valid UTF-8 are rejected; serializing a query parameter value re-encodes non-unreserved octets as uppercase %XX |

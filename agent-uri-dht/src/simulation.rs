@@ -410,6 +410,10 @@ impl SimulatedDht {
 
         let uri_str = registration.agent_uri().canonical();
         let keys = Self::ancestor_keys(registration.agent_uri());
+        let exact_key = DhtKey::derive(
+            registration.agent_uri().trust_root(),
+            registration.agent_uri().capability_path(),
+        );
         let identity = Self::identity_key(registration.agent_uri());
 
         // Possession first. The attestation says the trust root vouches for a
@@ -463,15 +467,20 @@ impl SimulatedDht {
                         .to_string(),
                 });
             }
-            for key in &keys {
-                if let Some(registrations) = indices.records.get(key)
-                    && registrations.len() >= self.config.max_registrations_per_key
-                {
-                    return Err(DhtError::key_capacity_exceeded(
-                        format!("{key}"),
-                        self.config.max_registrations_per_key,
-                    ));
-                }
+            // Capacity is charged to the key this agent registers at, and to
+            // no other. The ancestor keys hold a copy too, but the agent did
+            // not choose them: it chose a path, and the ancestors follow. An
+            // ancestor bucket therefore holds its whole subtree, and charging
+            // a registration against it would let whoever first fills a
+            // popular top-level prefix lock every path beneath it, at the cost
+            // of registering under that prefix (issue #54).
+            if let Some(registrations) = indices.records.get(&exact_key)
+                && registrations.len() >= self.config.max_registrations_per_capability
+            {
+                return Err(DhtError::key_capacity_exceeded(
+                    format!("{exact_key}"),
+                    self.config.max_registrations_per_capability,
+                ));
             }
 
             // Primary index: write once at every ancestor key. A GET for any
@@ -788,6 +797,25 @@ mod tests {
         .unwrap()
     }
 
+    /// A URI at an arbitrary capability path, for tests about how capacity is
+    /// charged across a subtree rather than at one path.
+    fn uri_at(path: &str, suffix: &str) -> AgentUri {
+        AgentUri::parse(&format!(
+            "agent://anthropic.com/{path}/llm_01h455vb4pex5vsknk084sn0{suffix}"
+        ))
+        .unwrap()
+    }
+
+    /// A simulator that is full the moment anything registers, so that any
+    /// key a registration is charged against rejects the next one.
+    fn dht_with_capacity_for_one() -> SimulatedDht {
+        SimulatedDht::new(
+            SimulationConfig::new()
+                .with_max_registrations_per_capability(1)
+                .with_verify_attestations(false),
+        )
+    }
+
     fn test_endpoint() -> Endpoint {
         Endpoint::https("agent.anthropic.com:443")
     }
@@ -1053,12 +1081,11 @@ mod tests {
         assert_eq!(stats.unique_trust_roots(), 1);
     }
 
+    /// Capacity does bind somewhere: two agents at the same capability path
+    /// are charged against the same key, and the second is refused.
     #[test]
-    fn key_capacity_exceeded() {
-        let config = SimulationConfig::new()
-            .with_max_registrations_per_key(1)
-            .with_verify_attestations(false);
-        let dht = SimulatedDht::new(config);
+    fn a_second_agent_at_a_full_capability_path_is_refused() {
+        let dht = dht_with_capacity_for_one();
         let key = SigningKey::generate();
 
         register(&dht, registration(&test_uri("2q"), &key), &key).unwrap();
@@ -1066,6 +1093,72 @@ mod tests {
         let result = register(&dht, registration(&test_uri("2r"), &key), &key);
 
         assert!(matches!(result, Err(DhtError::KeyCapacityExceeded { .. })));
+    }
+
+    /// A sibling path shares an ancestor key and nothing else. Charging it for
+    /// that ancestor would mean the first agent to register under a trust root
+    /// decides how many others may, which is the subtree lockout of issue #54.
+    #[test]
+    fn a_full_ancestor_does_not_refuse_a_sibling_path() {
+        let dht = dht_with_capacity_for_one();
+        let key = SigningKey::generate();
+
+        let occupant = uri_at("assistant/chat", "2q");
+        let sibling = uri_at("assistant/code", "2r");
+        register(&dht, registration(&occupant, &key), &key).unwrap();
+
+        register(&dht, registration(&sibling, &key), &key)
+            .expect("a path of its own has capacity of its own");
+    }
+
+    /// The issue's other half: a deeper path whose ancestor is the crowded key
+    /// itself. Its own key is empty, and that is the key it is charged for.
+    #[test]
+    fn a_full_ancestor_does_not_refuse_a_path_beneath_it() {
+        let dht = dht_with_capacity_for_one();
+        let key = SigningKey::generate();
+
+        register(
+            &dht,
+            registration(&uri_at("assistant/chat", "2q"), &key),
+            &key,
+        )
+        .unwrap();
+
+        register(
+            &dht,
+            registration(&uri_at("assistant/chat/vision", "2r"), &key),
+            &key,
+        )
+        .expect("an empty key is not full because its ancestor is");
+    }
+
+    /// The consequence, stated outright: an ancestor bucket holds its whole
+    /// subtree and is not bounded by the configured capacity. That is the
+    /// direct model's premise rather than an oversight, and a store that
+    /// cannot honor it is required to shard instead.
+    #[test]
+    fn an_ancestor_key_holds_more_than_one_path_may() {
+        let dht = dht_with_capacity_for_one();
+        let key = SigningKey::generate();
+
+        register(
+            &dht,
+            registration(&uri_at("assistant/chat", "2q"), &key),
+            &key,
+        )
+        .unwrap();
+        register(
+            &dht,
+            registration(&uri_at("assistant/code", "2r"), &key),
+            &key,
+        )
+        .unwrap();
+
+        let under_assistant = lookup(&dht, &prefix("anthropic.com", "assistant"));
+
+        assert_eq!(under_assistant.len(), 2);
+        assert!(dht.stats().max_registrations_per_key() > 1);
     }
 
     #[test]
