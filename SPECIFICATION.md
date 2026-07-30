@@ -707,6 +707,7 @@ encoding of:
 | `sequence` | Identifies the position in that record's history |
 | `agent_uri` | Binds the proof to one record |
 | Operation arguments | Binds the proof to the endpoints or TTL requested |
+| Resulting `expires_at` | Binds the proof to the record the write produces, not only to the request that produced it |
 
 For registration, which creates the record rather than changing one, the proof
 covers the record as submitted: its `agent_key`, endpoints, and `expires_at`,
@@ -727,6 +728,10 @@ at the `registered_at` and `sequence` the record opens with.
    so that no two distinct operations produce the same signed bytes.
 5. `registered_at` MUST NOT change over a record's lifetime. In particular,
    refreshing a registration extends `expires_at` only.
+6. The proof MUST cover the `expires_at` the write results in, and a node MUST
+   store that value rather than one it derives itself. A refreshing agent
+   therefore states the instant its record will expire, not only the lifetime
+   it asked for, because only the signer knows when it signed.
 
 **Rationale.** The sequence number orders writes within one record's life, so a
 captured proof cannot be applied twice. The registration time identifies the
@@ -735,6 +740,20 @@ record that replaces it. Two registrations of the same URI within the
 resolution of `registered_at` share an instance identity; requirement 10 of
 [Section 6.2](#62-registration-protocol) removes that dependence on the clock
 for agents that retain their sequence across re-registration.
+
+Requirement 6 exists because a record that travels between nodes travels whole.
+A field outside the signature is a field any node on the path may rewrite, and
+`expires_at` is the field that decides how long a record outlives the agent's
+intent to be found. Signing only the requested TTL, and letting each node
+compute an instant from it, would leave an observer of a legitimate migration
+free to republish the agent's own record with an expiry of their choosing.
+Shortening one is the denial of service
+[Section 8.1](#81-dht-eclipse-attacks) already scopes as a residual risk;
+lengthening one holds a genuine, agent-signed record open past the
+moment the agent chose to let it lapse. Requirement 6 makes both a signature
+failure. It is also why a node that finds an expiry outside its acceptable
+window MUST refuse the record rather than clamp it: clamping rewrites bytes the
+signature covers, and the record would then fail to verify at the next hop.
 
 ---
 

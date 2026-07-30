@@ -180,15 +180,21 @@ impl Registration {
         self.endpoints = endpoints;
     }
 
-    /// Refreshes the registration with a new TTL from now.
+    /// Moves the registration's expiry to an instant a write has authorized.
+    ///
+    /// Callers are the store, applying a write it has already checked. The
+    /// instant is taken rather than derived from a TTL because it is what the
+    /// agent signed: a store that computed `now + ttl` for itself would write
+    /// an expiry the agent never put its name to, and on a wire protocol that
+    /// field would then be one an observer could rewrite freely.
     ///
     /// `registered_at` is deliberately left alone. It identifies this record
     /// instance, which is what a [`MutationProof`](crate::MutationProof) binds
     /// itself to; moving it on every refresh would invalidate proofs an agent
     /// had already prepared, and would make the field misreport when the agent
     /// actually registered.
-    pub fn refresh(&mut self, ttl: Duration) {
-        self.expires_at = SystemTime::now() + ttl;
+    pub const fn set_expires_at(&mut self, expires_at: SystemTime) {
+        self.expires_at = expires_at;
     }
 
     /// Records the sequence number of a write that has been authorized.
@@ -367,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn refresh_updates_times() {
+    fn setting_the_expiry_revives_a_lapsed_registration() {
         let past = SystemTime::now() - Duration::from_hours(1);
         let mut registration = Registration::new(
             test_uri(),
@@ -379,10 +385,27 @@ mod tests {
 
         assert!(registration.is_expired());
 
-        registration.refresh(Duration::from_mins(1));
+        registration.set_expires_at(SystemTime::now() + Duration::from_mins(1));
 
         assert!(!registration.is_expired());
         assert!(registration.remaining_ttl().is_some());
+    }
+
+    #[test]
+    fn setting_the_expiry_leaves_the_record_instance_alone() {
+        // `registered_at` identifies the instance a mutation proof binds to.
+        // A refresh that moved it would invalidate every proof the agent had
+        // already prepared against this record.
+        let mut registration = Registration::new(
+            test_uri(),
+            test_key().verifying_key(),
+            vec![test_endpoint()],
+        );
+        let instance = registration.registered_at();
+
+        registration.set_expires_at(SystemTime::now() + Duration::from_hours(9));
+
+        assert_eq!(registration.registered_at(), instance);
     }
 
     #[test]

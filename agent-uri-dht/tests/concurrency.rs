@@ -49,7 +49,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use agent_uri::AgentUri;
 use agent_uri_attestation::SigningKey;
@@ -184,6 +184,7 @@ fn update(
     let found = current(dht, uri).ok_or_else(|| DhtError::not_found(uri.canonical()))?;
     let mutation = Mutation::UpdateEndpoint {
         endpoints: &endpoints,
+        expires_at: found.expires_at(),
     };
     let proof = MutationProof::sign_next(key, &found, &mutation);
     block_on(dht.update_endpoint(uri, endpoints, &proof, WriteOptions::default()))
@@ -196,8 +197,9 @@ fn refresh(
     ttl: Duration,
 ) -> Result<WriteReceipt, DhtError> {
     let found = current(dht, uri).ok_or_else(|| DhtError::not_found(uri.canonical()))?;
-    let proof = MutationProof::sign_next(key, &found, &Mutation::Refresh { ttl });
-    block_on(dht.refresh(uri, ttl, &proof, WriteOptions::default()))
+    let expires_at = SystemTime::now() + ttl;
+    let proof = MutationProof::sign_next(key, &found, &Mutation::Refresh { ttl, expires_at });
+    block_on(dht.refresh(uri, ttl, expires_at, &proof, WriteOptions::default()))
 }
 
 fn deregister(dht: &SimulatedDht, uri: &AgentUri, key: &SigningKey) -> Result<(), DhtError> {
@@ -342,6 +344,7 @@ fn only_one_of_many_writes_at_the_same_sequence_is_accepted() {
             let endpoints = vec![Endpoint::https(format!("writer-{index}.anthropic.com"))];
             let mutation = Mutation::UpdateEndpoint {
                 endpoints: &endpoints,
+                expires_at: found.expires_at(),
             };
             let proof = MutationProof::sign_next(&key, &found, &mutation);
             block_on(dht.update_endpoint(&uri, endpoints, &proof, WriteOptions::default()))

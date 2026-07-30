@@ -16,7 +16,7 @@
 //! So renewal lives here, in something that holds the agent's signing key and
 //! does openly what the node cannot do at all.
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use agent_uri::AgentUri;
 use agent_uri_attestation::SigningKey;
@@ -59,8 +59,13 @@ pub async fn renew(
         .find(|record| record.agent_uri() == agent_uri)
         .ok_or_else(|| DhtError::not_found(agent_uri.canonical()))?;
 
-    let proof = MutationProof::sign_next(key, &current, &Mutation::Refresh { ttl });
-    dht.refresh(agent_uri, ttl, &proof, options).await?;
+    // The expiry is computed here, once, and both signed and submitted. The
+    // node applies what it is given rather than deriving an instant of its
+    // own, so this is the only clock reading that matters.
+    let expires_at = SystemTime::now() + ttl;
+    let proof = MutationProof::sign_next(key, &current, &Mutation::Refresh { ttl, expires_at });
+    dht.refresh(agent_uri, ttl, expires_at, &proof, options)
+        .await?;
     Ok(())
 }
 

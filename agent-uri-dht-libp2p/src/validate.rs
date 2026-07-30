@@ -17,26 +17,27 @@
 //! 4. **The write is later than what is held.** Records are immutable, so
 //!    accepting one is choosing between two candidates.
 //!
-//! # What a signature does not cover
+//! # Every field of a record is signed
 //!
-//! `Mutation::UpdateEndpoint` and `Mutation::Refresh` in `agent-uri-dht` sign
-//! the parameters of the call, not the record that results from it. For a store
-//! that holds the record and applies the change itself, that is exactly right.
-//! On a wire protocol the resulting record travels whole, and its `expires_at`
-//! is then a field no signature covers.
+//! Check 2 rebuilds the mutation from the record's own fields, so any field it
+//! reads is a field an attacker cannot change without breaking the signature.
+//! `expires_at` is one of them, on all four kinds of write.
 //!
-//! The exposure is bounded on both sides. A record is refused unless its expiry
-//! lies in `(now, now + max_record_ttl]`, and a write is refused unless its
-//! version strictly advances, so an altered copy can only be planted at a node
-//! that has not yet seen the version it is derived from. Within that window an
-//! attacker who observed a migration can give the fresh replica an expiry of
-//! their choosing, up to the node's own ceiling. Shortening it is the
-//! denial of service already scoped in §8.1; lengthening it holds a genuine,
-//! agent-signed record open past the moment the agent chose.
+//! It was not always. Until issue #81, `Mutation::UpdateEndpoint` and
+//! `Mutation::Refresh` signed the parameters of the call and not the record
+//! that results from it, which is exactly right for a store that holds the
+//! record and applies the change itself, and left one field open here, where
+//! the resulting record travels whole. An attacker who observed a legitimate
+//! migration could republish it with an expiry of their choosing: shortening it
+//! is the denial of service scoped in §8.1, and lengthening it held a genuine,
+//! agent-signed record open past the moment the agent chose to let it lapse.
 //!
-//! Closing it needs `expires_at` inside the signed payload of those two
-//! mutations, which is a breaking change to `agent-uri-dht` and is filed
-//! separately rather than made here.
+//! Two rules bounded that, and both still earn their place. A record is refused
+//! unless its expiry lies in `(now, now + max_record_ttl]`, which is why an
+//! out-of-bounds expiry is **refused** rather than clamped: clamping rewrites
+//! bytes the signature covers and would break the record at the next hop. And a
+//! write is refused unless its version strictly advances, so a stale copy
+//! cannot displace a current one.
 
 use std::time::{Duration, SystemTime};
 
@@ -188,9 +189,11 @@ fn check_signature(record: &IdentityRecord) -> Result<(), Rejection> {
         },
         WireKind::UpdateEndpoint => Mutation::UpdateEndpoint {
             endpoints: state.endpoints(),
+            expires_at: state.expires_at(),
         },
         WireKind::Refresh => Mutation::Refresh {
             ttl: record.refresh_ttl().ok_or(Rejection::MissingRefreshTtl)?,
+            expires_at: state.expires_at(),
         },
         WireKind::Deregister => Mutation::Deregister,
     };
@@ -345,6 +348,46 @@ mod tests {
             signature: proof.signature().into(),
             state,
             kind: WireKind::Register,
+            refresh_ttl_millis: None,
+        }
+    }
+
+    /// Publishes `state` as a `Refresh` write signed by `signer`, extending the
+    /// record to `now + ttl`.
+    ///
+    /// The instant goes into the payload, into the record, and onto the wire as
+    /// the TTL, which is what an honest publisher does: all three describe one
+    /// write, and a node rebuilds the payload from the record to check it.
+    fn refreshed(state: Registration, signer: &SigningKey, ttl: Duration) -> IdentityRecord {
+        let expires_at = SystemTime::now() + ttl;
+        let proof =
+            MutationProof::sign_next(signer, &state, &Mutation::Refresh { ttl, expires_at });
+        let mut state = state.with_sequence(proof.sequence());
+        state.set_expires_at(expires_at);
+        IdentityRecord {
+            signature: proof.signature().into(),
+            state,
+            kind: WireKind::Refresh,
+            refresh_ttl_millis: Some(u64::try_from(ttl.as_millis()).unwrap()),
+        }
+    }
+
+    /// Publishes a migration of `state` to `moved`, signed by `signer`.
+    fn migrated(state: &Registration, signer: &SigningKey, moved: Vec<Endpoint>) -> IdentityRecord {
+        let proof = MutationProof::sign_next(
+            signer,
+            state,
+            &Mutation::UpdateEndpoint {
+                endpoints: &moved,
+                expires_at: state.expires_at(),
+            },
+        );
+        let mut state = state.clone().with_sequence(proof.sequence());
+        state.update_endpoints(moved);
+        IdentityRecord {
+            signature: proof.signature().into(),
+            state,
+            kind: WireKind::UpdateEndpoint,
             refresh_ttl_millis: None,
         }
     }
@@ -542,19 +585,7 @@ mod tests {
         let held = registered(fixture.attested(&uri("2q"), &agent), &agent);
 
         let moved = vec![Endpoint::https("eu-west-1.anthropic.com:443")];
-        let proof = MutationProof::sign_next(
-            &agent,
-            &held.state,
-            &Mutation::UpdateEndpoint { endpoints: &moved },
-        );
-        let mut state = held.state.clone().with_sequence(proof.sequence());
-        state.update_endpoints(moved);
-        let update = IdentityRecord {
-            signature: proof.signature().into(),
-            state,
-            kind: WireKind::UpdateEndpoint,
-            refresh_ttl_millis: None,
-        };
+        let update = migrated(&held.state, &agent, moved);
 
         assert_eq!(
             validate(
@@ -568,19 +599,91 @@ mod tests {
     }
 
     #[test]
-    fn a_refresh_without_its_ttl_is_refused() {
-        // The TTL is what the signature covers, so a refresh that omits it
-        // cannot be checked at all.
+    fn a_migration_whose_expiry_was_rewritten_in_flight_is_refused() {
+        // The gap #81 closed. A migration's resulting record travels whole, so
+        // before `expires_at` entered the signed payload an attacker who
+        // observed one could republish it holding the agent's own record open
+        // long past the moment the agent chose to let it lapse. The expiry is
+        // pushed out, not in: shortening a record is the denial of service
+        // §8.1 already scopes, and lengthening it is what this closes.
+        let fixture = Fixture::new();
+        let agent = SigningKey::generate();
+        let held = registered(fixture.attested(&uri("2q"), &agent), &agent);
+        let moved = vec![Endpoint::https("eu-west-1.anthropic.com:443")];
+
+        let mut tampered = migrated(&held.state, &agent, moved);
+        let honest = tampered.state.expires_at();
+        // Still inside the node's 24-hour ceiling, so the record clears the
+        // shape check and is refused by the signature rather than the bound.
+        tampered
+            .state
+            .set_expires_at(honest + Duration::from_hours(12));
+
+        assert_eq!(
+            validate(
+                &tampered,
+                Some(&held),
+                &fixture,
+                AttestationPolicy::VerifyKnownRoots
+            ),
+            Err(Rejection::BadSignature)
+        );
+    }
+
+    #[test]
+    fn a_refresh_whose_expiry_was_rewritten_in_flight_is_refused() {
+        // Same gap on the other write that moves an expiry. Matching the TTL
+        // is not enough to save it: the instant is what the record holds, and
+        // the instant is signed.
         let fixture = Fixture::new();
         let agent = SigningKey::generate();
         let held = fixture.attested(&uri("2q"), &agent);
-        let ttl = Duration::from_mins(30);
-        let proof = MutationProof::sign_next(&agent, &held, &Mutation::Refresh { ttl });
+
+        let mut tampered = refreshed(held, &agent, Duration::from_mins(30));
+        let honest = tampered.state.expires_at();
+        tampered
+            .state
+            .set_expires_at(honest + Duration::from_hours(12));
+
+        assert_eq!(
+            validate(
+                &tampered,
+                None,
+                &fixture,
+                AttestationPolicy::VerifyKnownRoots
+            ),
+            Err(Rejection::BadSignature)
+        );
+    }
+
+    #[test]
+    fn an_honest_refresh_is_stored() {
+        // The counterpart to the two tampering tests: an expiry that matches
+        // what was signed is accepted, so those two are failing on the
+        // rewrite and not on the fixture.
+        let fixture = Fixture::new();
+        let agent = SigningKey::generate();
+        let held = fixture.attested(&uri("2q"), &agent);
+
+        let record = refreshed(held, &agent, Duration::from_mins(30));
+
+        assert_eq!(
+            validate(&record, None, &fixture, AttestationPolicy::VerifyKnownRoots),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn a_refresh_without_its_ttl_is_refused() {
+        // The TTL is part of what the signature covers, so a refresh that omits
+        // it cannot be checked at all.
+        let fixture = Fixture::new();
+        let agent = SigningKey::generate();
+        let held = fixture.attested(&uri("2q"), &agent);
+
         let record = IdentityRecord {
-            signature: proof.signature().into(),
-            state: held.with_sequence(proof.sequence()),
-            kind: WireKind::Refresh,
             refresh_ttl_millis: None,
+            ..refreshed(held, &agent, Duration::from_mins(30))
         };
 
         assert_eq!(
@@ -594,18 +697,10 @@ mod tests {
         let fixture = Fixture::new();
         let agent = SigningKey::generate();
         let held = fixture.attested(&uri("2q"), &agent);
-        let proof = MutationProof::sign_next(
-            &agent,
-            &held,
-            &Mutation::Refresh {
-                ttl: Duration::from_mins(30),
-            },
-        );
+
         let record = IdentityRecord {
-            signature: proof.signature().into(),
-            state: held.with_sequence(proof.sequence()),
-            kind: WireKind::Refresh,
             refresh_ttl_millis: Some(u64::try_from(Duration::from_hours(12).as_millis()).unwrap()),
+            ..refreshed(held, &agent, Duration::from_mins(30))
         };
 
         assert_eq!(

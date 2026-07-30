@@ -98,7 +98,6 @@ Two things have to keep happening, and only one is Kademlia's job.
 
 - **A node with no peers cannot publish.** Kademlia counts remote acknowledgements, and a local store write is not one. Bootstrap first.
 - **Pointer pages are unauthenticated.** Anyone can put any URI on any page. A lookup dereferences each pointer and checks the agent's own URI against the path queried, so an injected pointer costs a wasted read and nothing more.
-- **`expires_at` is not fully covered by a signature on migrations and refreshes.** `Mutation::UpdateEndpoint` and `Mutation::Refresh` sign the parameters of the call, not the record that results from it, which is right for a store that applies the change itself and leaves one field open on a wire protocol. The exposure is bounded by a required expiry window and by strict version monotonicity; the `validate` module states it precisely.
 - **Shard growth is opportunistic.** A page over its high-water mark is widened by whoever notices; until then it keeps accepting pointers.
 
 ## Testing

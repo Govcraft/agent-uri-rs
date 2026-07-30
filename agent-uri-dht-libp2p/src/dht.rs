@@ -415,13 +415,16 @@ impl Dht for Libp2pDht {
         &self,
         agent_uri: &AgentUri,
         ttl: Duration,
+        expires_at: SystemTime,
         proof: &MutationProof,
         options: WriteOptions,
     ) -> Result<WriteReceipt, DhtError> {
         let mut state = self.current(agent_uri, options.timeout).await?;
-        state.refresh(ttl);
+        // The instant the agent signed, not one derived here from the TTL.
+        // This record is about to travel, and a field outside the signature
+        // is a field the next hop can rewrite (issue #81).
+        state.set_expires_at(expires_at);
         state.set_sequence(proof.sequence());
-        let expires_at = state.expires_at();
 
         let receipt = self
             .publish_identity(

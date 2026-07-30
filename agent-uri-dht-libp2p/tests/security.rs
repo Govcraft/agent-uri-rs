@@ -12,7 +12,8 @@ use agent_uri::AgentUri;
 use agent_uri_attestation::SigningKey;
 use agent_uri_dht::{Dht, DhtError, Endpoint, Mutation, MutationProof, Registration, WriteOptions};
 use support::{
-    Overlay, TRUST_ROOT, exact, lookup, lookup_until_found, proof_for, register, write_options,
+    Overlay, TRUST_ROOT, exact, lookup, lookup_until_found, migration_proof_for, proof_for,
+    register, write_options,
 };
 
 /// The write options an attacker would use: whatever gets the record furthest.
@@ -93,13 +94,7 @@ async fn an_attacker_cannot_repoint_an_agent_they_did_not_register() {
 
     let attacker = SigningKey::generate();
     let stolen = vec![Endpoint::https("attacker.example:443")];
-    let proof = proof_for(
-        &overlay.nodes[1],
-        &uri,
-        &attacker,
-        &Mutation::UpdateEndpoint { endpoints: &stolen },
-    )
-    .await;
+    let proof = migration_proof_for(&overlay.nodes[1], &uri, &attacker, &stolen).await;
 
     let result = overlay.nodes[1]
         .update_endpoint(&uri, stolen, &proof, attacker_options())
@@ -154,13 +149,7 @@ async fn a_replayed_write_does_not_apply_twice() {
     let _ = lookup_until_found(&overlay.nodes[2], &exact(&uri)).await;
 
     let second = vec![Endpoint::https("second.example:443")];
-    let proof = proof_for(
-        &overlay.nodes[0],
-        &uri,
-        &agent,
-        &Mutation::UpdateEndpoint { endpoints: &second },
-    )
-    .await;
+    let proof = migration_proof_for(&overlay.nodes[0], &uri, &agent, &second).await;
     overlay.nodes[0]
         .update_endpoint(&uri, second.clone(), &proof, write_options())
         .await
