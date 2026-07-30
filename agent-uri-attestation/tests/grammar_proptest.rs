@@ -638,13 +638,11 @@ proptest! {
         verifier.add_trusted_root(&trust_root, signing_key_2.verifying_key());
 
         let result = verifier.verify(&token);
+        // A genuine token checked against the wrong key is a signature failure,
+        // never a structural one, for every URI the generator produces.
         prop_assert!(
-            matches!(
-                result,
-                Err(AttestationError::InvalidSignature)
-                    | Err(AttestationError::InvalidTokenFormat { .. })
-            ),
-            "Expected signature error, got: {:?}",
+            matches!(result, Err(AttestationError::InvalidSignature)),
+            "Expected InvalidSignature, got: {:?}",
             result
         );
     }
