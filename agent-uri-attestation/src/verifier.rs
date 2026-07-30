@@ -81,6 +81,8 @@ impl Verifier {
     /// Verifies an attestation token and returns its claims.
     ///
     /// This method:
+    /// 0. Rejects tokens over [`crate::MAX_TOKEN_LENGTH`] bytes, before any
+    ///    decoding or signature work
     /// 1. Parses the PASETO token
     /// 2. Verifies the signature using the issuer's public key
     /// 3. Checks expiration
@@ -101,6 +103,8 @@ impl Verifier {
     /// # Errors
     ///
     /// Returns `AttestationError` if verification fails for any reason:
+    /// - `TokenTooLong` - Token exceeds [`crate::MAX_TOKEN_LENGTH`] bytes
+    ///   (checked before any decoding or signature work)
     /// - `InvalidSignature` - Signature doesn't match any trusted key
     /// - `TokenExpired` - Token has passed its expiration time
     /// - `UntrustedIssuer` - Issuer is not in the trusted roots set
@@ -134,6 +138,11 @@ impl Verifier {
         token: &str,
         verifier_audience: Option<&str>,
     ) -> Result<AttestationClaims, AttestationError> {
+        // Length first: every later step is attacker-funded work (one Ed25519
+        // verification per trusted root over the whole payload), so the cap has
+        // to be enforced before anything is decoded.
+        verification::check_token_length(token)?;
+
         if self.trusted_roots.is_empty() {
             return Err(AttestationError::UntrustedIssuer {
                 issuer: "unknown".to_string(),
@@ -967,5 +976,122 @@ mod tests {
         let claims = verifier.verify(&token).unwrap();
 
         assert_eq!(claims.capabilities, capabilities);
+    }
+
+    /// Builds a syntactically plausible but oversized token.
+    fn oversized_token() -> String {
+        format!("v4.public.{}", "A".repeat(crate::MAX_TOKEN_LENGTH))
+    }
+
+    #[test]
+    fn verify_rejects_oversized_token() {
+        let signing_key = SigningKey::generate();
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        let token = oversized_token();
+        match verifier.verify(&token) {
+            Err(AttestationError::TokenTooLong { max, actual }) => {
+                assert_eq!(max, crate::MAX_TOKEN_LENGTH);
+                assert_eq!(actual, token.len());
+            }
+            other => panic!("Expected TokenTooLong, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn oversized_token_is_rejected_before_any_key_is_tried() {
+        // Many trusted roots, none of which should be consulted: the length
+        // check must short-circuit ahead of the O(trusted keys) signature loop.
+        let mut verifier = Verifier::new();
+        for index in 0..32 {
+            verifier.add_trusted_root(
+                format!("root{index}.com"),
+                SigningKey::generate().verifying_key(),
+            );
+        }
+
+        // A signature failure would report InvalidSignature; TokenTooLong proves
+        // the loop never ran.
+        assert!(matches!(
+            verifier.verify(&oversized_token()),
+            Err(AttestationError::TokenTooLong { .. })
+        ));
+    }
+
+    #[test]
+    fn oversized_token_is_rejected_even_with_no_trusted_roots() {
+        let verifier = Verifier::new();
+
+        assert!(matches!(
+            verifier.verify(&oversized_token()),
+            Err(AttestationError::TokenTooLong { .. })
+        ));
+    }
+
+    #[test]
+    fn a_valid_token_padded_past_the_cap_is_rejected() {
+        let signing_key = SigningKey::generate();
+        let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
+        let uri = test_uri();
+        let token = issuer.issue(&uri, vec!["test".into()]).unwrap();
+
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+        assert!(verifier.verify(&token).is_ok());
+
+        let padded = format!("{token}{}", "A".repeat(crate::MAX_TOKEN_LENGTH));
+        assert!(matches!(
+            verifier.verify(&padded),
+            Err(AttestationError::TokenTooLong { .. })
+        ));
+    }
+
+    #[test]
+    fn every_verify_entry_point_enforces_the_cap() {
+        let signing_key = SigningKey::generate();
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        let token = oversized_token();
+        let uri = test_uri();
+        let capability = CapabilityPath::parse("test/read").unwrap();
+
+        let results = [
+            verifier.verify(&token),
+            verifier.verify_for_audience(&token, "verifier.example"),
+            verifier.verify_for_uri(&token, &uri),
+            verifier.verify_for_uri_and_audience(&token, &uri, "verifier.example"),
+            verifier.verify_for_capability(&token, &uri, &capability),
+            verifier.verify_for_capability_and_audience(
+                &token,
+                &uri,
+                &capability,
+                "verifier.example",
+            ),
+        ];
+
+        for result in results {
+            assert!(
+                matches!(result, Err(AttestationError::TokenTooLong { .. })),
+                "Expected TokenTooLong, got {result:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn token_at_the_cap_is_not_rejected_for_length() {
+        let signing_key = SigningKey::generate();
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        let token = format!("v4.public.{}", "A".repeat(crate::MAX_TOKEN_LENGTH - 10));
+        assert_eq!(token.len(), crate::MAX_TOKEN_LENGTH);
+
+        // It is still garbage, so it must fail; just not on length grounds.
+        assert!(!matches!(
+            verifier.verify(&token),
+            Err(AttestationError::TokenTooLong { .. })
+        ));
     }
 }
