@@ -18,6 +18,18 @@ ignore = [
     # CLI. Fixed by upgrading rusty_paseto to 0.10 — tracked in issue #17.
     # Remove this entry when #17 lands. Mirrored in .cargo/audit.toml.
     { id = "RUSTSEC-2026-0009", reason = "time 0.3.45 via rusty_paseto 0.9; fix tracked in issue #17" },
+    # `paste` 1.0.15 is archived by its author. Not a vulnerability: it is a
+    # proc-macro, used at build time only, reached through
+    # netlink-packet-core -> if-watch, which libp2p-tcp uses to watch for
+    # interface changes. Nothing in this workspace can choose otherwise;
+    # remove when the netlink crates drop it.
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; build-time proc-macro via if-watch in libp2p-tcp" },
+    # .cargo/audit.toml carries two entries this file deliberately does not:
+    # RUSTSEC-2026-0118 and -0119, both in hickory-proto. That crate reaches
+    # Cargo.lock only as an optional dependency of libp2p's `dns` and `mdns`
+    # features, neither of which is enabled. cargo-deny resolves the real
+    # feature graph and never sees it; cargo-audit reads the lockfile and does.
+    # Listing them here would only produce an advisory-not-detected warning.
 ]
 
 [licenses]
@@ -32,6 +44,12 @@ allow = [
     "ISC",
     # unicode-ident (`(MIT OR Apache-2.0) AND Unicode-3.0`).
     "Unicode-3.0",
+    # arrayref, via multiaddr and the rest of the libp2p stack. Permissive,
+    # OSI approved, FSF free; no alternative offered.
+    "BSD-2-Clause",
+    # foldhash, via hashbrown, via the libp2p stack. Permissive, OSI approved,
+    # FSF free.
+    "Zlib",
 ]
 confidence-threshold = 0.8
 
@@ -54,6 +72,21 @@ skip = [
     # Collapses when the derive ecosystem moves to syn 3, or when async fn in
     # trait becomes dyn-compatible and async-trait can be dropped entirely.
     { crate = "syn@3.0.3", reason = "async-trait 0.1.91; see agent-uri-dht Dht trait dyn-compatibility" },
+    # Everything below enters with libp2p 0.56, in agent-uri-dht-libp2p. Each
+    # is a version the libp2p stack itself holds both sides of, so none can be
+    # resolved from this workspace; they collapse when libp2p's own graph does.
+    # libp2p-yamux supports both yamux major lines at once, and yamux 0.13
+    # brings the rand 0.9 chain with it.
+    { crate = "yamux@0.12.1", reason = "libp2p-yamux 0.47 supports yamux 0.12 and 0.13 together" },
+    { crate = "rand@0.9.5", reason = "yamux 0.13 via libp2p-yamux; the rest of the graph is on rand 0.8" },
+    { crate = "rand_chacha@0.9.0", reason = "pulled by rand 0.9.5" },
+    # quick-protobuf-codec and rtnetlink are still on thiserror 1 while the rest
+    # of the libp2p crates have moved to 2.
+    { crate = "thiserror@1.0.69", reason = "quick-protobuf-codec and rtnetlink via libp2p 0.56" },
+    { crate = "thiserror-impl@1.0.69", reason = "pulled by thiserror 1.0.69" },
+    # multistream-select is still on unsigned-varint 0.7; libp2p-core, multiaddr
+    # and multihash are on 0.8.
+    { crate = "unsigned-varint@0.7.2", reason = "multistream-select 0.13 via libp2p 0.56" },
 ]
 
 [sources]

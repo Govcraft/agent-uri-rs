@@ -61,6 +61,19 @@ pub enum DhtError {
         /// The agent URI whose registration was refused
         agent_uri: String,
     },
+    /// A node refused to store the record.
+    ///
+    /// Distinct from the variants that name a specific defect. A distributed
+    /// backend applies checks the in-process index has no reason to: whether a
+    /// record's lifetime is one this node will hold, whether its encoding is
+    /// one this node speaks. Collapsing those into `InvalidAttestation` would
+    /// send an operator looking at trust roots for a clock problem.
+    Rejected {
+        /// The agent URI whose record was refused
+        agent_uri: String,
+        /// Why the node refused it
+        reason: String,
+    },
     /// The write's sequence number did not advance past the record's.
     ///
     /// Either the write is a replay of one already applied, or two writers are
@@ -89,29 +102,35 @@ pub enum DhtError {
     },
     /// The node is not connected to any peer that can serve the operation.
     NoPeers,
+    /// The local node cannot serve the request at all.
+    ///
+    /// Distinct from [`DhtError::NoPeers`], which describes the overlay. This
+    /// describes the node the caller is holding: it has shut down, or its own
+    /// store will not take the record. Retrying against the same handle will
+    /// fail the same way.
+    Unavailable {
+        /// What is wrong with this node
+        reason: String,
+    },
 }
 
 impl fmt::Display for DhtError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotFound { agent_uri } => {
-                write!(
-                    f,
-                    "agent '{agent_uri}' not found in DHT; verify the URI is correct and the agent is registered"
-                )
-            }
-            Self::AlreadyRegistered { agent_uri } => {
-                write!(
-                    f,
-                    "agent '{agent_uri}' is already registered; use update_endpoint to modify the registration"
-                )
-            }
-            Self::Expired { agent_uri } => {
-                write!(
-                    f,
-                    "registration for agent '{agent_uri}' has expired; re-register to restore"
-                )
-            }
+            Self::NotFound { agent_uri } => write!(
+                f,
+                "agent '{agent_uri}' not found in DHT; verify the URI is correct and the agent \
+                 is registered"
+            ),
+            Self::AlreadyRegistered { agent_uri } => write!(
+                f,
+                "agent '{agent_uri}' is already registered; use update_endpoint to modify the \
+                 registration"
+            ),
+            Self::Expired { agent_uri } => write!(
+                f,
+                "registration for agent '{agent_uri}' has expired; re-register to restore"
+            ),
             Self::InvalidAttestation { agent_uri, reason } => {
                 write!(f, "invalid attestation for agent '{agent_uri}': {reason}")
             }
@@ -119,73 +138,62 @@ impl fmt::Display for DhtError {
                 identity,
                 existing_path,
                 requested_path,
-            } => {
-                write!(
-                    f,
-                    "agent identity '{identity}' is already bound to capability path \
-                     '{existing_path}' and cannot be reused at '{requested_path}'; mint a new agent ID"
-                )
-            }
-            Self::KeyCapacityExceeded { key, max } => {
-                write!(
-                    f,
-                    "DHT key '{key}' has reached maximum capacity of {max} registrations"
-                )
-            }
-            Self::NoEndpoints => {
-                write!(f, "registration must have at least one endpoint")
-            }
+            } => write!(
+                f,
+                "agent identity '{identity}' is already bound to capability path \
+                 '{existing_path}' and cannot be reused at '{requested_path}'; mint a new agent ID"
+            ),
+            Self::KeyCapacityExceeded { key, max } => write!(
+                f,
+                "DHT key '{key}' has reached maximum capacity of {max} registrations"
+            ),
+            Self::NoEndpoints => write!(f, "registration must have at least one endpoint"),
             Self::Unauthorized {
                 agent_uri,
                 operation,
-            } => {
-                write!(
-                    f,
-                    "{operation} on agent '{agent_uri}' was not authorized by the agent key bound \
-                     to its registration; the proof must be signed by that key over this exact \
-                     operation"
-                )
-            }
-            Self::AgentKeyMismatch { agent_uri } => {
-                write!(
-                    f,
-                    "the attestation presented for agent '{agent_uri}' attests a different key \
-                     than the registration names; a token attests one agent's key and cannot be \
-                     presented for another"
-                )
-            }
+            } => write!(
+                f,
+                "{operation} on agent '{agent_uri}' was not authorized by the agent key bound \
+                 to its registration; the proof must be signed by that key over this exact \
+                 operation"
+            ),
+            Self::AgentKeyMismatch { agent_uri } => write!(
+                f,
+                "the attestation presented for agent '{agent_uri}' attests a different key \
+                 than the registration names; a token attests one agent's key and cannot be \
+                 presented for another"
+            ),
+            Self::Rejected { agent_uri, reason } => write!(
+                f,
+                "a node refused to store the record for agent '{agent_uri}': {reason}"
+            ),
             Self::StaleSequence {
                 agent_uri,
                 presented,
                 current,
-            } => {
-                write!(
-                    f,
-                    "write to agent '{agent_uri}' presented sequence {presented}, which does not \
-                     advance past the record's {current}; re-read the registration and sign a \
-                     higher sequence"
-                )
-            }
-            Self::Timeout { operation, after } => {
-                write!(
-                    f,
-                    "{operation} did not complete within {after:?}; the network may be slow or \
-                     partitioned, and the operation may still have taken effect"
-                )
-            }
-            Self::QuorumFailed { achieved, required } => {
-                write!(
-                    f,
-                    "only {achieved} of the {required} replicas required by the requested quorum \
-                     responded; the operation may have partially applied"
-                )
-            }
-            Self::NoPeers => {
-                write!(
-                    f,
-                    "not connected to any peer; bootstrap against a known peer before \
-                     issuing operations"
-                )
+            } => write!(
+                f,
+                "write to agent '{agent_uri}' presented sequence {presented}, which does not \
+                 advance past the record's {current}; re-read the registration and sign a \
+                 higher sequence"
+            ),
+            Self::Timeout { operation, after } => write!(
+                f,
+                "{operation} did not complete within {after:?}; the network may be slow or \
+                 partitioned, and the operation may still have taken effect"
+            ),
+            Self::QuorumFailed { achieved, required } => write!(
+                f,
+                "only {achieved} of the {required} replicas required by the requested quorum \
+                 responded; the operation may have partially applied"
+            ),
+            Self::NoPeers => write!(
+                f,
+                "not connected to any peer; bootstrap against a known peer before issuing \
+                 operations"
+            ),
+            Self::Unavailable { reason } => {
+                write!(f, "this DHT node cannot serve the request: {reason}")
             }
         }
     }
@@ -222,6 +230,23 @@ impl DhtError {
     #[must_use]
     pub fn invalid_attestation(agent_uri: impl Into<String>, reason: impl Into<String>) -> Self {
         Self::InvalidAttestation {
+            agent_uri: agent_uri.into(),
+            reason: reason.into(),
+        }
+    }
+
+    /// Creates an `Unavailable` error.
+    #[must_use]
+    pub fn unavailable(reason: impl Into<String>) -> Self {
+        Self::Unavailable {
+            reason: reason.into(),
+        }
+    }
+
+    /// Creates a `Rejected` error.
+    #[must_use]
+    pub fn rejected(agent_uri: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self::Rejected {
             agent_uri: agent_uri.into(),
             reason: reason.into(),
         }
@@ -358,6 +383,12 @@ mod tests {
         assert!(!DhtError::expired("agent://a.com/b/c_1").is_transient());
         assert!(!DhtError::invalid_attestation("agent://a.com/b/c_1", "bad").is_transient());
         assert!(!DhtError::key_capacity_exceeded("k", 1).is_transient());
+        // A node that refused a record refuses it again: the record is the
+        // problem, not the path to the node.
+        assert!(!DhtError::rejected("agent://a.com/b/c_1", "expiry too far ahead").is_transient());
+        // A node that has shut down does not come back; the caller needs a new
+        // one, not another attempt against this one.
+        assert!(!DhtError::unavailable("the node has shut down").is_transient());
         assert!(
             !DhtError::AgentKeyMismatch {
                 agent_uri: "agent://a.com/b/c_1".to_string()
@@ -403,6 +434,21 @@ mod tests {
         let shown = err.to_string();
         assert!(shown.contains("agent://a.com/b/c_1"));
         assert!(shown.contains("different key"));
+    }
+
+    #[test]
+    fn rejected_error_carries_the_nodes_reason() {
+        let err = DhtError::rejected("agent://a.com/b/c_1", "record expiry is in the past");
+        let shown = err.to_string();
+        assert!(shown.contains("agent://a.com/b/c_1"));
+        assert!(shown.contains("record expiry is in the past"));
+    }
+
+    #[test]
+    fn unavailable_error_names_the_local_node_not_the_overlay() {
+        let err = DhtError::unavailable("the node has shut down");
+        assert!(err.to_string().contains("this DHT node"));
+        assert!(err.to_string().contains("shut down"));
     }
 
     #[test]
