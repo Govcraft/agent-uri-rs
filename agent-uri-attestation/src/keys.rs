@@ -1,5 +1,7 @@
 //! Key types for attestation signing and verification.
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use ed25519_dalek::{
     Signature as DalekSignature, Signer, SigningKey as DalekSigningKey, Verifier as DalekVerifier,
     VerifyingKey as DalekVerifyingKey,
@@ -183,6 +185,42 @@ impl VerifyingKey {
         self.inner.to_bytes()
     }
 
+    /// Returns the key in the base64 form used on the wire.
+    ///
+    /// Standard base64 with padding, matching the `public_key` field of the
+    /// trust root's published key set, so a key means the same string wherever
+    /// it appears.
+    #[must_use]
+    pub fn to_base64(&self) -> String {
+        BASE64.encode(self.to_bytes())
+    }
+
+    /// Parses a key from its base64 wire form.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AttestationError::InvalidKeyFormat`] if the string is not
+    /// base64, does not decode to 32 bytes, or those bytes are not a valid
+    /// Ed25519 public key.
+    pub fn from_base64(encoded: &str) -> Result<Self, AttestationError> {
+        let decoded =
+            BASE64
+                .decode(encoded)
+                .map_err(|error| AttestationError::InvalidKeyFormat {
+                    reason: format!("not valid base64: {error}"),
+                })?;
+        let bytes: [u8; 32] =
+            decoded
+                .try_into()
+                .map_err(|decoded: Vec<u8>| AttestationError::InvalidKeyFormat {
+                    reason: format!(
+                        "an Ed25519 public key is 32 bytes, but this decoded to {}",
+                        decoded.len()
+                    ),
+                })?;
+        Self::from_bytes(&bytes)
+    }
+
     /// Verifies a detached signature over `message`.
     ///
     /// # Errors
@@ -360,6 +398,31 @@ mod tests {
         assert!(shown.starts_with("Signature("));
         assert!(shown.contains("..."));
         assert!(shown.len() < 32);
+    }
+
+    #[test]
+    fn verifying_key_round_trips_its_base64_form() {
+        let key = SigningKey::generate().verifying_key();
+
+        assert_eq!(VerifyingKey::from_base64(&key.to_base64()).unwrap(), key);
+    }
+
+    #[test]
+    fn base64_that_is_not_base64_is_rejected() {
+        assert!(matches!(
+            VerifyingKey::from_base64("not base64!!"),
+            Err(AttestationError::InvalidKeyFormat { .. })
+        ));
+    }
+
+    #[test]
+    fn base64_of_the_wrong_length_names_the_length_it_got() {
+        // A 31-byte key silently zero-padded to 32 would be a different key
+        // that still verified nothing, so the length has to be checked.
+        let err = VerifyingKey::from_base64(&BASE64.encode([0u8; 31])).unwrap_err();
+
+        assert!(matches!(err, AttestationError::InvalidKeyFormat { .. }));
+        assert!(err.to_string().contains("31"));
     }
 
     #[test]

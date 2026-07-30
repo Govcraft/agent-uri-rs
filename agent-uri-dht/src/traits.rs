@@ -27,11 +27,12 @@ use crate::{
 /// # Authorization
 ///
 /// Registration records are world-readable, so an agent URI is public
-/// knowledge and proves nothing. Every write that changes or removes a record
-/// therefore carries a [`MutationProof`] signed by the key bound to that
-/// record at registration. A backend that accepted an unproven write would let
-/// any node that can reach a replica repoint an agent at its own
-/// infrastructure.
+/// knowledge and proves nothing. Neither does the attestation token stored
+/// beside it, which any lookup returns. Every write therefore carries a
+/// [`MutationProof`] signed by the agent's own key: registration signs the
+/// record it creates, later writes sign against the record they found. A
+/// backend that accepted an unproven write would let any node that can reach a
+/// replica repoint an agent at its own infrastructure.
 ///
 /// # Failure is normal
 ///
@@ -61,18 +62,27 @@ pub trait Dht: Send + Sync {
     /// capability path, and at every ancestor path, enabling discovery by
     /// capability prefix.
     ///
+    /// `proof` must be signed by the record's own agent key over the record as
+    /// submitted, and the attestation must name that same key. Together those
+    /// say the registering party holds the key the trust root vouched for; the
+    /// token alone would say only that some trust root vouched for someone.
+    ///
     /// # Errors
     ///
     /// Returns `DhtError` if:
+    /// - The proof does not authorize this record (`Unauthorized`)
     /// - The agent is already registered (`AlreadyRegistered`)
     /// - The endpoints list is empty (`NoEndpoints`)
     /// - The DHT key is at capacity (`KeyCapacityExceeded`)
     /// - Attestation verification fails (`InvalidAttestation`)
+    /// - The attestation names a different key than the record
+    ///   (`AgentKeyMismatch`)
     /// - The operation times out, finds no peers, or misses quorum
     ///   (`Timeout`, `NoPeers`, `QuorumFailed`)
     async fn register(
         &self,
         registration: Registration,
+        proof: &MutationProof,
         options: WriteOptions,
     ) -> Result<WriteReceipt, DhtError>;
 

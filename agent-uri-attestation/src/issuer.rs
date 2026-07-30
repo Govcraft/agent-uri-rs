@@ -27,7 +27,7 @@ use crate::keys::{SigningKey, VerifyingKey};
 /// let uri = AgentUri::parse(
 ///     "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q"
 /// ).unwrap();
-/// let token = issuer.issue(&uri, vec!["workflow/approval".into()]).unwrap();
+/// let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec!["workflow/approval".into()]).unwrap();
 ///
 /// assert!(token.starts_with("v4.public."));
 /// ```
@@ -93,7 +93,12 @@ impl Issuer {
     /// # Arguments
     ///
     /// * `uri` - The agent URI to attest
+    /// * `agent_key` - The agent's own public key, which the token binds to
     /// * `capabilities` - Capabilities to grant
+    ///
+    /// The agent key is what stops the token from being a bearer credential.
+    /// A trust root that attests a key it has not seen the agent prove
+    /// possession of is vouching for whoever supplied that key.
     ///
     /// # Errors
     ///
@@ -112,15 +117,19 @@ impl Issuer {
     /// let uri = AgentUri::parse(
     ///     "agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q"
     /// ).unwrap();
+    /// let agent_key = SigningKey::generate().verifying_key();
     ///
-    /// let token = issuer.issue(&uri, vec!["test/read".into(), "test/write".into()]).unwrap();
+    /// let token = issuer
+    ///     .issue(&uri, &agent_key, vec!["test/read".into(), "test/write".into()])
+    ///     .unwrap();
     /// ```
     pub fn issue(
         &self,
         uri: &AgentUri,
+        agent_key: &VerifyingKey,
         capabilities: Vec<String>,
     ) -> Result<String, AttestationError> {
-        self.issue_with_ttl(uri, capabilities, self.default_ttl)
+        self.issue_with_ttl(uri, agent_key, capabilities, self.default_ttl)
     }
 
     /// Issues an attestation token with a custom TTL.
@@ -128,6 +137,7 @@ impl Issuer {
     /// # Arguments
     ///
     /// * `uri` - The agent URI to attest
+    /// * `agent_key` - The agent's own public key, which the token binds to
     /// * `capabilities` - Capabilities to grant
     /// * `ttl` - Time-to-live for this specific token
     ///
@@ -137,11 +147,13 @@ impl Issuer {
     pub fn issue_with_ttl(
         &self,
         uri: &AgentUri,
+        agent_key: &VerifyingKey,
         capabilities: Vec<String>,
         ttl: Duration,
     ) -> Result<String, AttestationError> {
         let claims = AttestationClaimsBuilder::new()
             .agent_uri(uri.canonical())
+            .agent_key(agent_key)
             .capabilities(capabilities)
             .issuer(&self.trust_root)
             .ttl(ttl)
@@ -161,6 +173,9 @@ impl Issuer {
     /// [`crate::MAX_TOKEN_LENGTH`] bytes, which the verifier would reject.
     pub fn issue_claims(&self, claims: &AttestationClaims) -> Result<String, AttestationError> {
         crate::verification::validate_capability_scope(&claims.agent_uri, &claims.capabilities)?;
+        // A token whose agent key does not decode is one the verifier will
+        // reject, so refuse to mint it here where the caller can still fix it.
+        VerifyingKey::from_base64(&claims.agent_key)?;
         // Build the PASETO key from the signing key
         let dalek_key = self.signing_key.as_dalek();
         let key_bytes = dalek_key.to_keypair_bytes();
@@ -183,6 +198,10 @@ impl Issuer {
             }
         })?;
         let iss_claim = IssuerClaim::from(claims.iss.as_str());
+        let agent_key_claim = CustomClaim::try_from(("agent_key", claims.agent_key.as_str()))
+            .map_err(|e| AttestationError::InvalidClaims {
+                reason: format!("invalid agent_key claim: {e}"),
+            })?;
         let agent_uri_claim = CustomClaim::try_from(("agent_uri", claims.agent_uri.as_str()))
             .map_err(|e| AttestationError::InvalidClaims {
                 reason: format!("invalid agent_uri claim: {e}"),
@@ -206,6 +225,7 @@ impl Issuer {
             .set_claim(iat_claim)
             .set_claim(iss_claim)
             .set_claim(agent_uri_claim)
+            .set_claim(agent_key_claim)
             .set_claim(capabilities_claim);
 
         // Set optional audience
@@ -243,7 +263,13 @@ mod tests {
         let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec!["test".into()]).unwrap();
+        let token = issuer
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["test".into()],
+            )
+            .unwrap();
 
         assert!(token.starts_with("v4.public."));
     }
@@ -282,7 +308,12 @@ mod tests {
 
         // Should not error with different TTL
         let token = issuer
-            .issue_with_ttl(&uri, vec![], Duration::from_mins(1))
+            .issue_with_ttl(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec![],
+                Duration::from_mins(1),
+            )
             .unwrap();
 
         assert!(token.starts_with("v4.public."));
@@ -295,7 +326,9 @@ mod tests {
 
         let capabilities = vec!["test/read".into(), "test/write".into(), "test/admin".into()];
 
-        let token = issuer.issue(&uri, capabilities).unwrap();
+        let token = issuer
+            .issue(&uri, &SigningKey::generate().verifying_key(), capabilities)
+            .unwrap();
 
         assert!(token.starts_with("v4.public."));
     }
@@ -306,6 +339,7 @@ mod tests {
 
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+            .agent_key(&SigningKey::generate().verifying_key())
             .issuer("acme.com")
             .add_capability("test/read")
             .audience("api.acme.com")
@@ -329,7 +363,7 @@ mod tests {
             .map(|index| format!("test/{}/{}/seg{index}", "a".repeat(60), "b".repeat(60)))
             .collect();
 
-        match issuer.issue(&uri, capabilities) {
+        match issuer.issue(&uri, &SigningKey::generate().verifying_key(), capabilities) {
             Err(AttestationError::TokenTooLong { max, actual }) => {
                 assert_eq!(max, crate::MAX_TOKEN_LENGTH);
                 assert!(actual > max);
@@ -343,7 +377,13 @@ mod tests {
         let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec!["test/read".into()]).unwrap();
+        let token = issuer
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["test/read".into()],
+            )
+            .unwrap();
 
         assert!(crate::check_token_length(&token).is_ok());
     }

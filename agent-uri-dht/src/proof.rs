@@ -1,9 +1,11 @@
 //! Proof that the holder of an agent's key authorized a write.
 //!
 //! A registration record is world-readable, so knowing an agent's URI is not
-//! evidence of anything. Every write that changes or removes a record must
-//! therefore carry a [`MutationProof`]: an Ed25519 signature, made by the key
-//! bound to the record at registration, over the exact operation requested.
+//! evidence of anything, and neither is holding a copy of the attestation
+//! token stored alongside it. Every write must therefore carry a
+//! [`MutationProof`]: an Ed25519 signature, made by the agent's own key, over
+//! the exact operation requested. Registration signs the record it creates;
+//! later writes sign against the record they found.
 //!
 //! # What the signature covers
 //!
@@ -45,7 +47,7 @@
 use std::time::{Duration, SystemTime};
 
 use agent_uri::AgentUri;
-use agent_uri_attestation::{Signature, SigningKey};
+use agent_uri_attestation::{Signature, SigningKey, VerifyingKey};
 
 use crate::registration::system_time_to_millis;
 use crate::{DhtError, Endpoint, Registration};
@@ -61,6 +63,8 @@ const DOMAIN: &[u8] = b"agent-uri/dht-mutation/v1\x00";
 /// would double as a deregistration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MutationKind {
+    /// Creating the record.
+    Register,
     /// Replacing the record's endpoints.
     UpdateEndpoint,
     /// Extending the record's lifetime.
@@ -79,6 +83,7 @@ impl MutationKind {
             Self::UpdateEndpoint => 1,
             Self::Refresh => 2,
             Self::Deregister => 3,
+            Self::Register => 4,
         }
     }
 
@@ -89,6 +94,7 @@ impl MutationKind {
             Self::UpdateEndpoint => "update_endpoint",
             Self::Refresh => "refresh",
             Self::Deregister => "deregister",
+            Self::Register => "register",
         }
     }
 }
@@ -106,6 +112,20 @@ impl std::fmt::Display for MutationKind {
 /// TTL) are inside what the signature covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mutation<'a> {
+    /// Create the record with exactly this content.
+    ///
+    /// Registration is a write like any other and needs the same
+    /// authorization. Without it, an attestation token lifted from a public
+    /// record would be enough to re-register that URI pointing anywhere: the
+    /// token binds the agent key, but nothing would bind the endpoints.
+    Register {
+        /// The key the new record will name as its only writer.
+        agent_key: &'a VerifyingKey,
+        /// The endpoints the new record will hold.
+        endpoints: &'a [Endpoint],
+        /// When the new record will expire.
+        expires_at: SystemTime,
+    },
     /// Replace the record's endpoints with these.
     UpdateEndpoint {
         /// The endpoints the record will hold.
@@ -125,6 +145,7 @@ impl Mutation<'_> {
     #[must_use]
     pub const fn kind(&self) -> MutationKind {
         match self {
+            Self::Register { .. } => MutationKind::Register,
             Self::UpdateEndpoint { .. } => MutationKind::UpdateEndpoint,
             Self::Refresh { .. } => MutationKind::Refresh,
             Self::Deregister => MutationKind::Deregister,
@@ -207,6 +228,14 @@ fn push_endpoint(out: &mut Vec<u8>, endpoint: &Endpoint) {
     }
 }
 
+fn push_endpoints(out: &mut Vec<u8>, endpoints: &[Endpoint]) {
+    let count = u64::try_from(endpoints.len()).expect("an endpoint count fits in u64");
+    out.extend_from_slice(&count.to_be_bytes());
+    for endpoint in endpoints {
+        push_endpoint(out, endpoint);
+    }
+}
+
 /// Returns the exact bytes a proof for this mutation signs.
 ///
 /// Pure and deterministic: signer and verifier compute it independently from
@@ -229,12 +258,19 @@ pub fn signing_payload(
     push_field(&mut out, agent_uri.canonical().as_bytes());
 
     match mutation {
+        Mutation::Register {
+            agent_key,
+            endpoints,
+            expires_at,
+        } => {
+            // The key goes in so the payload is self-certifying: the signature
+            // commits to the key it must be checked against.
+            push_field(&mut out, &agent_key.to_bytes());
+            out.extend_from_slice(&system_time_to_millis(*expires_at).to_be_bytes());
+            push_endpoints(&mut out, endpoints);
+        }
         Mutation::UpdateEndpoint { endpoints } => {
-            let count = u64::try_from(endpoints.len()).expect("an endpoint count fits in u64");
-            out.extend_from_slice(&count.to_be_bytes());
-            for endpoint in *endpoints {
-                push_endpoint(&mut out, endpoint);
-            }
+            push_endpoints(&mut out, endpoints);
         }
         Mutation::Refresh { ttl } => {
             out.extend_from_slice(&ttl.as_secs().to_be_bytes());
@@ -287,6 +323,57 @@ pub struct MutationProof {
 }
 
 impl MutationProof {
+    /// Signs the registration of `record`.
+    ///
+    /// Covers the record as submitted: its key, endpoints, expiry, instance
+    /// identity, and starting sequence. A relay can therefore forward a
+    /// registration but not alter one.
+    #[must_use]
+    pub fn sign_registration(key: &SigningKey, record: &Registration) -> Self {
+        Self::sign(
+            key,
+            record.agent_uri(),
+            RecordVersion::of(record),
+            &Self::registration_of(record),
+        )
+    }
+
+    /// The mutation a registration proof covers.
+    ///
+    /// Derived from the record rather than supplied, so signer and store
+    /// cannot describe the same registration two different ways.
+    fn registration_of(record: &Registration) -> Mutation<'_> {
+        Mutation::Register {
+            agent_key: record.agent_key(),
+            endpoints: record.endpoints(),
+            expires_at: record.expires_at(),
+        }
+    }
+
+    /// Checks that this proof authorizes the registration of `record`.
+    ///
+    /// Unlike a later write there is no history to advance past, so only the
+    /// signature is at issue: the record's own key must have signed the record
+    /// exactly as submitted.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DhtError::Unauthorized`] if the signature does not answer for
+    /// this record.
+    pub fn authorizes_registration(&self, record: &Registration) -> Result<(), DhtError> {
+        let version = RecordVersion::new(record.registered_at(), self.sequence);
+        record
+            .agent_key()
+            .verify(
+                &signing_payload(record.agent_uri(), version, &Self::registration_of(record)),
+                &self.signature,
+            )
+            .map_err(|_| DhtError::Unauthorized {
+                agent_uri: record.agent_uri().canonical(),
+                operation: MutationKind::Register,
+            })
+    }
+
     /// Signs the next write to `record`.
     ///
     /// The usual way to build a proof: look the record up, then sign against
@@ -698,8 +785,47 @@ mod tests {
     }
 
     #[test]
+    fn a_registration_proof_does_not_double_as_a_later_write() {
+        // Both are signed at the same version by the same key, so only the
+        // operation tag separates them.
+        let key = SigningKey::generate();
+        let record = record(&test_uri(), &key.verifying_key());
+        let proof = MutationProof::sign_registration(&key, &record);
+
+        assert!(proof.authorizes_registration(&record).is_ok());
+        assert!(matches!(
+            proof.authorizes(&record, &Mutation::Deregister),
+            Err(DhtError::Unauthorized { .. })
+        ));
+    }
+
+    #[test]
+    fn a_registration_proof_is_bound_to_the_key_the_record_names() {
+        // The key is inside the signed payload, so a record cannot be handed a
+        // proof that was made for a record naming somebody else.
+        let key = SigningKey::generate();
+        let other = SigningKey::generate();
+        let mine = record(&test_uri(), &key.verifying_key());
+        let proof = MutationProof::sign_registration(&key, &mine);
+
+        // Same everything except the key the record names.
+        let swapped = Registration::new(
+            test_uri(),
+            other.verifying_key(),
+            vec![Endpoint::https("a.example")],
+        )
+        .with_registered_at(mine.registered_at());
+
+        assert!(matches!(
+            proof.authorizes_registration(&swapped),
+            Err(DhtError::Unauthorized { .. })
+        ));
+    }
+
+    #[test]
     fn mutation_kinds_have_distinct_tags() {
         let tags = [
+            MutationKind::Register.tag(),
             MutationKind::UpdateEndpoint.tag(),
             MutationKind::Refresh.tag(),
             MutationKind::Deregister.tag(),

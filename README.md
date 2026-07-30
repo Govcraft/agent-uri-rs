@@ -116,7 +116,7 @@ Agent IDs use [TypeID](https://github.com/jetify-com/typeid) format: a semantic 
 
 ```toml
 [dependencies]
-agent-uri-attestation = "0.4"
+agent-uri-attestation = "0.5"
 ```
 
 ```rust
@@ -131,16 +131,24 @@ let uri = AgentUri::parse(
 
 let signing_key = SigningKey::generate();
 let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(86400));
-let token = issuer.issue(&uri, vec!["workflow/approval".into()]).unwrap();
+
+// The token binds the agent's own key, not just its URI.
+let agent_key = SigningKey::generate();
+let token = issuer
+    .issue(&uri, &agent_key.verifying_key(), vec!["workflow/approval".into()])
+    .unwrap();
 
 // Verifier checks token without callback
 let mut verifier = Verifier::new();
 verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 let claims = verifier.verify(&token).unwrap();
 assert_eq!(claims.agent_uri, uri.to_string());
+assert_eq!(claims.agent_verifying_key().unwrap(), agent_key.verifying_key());
 ```
 
 Tokens use PASETO v4.public (Ed25519 signatures). The URI path is identity-defining: every attested capability must equal that path or be its descendant. Changing the path creates a different agent identity and requires a new Agent ID and attestation.
+
+The `agent_key` claim is what keeps a token from being a bearer credential. Registration records are world-readable and carry their token inline, so without it anyone who performed a lookup would hold a credential naming a URI and its capabilities and nothing about who may present it.
 
 ### agent-uri-dht
 
@@ -148,14 +156,15 @@ Tokens use PASETO v4.public (Ed25519 signatures). The URI path is identity-defin
 
 ```toml
 [dependencies]
-agent-uri-dht = "0.3"
+agent-uri-dht = "0.5"
 ```
 
 ```rust
 use agent_uri::{AgentUri, TrustRoot, CapabilityPath};
 use agent_uri_attestation::{Issuer, SigningKey, Verifier};
 use agent_uri_dht::{
-    Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig, WriteOptions,
+    Dht, Endpoint, MutationProof, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig,
+    WriteOptions,
 };
 use futures::executor::block_on;
 use std::time::Duration;
@@ -171,16 +180,25 @@ let issuer = Issuer::new(
     signing_key.clone(),
     Duration::from_secs(3600),
 );
-let token = issuer.issue(&uri, vec!["assistant/chat".into()]).unwrap();
+let agent_key = SigningKey::generate();
+let token = issuer
+    .issue(&uri, &agent_key.verifying_key(), vec!["assistant/chat".into()])
+    .unwrap();
 let mut verifier = Verifier::new();
 verifier.add_trusted_root("anthropic.com", signing_key.verifying_key());
 let dht = SimulatedDht::with_verifier(SimulationConfig::default(), verifier);
 let registration = Registration::new(
     uri.clone(),
+    agent_key.verifying_key(),
     vec![Endpoint::https("us-east-1.agent.anthropic.com")]
 ).with_attestation(token);
+
+// Every write is signed by the agent's own key: the token says the trust root
+// vouched for that key, the proof says this party holds it.
+let proof = MutationProof::sign_registration(&agent_key, &registration);
+
 // Every operation is async and takes a deadline and a quorum.
-block_on(dht.register(registration, WriteOptions::default())).unwrap();
+block_on(dht.register(registration, &proof, WriteOptions::default())).unwrap();
 
 // Client discovers by capability prefix. Results are paged: follow
 // `next_cursor()` until it is None, or you are sampling rather than enumerating.

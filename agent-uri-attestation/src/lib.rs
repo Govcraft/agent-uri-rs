@@ -18,14 +18,18 @@
 //! use agent_uri::AgentUri;
 //! use std::time::Duration;
 //!
-//! // Issuer side: create attestation
+//! // Issuer side: create attestation. The agent proves it holds `agent_key`;
+//! // the trust root then attests that key alongside the URI.
 //! let signing_key = SigningKey::generate();
 //! let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(86400));
 //!
 //! let uri = AgentUri::parse(
 //!     "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q"
 //! ).unwrap();
-//! let token = issuer.issue(&uri, vec!["workflow/approval/read".into()]).unwrap();
+//! let agent_key = SigningKey::generate();
+//! let token = issuer
+//!     .issue(&uri, &agent_key.verifying_key(), vec!["workflow/approval/read".into()])
+//!     .unwrap();
 //!
 //! // Verifier side: validate attestation
 //! let mut verifier = Verifier::new();
@@ -34,6 +38,7 @@
 //! let claims = verifier.verify(&token).unwrap();
 //! assert_eq!(claims.agent_uri, uri.to_string());
 //! assert_eq!(claims.capabilities, vec!["workflow/approval/read"]);
+//! assert_eq!(claims.agent_verifying_key().unwrap(), agent_key.verifying_key());
 //! ```
 //!
 //! # Token Structure
@@ -41,6 +46,7 @@
 //! Attestation tokens are PASETO v4.public tokens containing:
 //!
 //! - `agent_uri`: The full agent URI being attested
+//! - `agent_key`: The agent's own Ed25519 public key, base64-encoded
 //! - `capabilities`: Array of capability strings granted
 //! - `iss`: Issuer (trust root) that created the attestation
 //! - `iat`: Issued-at timestamp
@@ -52,11 +58,24 @@
 //! | Property | How Achieved |
 //! |----------|--------------|
 //! | No algorithm confusion | PASETO v4 is Ed25519-only |
+//! | Not a bearer credential | `agent_key` binds the token to a key the holder must possess |
 //! | Replay protection | `exp` claim validated automatically |
 //! | Trust root binding | `iss` must match trusted roots |
 //! | Issuer/namespace binding | `iss` must equal the `agent_uri` claim's authority |
 //! | URI binding | `agent_uri` claim verified against expected |
 //! | Tamper detection | Ed25519 signature verification |
+//!
+//! # Breaking change in 0.5.0
+//!
+//! Attestation tokens now carry a REQUIRED **`agent_key`** claim: the agent's
+//! own Ed25519 public key, base64-encoded. [`Issuer::issue`] takes it and
+//! [`Verifier`] rejects a token without one.
+//!
+//! Without it a token was a bearer credential. Registration records are
+//! world-readable and carry their token inline, so anyone who performed a
+//! lookup held a credential that named a URI and its capabilities and nothing
+//! about who was entitled to present it. The claim closes that: a lifted token
+//! is useless without the private half, which the agent never publishes.
 //!
 //! # Breaking change in 0.3.0
 //!
@@ -87,6 +106,7 @@
 //! |-----------|------------|
 //! | Total token | 8192 chars ([`MAX_TOKEN_LENGTH`]) |
 //! | `agent_uri` | 512 chars |
+//! | `agent_key` | 44 chars |
 //! | capabilities | 64 items |
 //! | Each capability | 256 chars |
 //! | issuer | 128 chars |

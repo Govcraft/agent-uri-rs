@@ -35,7 +35,7 @@ use crate::verification;
 /// let uri = AgentUri::parse(
 ///     "agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q"
 /// ).unwrap();
-/// let token = issuer.issue(&uri, vec!["test".into()]).unwrap();
+/// let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec!["test".into()]).unwrap();
 ///
 /// // Create a verifier with the issuer's public key
 /// let mut verifier = Verifier::new();
@@ -233,6 +233,10 @@ impl Verifier {
         }
 
         verification::validate_capability_scope(&claims.agent_uri, &claims.capabilities)?;
+        // Callers act on the attested key, so it has to be a key. Checking it
+        // here means every claim set this method hands back has one that
+        // decodes, and no caller has to re-derive that.
+        claims.agent_verifying_key()?;
         verification::validate_audience(claims.aud.as_deref(), verifier_audience)?;
 
         Ok(claims)
@@ -351,7 +355,7 @@ impl Verifier {
     /// let uri = AgentUri::parse(
     ///     "agent://acme.com/workflow/approval/agent_01h455vb4pex5vsknk084sn02q"
     /// ).unwrap();
-    /// let token = issuer.issue(&uri, vec!["workflow/approval".into()]).unwrap();
+    /// let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec!["workflow/approval".into()]).unwrap();
     ///
     /// let mut verifier = Verifier::new();
     /// verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -572,6 +576,7 @@ fn timestamp_claim(
 /// Extract `AttestationClaims` from parsed JSON value.
 fn extract_claims(json: &serde_json::Value) -> Result<AttestationClaims, AttestationError> {
     let agent_uri = required_str_claim(json, "agent_uri")?.to_string();
+    let agent_key = required_str_claim(json, "agent_key")?.to_string();
     let iss = required_str_claim(json, "iss")?.to_string();
     let iat = timestamp_claim(json, "iat")?;
     let exp = timestamp_claim(json, "exp")?;
@@ -598,6 +603,7 @@ fn extract_claims(json: &serde_json::Value) -> Result<AttestationClaims, Attesta
 
     Ok(AttestationClaims {
         agent_uri,
+        agent_key,
         capabilities,
         iss,
         iat,
@@ -642,6 +648,7 @@ mod tests {
         let now = Utc::now();
         serde_json::json!({
             "agent_uri": test_uri().canonical(),
+            "agent_key": SigningKey::generate().verifying_key().to_base64(),
             "capabilities": ["test"],
             "iss": "acme.com",
             "iat": now.to_rfc3339(),
@@ -723,6 +730,7 @@ mod tests {
     ) -> AttestationClaims {
         AttestationClaims {
             agent_uri: test_uri().to_string(),
+            agent_key: SigningKey::generate().verifying_key().to_base64(),
             capabilities: vec!["test".into()],
             iss: "acme.com".into(),
             iat,
@@ -739,7 +747,13 @@ mod tests {
         // InvalidTokenFormat, sending callers hunting for a copy-paste error.
         let signing_key = SigningKey::generate();
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
-        let token = issuer.issue(&test_uri(), vec!["test".into()]).unwrap();
+        let token = issuer
+            .issue(
+                &test_uri(),
+                &SigningKey::generate().verifying_key(),
+                vec!["test".into()],
+            )
+            .unwrap();
 
         let tampered = tamper(&token);
 
@@ -756,7 +770,13 @@ mod tests {
     fn a_token_signed_by_another_key_is_reported_as_an_invalid_signature() {
         let signing_key = SigningKey::generate();
         let issuer = Issuer::new("acme.com", signing_key, Duration::from_hours(1));
-        let token = issuer.issue(&test_uri(), vec!["test".into()]).unwrap();
+        let token = issuer
+            .issue(
+                &test_uri(),
+                &SigningKey::generate().verifying_key(),
+                vec!["test".into()],
+            )
+            .unwrap();
 
         // The right authority, but the wrong key registered for it.
         let mut verifier = Verifier::new();
@@ -858,7 +878,13 @@ mod tests {
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec!["test".into()]).unwrap();
+        let token = issuer
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["test".into()],
+            )
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -877,7 +903,9 @@ mod tests {
         let uri =
             AgentUri::parse("agent://evil.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
-        let token = issuer.issue(&uri, vec![]).unwrap();
+        let token = issuer
+            .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+            .unwrap();
 
         let mut verifier = Verifier::new();
         // Register key under different trust root
@@ -900,7 +928,9 @@ mod tests {
         let issuer = Issuer::new("acme.com", signing_key1, Duration::from_hours(1));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec![]).unwrap();
+        let token = issuer
+            .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+            .unwrap();
 
         let mut verifier = Verifier::new();
         // Register different key
@@ -924,7 +954,9 @@ mod tests {
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec![]).unwrap();
+        let token = issuer
+            .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -942,7 +974,9 @@ mod tests {
         let uri2 =
             AgentUri::parse("agent://acme.com/other/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
-        let token = issuer.issue(&uri1, vec![]).unwrap();
+        let token = issuer
+            .issue(&uri1, &SigningKey::generate().verifying_key(), vec![])
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -958,7 +992,9 @@ mod tests {
         let issuer = Issuer::new("acme.com", signing_key, Duration::from_hours(1));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec![]).unwrap();
+        let token = issuer
+            .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+            .unwrap();
 
         let verifier = Verifier::new();
 
@@ -981,7 +1017,13 @@ mod tests {
 
         let foreign_uri =
             AgentUri::parse("agent://evil.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
-        let token = issuer.issue(&foreign_uri, vec!["test".into()]).unwrap();
+        let token = issuer
+            .issue(
+                &foreign_uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["test".into()],
+            )
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -1024,7 +1066,11 @@ mod tests {
             AgentUri::parse("agent://acme.com/workflow/approval/agent_01h455vb4pex5vsknk084sn02q")
                 .unwrap();
         let token = issuer
-            .issue(&uri, vec!["workflow/approval".into()])
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["workflow/approval".into()],
+            )
             .unwrap();
 
         let mut verifier = Verifier::new();
@@ -1047,6 +1093,7 @@ mod tests {
         // the issuer/namespace binding.
         let result = AttestationClaims::builder()
             .agent_uri("not-an-agent-uri")
+            .agent_key(&SigningKey::generate().verifying_key())
             .issuer("acme.com")
             .ttl(Duration::from_hours(1))
             .build();
@@ -1063,6 +1110,7 @@ mod tests {
         let uri = test_uri();
         let claims = AttestationClaims::builder()
             .agent_uri(uri.canonical())
+            .agent_key(&SigningKey::generate().verifying_key())
             .issuer("acme.com")
             .add_capability("test")
             .audience("api.globex.com")
@@ -1097,6 +1145,7 @@ mod tests {
         for capability in ["workflow", "financial/payment", "workflow/review"] {
             let result = AttestationClaims::builder()
                 .agent_uri(uri.canonical())
+                .agent_key(&SigningKey::generate().verifying_key())
                 .issuer("acme.com")
                 .add_capability(capability)
                 .build();
@@ -1109,6 +1158,7 @@ mod tests {
         assert!(
             AttestationClaims::builder()
                 .agent_uri(uri.canonical())
+                .agent_key(&SigningKey::generate().verifying_key())
                 .issuer("acme.com")
                 .add_capability("workflow/approval/invoice")
                 .build()
@@ -1127,7 +1177,13 @@ mod tests {
             "test/write".to_string(),
             "test/admin".to_string(),
         ];
-        let token = issuer.issue(&uri, capabilities.clone()).unwrap();
+        let token = issuer
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                capabilities.clone(),
+            )
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -1193,7 +1249,13 @@ mod tests {
         let signing_key = SigningKey::generate();
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_hours(1));
         let uri = test_uri();
-        let token = issuer.issue(&uri, vec!["test".into()]).unwrap();
+        let token = issuer
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["test".into()],
+            )
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -1346,7 +1408,7 @@ mod tests {
         let signing_key = SigningKey::generate();
         let verifier = verifier_trusting(&signing_key);
 
-        for name in ["exp", "iss", "iat", "agent_uri"] {
+        for name in ["exp", "iss", "iat", "agent_uri", "agent_key"] {
             let token = token_without_claim(&signing_key, name);
             match verifier.verify(&token) {
                 Err(AttestationError::InvalidClaims { reason }) => assert!(

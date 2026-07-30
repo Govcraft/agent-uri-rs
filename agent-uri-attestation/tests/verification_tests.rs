@@ -337,6 +337,7 @@ mod is_expired_at_tests {
     fn not_expired_at_current_time() {
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+            .agent_key(&SigningKey::generate().verifying_key())
             .issuer("acme.com")
             .ttl(Duration::from_secs(3600))
             .build()
@@ -350,6 +351,7 @@ mod is_expired_at_tests {
     fn expired_at_exact_expiration() {
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+            .agent_key(&SigningKey::generate().verifying_key())
             .issuer("acme.com")
             .ttl(Duration::from_secs(3600))
             .build()
@@ -362,6 +364,7 @@ mod is_expired_at_tests {
     fn expired_at_future_time() {
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+            .agent_key(&SigningKey::generate().verifying_key())
             .issuer("acme.com")
             .ttl(Duration::from_secs(3600))
             .build()
@@ -375,6 +378,7 @@ mod is_expired_at_tests {
     fn not_expired_one_second_before() {
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+            .agent_key(&SigningKey::generate().verifying_key())
             .issuer("acme.com")
             .ttl(Duration::from_secs(3600))
             .build()
@@ -404,7 +408,11 @@ mod verify_for_capability_tests {
         let uri = test_uri();
 
         let token = issuer
-            .issue(&uri, vec!["workflow/approval".into()])
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["workflow/approval".into()],
+            )
             .unwrap();
 
         let mut verifier = Verifier::new();
@@ -425,7 +433,11 @@ mod verify_for_capability_tests {
         let uri = test_uri();
 
         let token = issuer
-            .issue(&uri, vec!["workflow/approval".into()])
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["workflow/approval".into()],
+            )
             .unwrap();
 
         let mut verifier = Verifier::new();
@@ -445,7 +457,11 @@ mod verify_for_capability_tests {
 
         // Token grants one descendant of the identity path.
         let token = issuer
-            .issue(&uri, vec!["workflow/approval/read".into()])
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["workflow/approval/read".into()],
+            )
             .unwrap();
 
         let mut verifier = Verifier::new();
@@ -467,7 +483,9 @@ mod verify_for_capability_tests {
         let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
         let uri = test_uri();
 
-        let token = issuer.issue(&uri, vec![]).unwrap();
+        let token = issuer
+            .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+            .unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -486,7 +504,11 @@ mod verify_for_capability_tests {
         let uri = test_uri();
 
         let token = issuer
-            .issue(&uri, vec!["workflow/approval".into()])
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["workflow/approval".into()],
+            )
             .unwrap();
 
         // Wait for expiration
@@ -512,7 +534,11 @@ mod verify_for_capability_tests {
             .unwrap();
 
         let token = issuer
-            .issue(&uri1, vec!["workflow/approval".into()])
+            .issue(
+                &uri1,
+                &SigningKey::generate().verifying_key(),
+                vec!["workflow/approval".into()],
+            )
             .unwrap();
 
         let mut verifier = Verifier::new();
@@ -533,7 +559,11 @@ mod verify_for_capability_tests {
         let uri = test_uri();
 
         let token = issuer
-            .issue(&uri, vec!["workflow/approval".into()])
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["workflow/approval".into()],
+            )
             .unwrap();
 
         // Verifier has no trusted roots
@@ -557,6 +587,7 @@ mod verify_for_capability_tests {
         let token = issuer
             .issue(
                 &uri,
+                &SigningKey::generate().verifying_key(),
                 vec![
                     "workflow/approval/storage-read".into(),
                     "workflow/approval/read".into(),
@@ -582,7 +613,11 @@ mod verify_for_capability_tests {
 
         // Token has specific capability
         let token = issuer
-            .issue(&uri, vec!["workflow/approval/specific".into()])
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["workflow/approval/specific".into()],
+            )
             .unwrap();
 
         let mut verifier = Verifier::new();

@@ -28,8 +28,8 @@
 //! use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
 //! use agent_uri_attestation::SigningKey;
 //! use agent_uri_dht::{
-//!     Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig,
-//!     WriteOptions,
+//!     Dht, Endpoint, MutationProof, Query, ReadOptions, Registration, SimulatedDht,
+//!     SimulationConfig, WriteOptions,
 //! };
 //! use futures::executor::block_on;
 //!
@@ -47,9 +47,10 @@
 //! let endpoint = Endpoint::https("agent.anthropic.com:443");
 //! let agent_key = SigningKey::generate();
 //! let registration = Registration::new(uri, agent_key.verifying_key(), vec![endpoint]);
+//! let proof = MutationProof::sign_registration(&agent_key, &registration);
 //!
 //! // Every operation is async, because a real backend crosses the network.
-//! block_on(dht.register(registration, WriteOptions::default())).unwrap();
+//! block_on(dht.register(registration, &proof, WriteOptions::default())).unwrap();
 //!
 //! // Discover agents by capability. Results are paged.
 //! let query = Query::prefix(
@@ -80,9 +81,9 @@
 //!   slow or partitioned network from a rejected request. Collapsing the two
 //!   turns a partition into an apparently empty namespace.
 //! - **Writes are authorized, not merely addressed.** An agent URI is public,
-//!   so every write that changes or removes a record carries a
-//!   [`MutationProof`] signed by the key that record names. Without this,
-//!   reaching a replica would be enough to repoint an agent.
+//!   and so is the attestation token stored beside it, so every write carries a
+//!   [`MutationProof`] signed by the agent's own key. Without this, reaching a
+//!   replica would be enough to repoint an agent.
 //!
 //! `SimulatedDht` honors all of this against one in-process copy, so code
 //! written against it does not acquire habits a real backend will punish.
@@ -143,7 +144,9 @@
 //!     agent_key.verifying_key(),
 //!     vec![Endpoint::https("us-east-1.agent.anthropic.com")]
 //! );
-//! block_on(dht.register(registration.clone(), WriteOptions::default())).unwrap();
+//! let registration_proof = MutationProof::sign_registration(&agent_key, &registration);
+//! block_on(dht.register(registration.clone(), &registration_proof, WriteOptions::default()))
+//!     .unwrap();
 //!
 //! // Migrate to new location (same identity). The proof is signed against the
 //! // record as it stands, so an intercepted migration cannot be re-aimed at

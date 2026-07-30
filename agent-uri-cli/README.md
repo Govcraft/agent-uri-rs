@@ -99,6 +99,7 @@ This is the value you register with a trust-root registry, and the value relying
 $ agent-uri attest issue \
     --key ./acme.key \
     --agent agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q \
+    --agent-key d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a \
     --capability workflow/approval \
     --ttl 90d
 Issued an attestation.
@@ -107,6 +108,7 @@ Issued an attestation.
   issuer        acme.com
   capabilities  workflow/approval
   expires at    2026-10-10T01:14:20Z (in 89 days)
+  agent key     d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
   signing key   29172969a481f7400956932052bbbb73ad9e36aff29b4c69c0be7217a68af8cc
 
 v4.public.eyJhZ2VudF91cmkiOiJhZ2VudDovL2FjbWUuY29tL3dvcmtmbG93...
@@ -115,16 +117,18 @@ v4.public.eyJhZ2VudF91cmkiOiJhZ2VudDovL2FjbWUuY29tL3dvcmtmbG93...
 **The token is the only thing on stdout.** Everything above it is prose on stderr. So this does what it looks like it does:
 
 ```console
-$ agent-uri attest issue --key ./acme.key --agent agent://acme.com/... --capability chat/reply | pbcopy
+$ agent-uri attest issue --key ./acme.key --agent agent://acme.com/... --agent-key d75a... --capability chat/reply | pbcopy
 ```
 
 The issuer is derived from the URI's authority. `--issuer` exists only so a mistake can be caught out loud:
 
 ```console
-$ agent-uri attest issue --key ./acme.key --agent agent://acme.com/workflow/approval/... --capability workflow/approval --issuer evil.com
+$ agent-uri attest issue --key ./acme.key --agent agent://acme.com/workflow/approval/... --agent-key d75a... --capability workflow/approval --issuer evil.com
 error: issuer 'evil.com' does not own the attested URI's authority 'acme.com'; a key may only attest agent URIs rooted at its own authority
   fix: drop --issuer to use 'acme.com', or attest a URI rooted at 'evil.com'; a token issued this way could never verify
 ```
+
+**`--agent-key`** is the agent's own public key, in the same 64-hex form `key public` prints. The token binds to it, so a token lifted from a public registration record is useless to whoever read it. Attest a key only once the agent has proven it holds the matching private half: signing a key you were merely handed vouches for whoever handed it over.
 
 **TTL.** `--ttl` takes humane durations: `30s`, `30m`, `12h`, `90d`, `2w`, `1h30m`. A bare number is rejected rather than guessed, because silent unit ambiguity is how a 30-second credential gets shipped in place of a 30-day one. The default is **24h**, and the maximum is 365d. Prefer short lifetimes and re-issue: an attestation cannot be revoked before it expires, so its TTL is the blast radius of a leak.
 

@@ -69,11 +69,24 @@ fn generate_key(home: &TempDir, path: &Path) -> String {
 }
 
 /// Mints a token through the CLI, returning only what landed on stdout.
+/// A stand-in for the agent's own public key.
+///
+/// Any valid Ed25519 public key does; the CLI never signs with it. Holding it
+/// constant keeps these tests about the token rather than the key.
+const AGENT_KEY: &str = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+
 fn issue(home: &TempDir, key: &Path, uri: &str, capability: &str) -> String {
     let output = agent_uri(home)
         .args(["attest", "issue", "--key"])
         .arg(key)
-        .args(["--agent", uri, "--capability", capability])
+        .args([
+            "--agent",
+            uri,
+            "--agent-key",
+            AGENT_KEY,
+            "--capability",
+            capability,
+        ])
         .output()
         .expect("runs");
 
@@ -309,7 +322,14 @@ fn issue_puts_the_token_and_nothing_else_on_stdout() {
     let output = agent_uri(&home)
         .args(["attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", URI, "--capability", "workflow/approval"])
+        .args([
+            "--agent",
+            URI,
+            "--agent-key",
+            AGENT_KEY,
+            "--capability",
+            "workflow/approval",
+        ])
         .output()
         .expect("runs");
 
@@ -338,6 +358,8 @@ fn issue_refuses_an_issuer_that_does_not_own_the_uris_authority() {
         .args([
             "--agent",
             URI,
+            "--agent-key",
+            AGENT_KEY,
             "--capability",
             "workflow/approval/read",
             "--issuer",
@@ -362,7 +384,14 @@ fn issue_refuses_an_invalid_agent_uri() {
     let output = agent_uri(&home)
         .args(["attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", "http://example.com", "--capability", "read"])
+        .args([
+            "--agent",
+            "http://example.com",
+            "--agent-key",
+            AGENT_KEY,
+            "--capability",
+            "read",
+        ])
         .output()
         .expect("runs");
 
@@ -382,6 +411,8 @@ fn a_custom_ttl_is_honoured() {
         .args([
             "--agent",
             URI,
+            "--agent-key",
+            AGENT_KEY,
             "--capability",
             "workflow/approval/read",
             "--ttl",
@@ -410,7 +441,14 @@ fn the_default_ttl_is_twenty_four_hours() {
     let output = agent_uri(&home)
         .args(["--json", "attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", URI, "--capability", "workflow/approval/read"])
+        .args([
+            "--agent",
+            URI,
+            "--agent-key",
+            AGENT_KEY,
+            "--capability",
+            "workflow/approval/read",
+        ])
         .output()
         .expect("runs");
 
@@ -431,6 +469,7 @@ fn expired_token(signing_key: &SigningKey) -> String {
 
     let mut claims = AttestationClaims::builder()
         .agent_uri(URI)
+        .agent_key(&SigningKey::generate().verifying_key())
         .issuer("acme.com")
         .add_capability("workflow/approval")
         .build()
@@ -757,6 +796,8 @@ fn an_unparseable_ttl_is_a_usage_error_not_a_refusal() {
         .args([
             "--agent",
             URI,
+            "--agent-key",
+            AGENT_KEY,
             "--capability",
             "workflow/approval/read",
             "--ttl",
@@ -782,6 +823,8 @@ fn a_bare_number_ttl_is_rejected_rather_than_guessed() {
         .args([
             "--agent",
             URI,
+            "--agent-key",
+            AGENT_KEY,
             "--capability",
             "workflow/approval/read",
             "--ttl",
@@ -856,6 +899,8 @@ fn json_issue_wraps_the_token_with_its_claims() {
         .args([
             "--agent",
             URI,
+            "--agent-key",
+            AGENT_KEY,
             "--capability",
             "workflow/approval",
             "--audience",
@@ -885,6 +930,8 @@ fn audience_restricted_token_requires_exact_cli_context() {
         .args([
             "--agent",
             URI,
+            "--agent-key",
+            AGENT_KEY,
             "--capability",
             "workflow/approval",
             "--audience",
@@ -945,7 +992,14 @@ fn json_mode_never_narrates_on_stderr() {
     let output = agent_uri(&home)
         .args(["--json", "attest", "issue", "--key"])
         .arg(&key)
-        .args(["--agent", URI, "--capability", "workflow/approval/read"])
+        .args([
+            "--agent",
+            URI,
+            "--agent-key",
+            AGENT_KEY,
+            "--capability",
+            "workflow/approval/read",
+        ])
         .output()
         .expect("runs");
 

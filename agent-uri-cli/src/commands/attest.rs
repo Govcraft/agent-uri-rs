@@ -30,6 +30,7 @@ pub fn run<O: Write, E: Write>(
         AttestCommand::Issue {
             key,
             agent,
+            agent_key,
             capability,
             ttl,
             audience,
@@ -38,6 +39,7 @@ pub fn run<O: Write, E: Write>(
             &IssueRequest {
                 key_path: key,
                 agent,
+                agent_key,
                 capabilities: capability,
                 ttl: *ttl,
                 audience: audience.as_deref(),
@@ -69,6 +71,7 @@ pub fn run<O: Write, E: Write>(
 struct IssueRequest<'a> {
     key_path: &'a std::path::Path,
     agent: &'a str,
+    agent_key: &'a str,
     capabilities: &'a [String],
     ttl: Ttl,
     audience: Option<&'a str>,
@@ -128,9 +131,18 @@ fn issue<O: Write, E: Write>(
     let issuer_root = resolve_issuer(&uri, request.issuer)?;
     let signing_key = keyfile::load(request.key_path)?;
     let public_key = trust::encode_public(&signing_key.verifying_key());
+    let agent_key = trust::decode_public(request.agent_key).map_err(|source| {
+        CliError::refused(
+            "invalid_agent_key",
+            format!("--agent-key is not a usable public key: {source}"),
+            "pass the 64 hex characters printed by 'agent-uri key generate' \
+             for the agent's own key, not the trust root's",
+        )
+    })?;
 
     let claims = AttestationClaims::builder()
         .agent_uri(uri.to_string())
+        .agent_key(&agent_key)
         .capabilities(request.capabilities.to_vec())
         .issuer(&issuer_root)
         .ttl(request.ttl.as_duration());
@@ -173,6 +185,7 @@ fn issue<O: Write, E: Write>(
         "expires at",
         &crate::timefmt::absolute_and_relative(claims.exp, Utc::now()),
     );
+    out.field("agent key", request.agent_key);
     out.field("signing key", &public_key);
     out.blank();
 

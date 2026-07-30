@@ -73,25 +73,36 @@ impl FromStr for TrustedRoot {
             return Err(TrustedRootError::EmptyRoot);
         }
 
-        let hex_key = hex_key.trim();
-        if hex_key.len() != HEX_LEN {
-            return Err(TrustedRootError::BadLength(hex_key.len()));
-        }
-
-        let bytes =
-            hex::decode(hex_key).map_err(|source| TrustedRootError::NotHex(source.to_string()))?;
-        let bytes: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| TrustedRootError::BadLength(hex_key.len()))?;
-
-        let key = VerifyingKey::from_bytes(&bytes)
-            .map_err(|source| TrustedRootError::NotAKey(source.to_string()))?;
+        let key = decode_public(hex_key.trim())?;
 
         Ok(Self {
             root: root.to_string(),
             key,
         })
     }
+}
+
+/// Decodes a public key from 64 hex characters.
+///
+/// The same encoding `--trust-root` uses, so a key that was printed by
+/// `agent-uri key generate` can be pasted wherever a key is asked for.
+///
+/// # Errors
+///
+/// Returns [`TrustedRootError`] if the input is not 64 hex characters
+/// decoding to a valid Ed25519 public key.
+pub fn decode_public(hex_key: &str) -> Result<VerifyingKey, TrustedRootError> {
+    if hex_key.len() != HEX_LEN {
+        return Err(TrustedRootError::BadLength(hex_key.len()));
+    }
+
+    let bytes =
+        hex::decode(hex_key).map_err(|source| TrustedRootError::NotHex(source.to_string()))?;
+    let bytes: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| TrustedRootError::BadLength(hex_key.len()))?;
+
+    VerifyingKey::from_bytes(&bytes).map_err(|source| TrustedRootError::NotAKey(source.to_string()))
 }
 
 /// Encodes a public key as 64 lowercase hex characters.
