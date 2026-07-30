@@ -1,6 +1,7 @@
 //! Custom error types for DHT operations.
 
 use std::fmt;
+use std::time::Duration;
 
 /// Errors that can occur during DHT operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +46,22 @@ pub enum DhtError {
     },
     /// The endpoints list is empty.
     NoEndpoints,
+    /// The operation did not complete within its deadline.
+    Timeout {
+        /// The operation that timed out
+        operation: &'static str,
+        /// How long the operation was given
+        after: Duration,
+    },
+    /// Too few replicas answered to satisfy the requested quorum.
+    QuorumFailed {
+        /// Replicas that answered
+        achieved: usize,
+        /// Replicas the requested quorum needed
+        required: usize,
+    },
+    /// The node is not connected to any peer that can serve the operation.
+    NoPeers,
 }
 
 impl fmt::Display for DhtError {
@@ -90,6 +107,27 @@ impl fmt::Display for DhtError {
             }
             Self::NoEndpoints => {
                 write!(f, "registration must have at least one endpoint")
+            }
+            Self::Timeout { operation, after } => {
+                write!(
+                    f,
+                    "{operation} did not complete within {after:?}; the network may be slow or \
+                     partitioned, and the operation may still have taken effect"
+                )
+            }
+            Self::QuorumFailed { achieved, required } => {
+                write!(
+                    f,
+                    "only {achieved} of the {required} replicas required by the requested quorum \
+                     responded; the operation may have partially applied"
+                )
+            }
+            Self::NoPeers => {
+                write!(
+                    f,
+                    "not connected to any peer; bootstrap against a known peer before \
+                     issuing operations"
+                )
             }
         }
     }
@@ -151,6 +189,23 @@ impl DhtError {
     pub const fn is_expired(&self) -> bool {
         matches!(self, Self::Expired { .. })
     }
+
+    /// Returns true if retrying the operation could plausibly succeed.
+    ///
+    /// Transient failures describe the network, not the request: the same call
+    /// against a healthier overlay may succeed. Every other variant rejects the
+    /// request itself and will keep rejecting it.
+    ///
+    /// A transient failure is not proof the operation did not take effect. A
+    /// write that timed out may have reached some replicas, so retries must be
+    /// safe to repeat.
+    #[must_use]
+    pub const fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            Self::Timeout { .. } | Self::QuorumFailed { .. } | Self::NoPeers
+        )
+    }
 }
 
 #[cfg(test)]
@@ -188,5 +243,62 @@ mod tests {
         let err = DhtError::key_capacity_exceeded("abc123...", 20);
         assert!(err.to_string().contains("maximum capacity"));
         assert!(err.to_string().contains("20"));
+    }
+
+    #[test]
+    fn timeout_error_display_warns_the_write_may_have_landed() {
+        let err = DhtError::Timeout {
+            operation: "register",
+            after: Duration::from_secs(30),
+        };
+        let shown = err.to_string();
+        assert!(shown.contains("register"));
+        assert!(shown.contains("may still have taken effect"));
+    }
+
+    #[test]
+    fn quorum_failed_error_reports_both_counts() {
+        let err = DhtError::QuorumFailed {
+            achieved: 3,
+            required: 11,
+        };
+        let shown = err.to_string();
+        assert!(shown.contains('3'));
+        assert!(shown.contains("11"));
+    }
+
+    #[test]
+    fn no_peers_error_points_at_bootstrap() {
+        assert!(DhtError::NoPeers.to_string().contains("bootstrap"));
+    }
+
+    #[test]
+    fn network_failures_are_transient() {
+        assert!(
+            DhtError::Timeout {
+                operation: "lookup",
+                after: Duration::from_secs(1)
+            }
+            .is_transient()
+        );
+        assert!(
+            DhtError::QuorumFailed {
+                achieved: 1,
+                required: 2
+            }
+            .is_transient()
+        );
+        assert!(DhtError::NoPeers.is_transient());
+    }
+
+    #[test]
+    fn request_rejections_are_not_transient() {
+        // Retrying these is pure waste: the request itself is the problem.
+        assert!(!DhtError::NoEndpoints.is_transient());
+        assert!(!DhtError::not_found("agent://a.com/b/c_1").is_transient());
+        assert!(!DhtError::already_registered("agent://a.com/b/c_1").is_transient());
+        assert!(!DhtError::expired("agent://a.com/b/c_1").is_transient());
+        assert!(!DhtError::invalid_attestation("agent://a.com/b/c_1", "bad").is_transient());
+        assert!(!DhtError::key_capacity_exceeded("k", 1).is_transient());
     }
 }

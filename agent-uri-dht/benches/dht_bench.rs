@@ -16,10 +16,12 @@
 //! | SimulatedDht lookup_prefix | Scales | With result count |
 
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
+use futures::executor::block_on;
 
 use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
 use agent_uri_dht::{
-    Dht, DhtKey, Endpoint, PathTrie, Registration, SimulatedDht, SimulationConfig,
+    Dht, DhtKey, Endpoint, PathTrie, Query, ReadOptions, Registration, SimulatedDht,
+    SimulationConfig, WriteOptions,
 };
 
 fn benchmark_dht() -> SimulatedDht {
@@ -246,7 +248,8 @@ fn bench_simulated_dht_register(c: &mut Criterion) {
                 (dht, registration)
             },
             |(dht, registration)| {
-                dht.register(registration).expect("registration succeeds");
+                block_on(dht.register(registration, WriteOptions::default()))
+                    .expect("registration succeeds");
                 dht
             },
             BatchSize::SmallInput,
@@ -273,7 +276,7 @@ fn bench_simulated_dht_lookup_exact(c: &mut Criterion) {
                             vec![Endpoint::https(format!("agent{i}.anthropic.com"))],
                         );
                         // Ignore errors for duplicates at same path
-                        let _ = dht.register(registration);
+                        let _ = block_on(dht.register(registration, WriteOptions::default()));
                     }
                     dht
                 },
@@ -281,7 +284,7 @@ fn bench_simulated_dht_lookup_exact(c: &mut Criterion) {
                     // Benchmark: lookup
                     let trust_root = TrustRoot::parse("anthropic.com").expect("valid");
                     let path = CapabilityPath::parse("cat0/sub0").expect("valid");
-                    dht.lookup_exact(&trust_root, &path)
+                    block_on(dht.lookup(&Query::exact(trust_root, path), &ReadOptions::default()))
                         .expect("lookup succeeds")
                 },
                 BatchSize::SmallInput,
@@ -316,7 +319,7 @@ fn bench_simulated_dht_lookup_prefix(c: &mut Criterion) {
                     ))],
                 );
                 // Ignore duplicate errors
-                let _ = dht.register(registration);
+                let _ = block_on(dht.register(registration, WriteOptions::default()));
             }
         }
     }
@@ -328,13 +331,23 @@ fn bench_simulated_dht_lookup_prefix(c: &mut Criterion) {
     // ~10 results (agents in one subcategory)
     let path_10 = CapabilityPath::parse("cat0/sub0").expect("valid path");
     group.bench_function("10_results", |b| {
-        b.iter(|| dht.lookup_prefix(&trust_root, &path_10));
+        b.iter(|| {
+            block_on(dht.lookup(
+                &Query::prefix(trust_root.clone(), path_10.clone()),
+                &ReadOptions::default(),
+            ))
+        });
     });
 
     // ~100 results (agents in one category)
     let path_100 = CapabilityPath::parse("cat0").expect("valid path");
     group.bench_function("100_results", |b| {
-        b.iter(|| dht.lookup_prefix(&trust_root, &path_100));
+        b.iter(|| {
+            block_on(dht.lookup(
+                &Query::prefix(trust_root.clone(), path_100.clone()),
+                &ReadOptions::default(),
+            ))
+        });
     });
 
     group.finish();
