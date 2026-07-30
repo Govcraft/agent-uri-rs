@@ -42,7 +42,11 @@ impl ExtensionClass {
         if name.is_empty() {
             return Err("extension class name cannot be empty");
         }
-        if name.len() < 2 {
+        // Characters, as the contract says. A single two-byte character clears a
+        // byte count, and while the lowercase check below refuses it anyway, a
+        // length check that is only right about ASCII is worth no more than the
+        // check standing behind it (issue #33).
+        if name.chars().count() < 2 {
             return Err("extension class name must be at least 2 characters");
         }
         if !name.chars().all(|c| c.is_ascii_lowercase()) {
@@ -161,5 +165,15 @@ mod tests {
         assert!(ExtensionClass::new("v2").is_err());
         // Valid
         assert!(ExtensionClass::new("custom").is_ok());
+    }
+
+    #[test]
+    fn a_one_character_name_is_too_short_however_many_bytes_it_takes() {
+        // Two bytes, one character. Both checks refuse it, but only one of them
+        // is refusing it for what is actually wrong with it (issue #33).
+        assert_eq!(
+            ExtensionClass::new("\u{00e9}"),
+            Err("extension class name must be at least 2 characters")
+        );
     }
 }
