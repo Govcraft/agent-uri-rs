@@ -16,6 +16,7 @@
 ; Total token            8192 chars    PASETO practical limit
 ; Payload (decoded)      4096 bytes    After base64url decode
 ; agent_uri              512 chars     Per agent-uri specification
+; agent_key               44 chars     base64 of a 32-byte Ed25519 public key
 ; capabilities array     64 items      Practical limit
 ; Each capability        256 chars     Agent URI capability-path grammar
 ; issuer (iss)           128 chars     Matches trust-root limit
@@ -59,7 +60,7 @@ base64url-char      = ALPHA / DIGIT / "-" / "_"
 ; ============================================================================
 ;
 ; The claims JSON contains both standard PASETO claims (iss, iat, exp, aud)
-; and custom claims (agent_uri, capabilities).
+; and custom claims (agent_uri, agent_key, capabilities).
 ;
 ; Field ordering in serialized JSON is not significant for parsing,
 ; but this grammar shows the logical structure.
@@ -67,6 +68,7 @@ base64url-char      = ALPHA / DIGIT / "-" / "_"
 claims-json         = "{" ws claims-members ws "}"
 
 claims-members      = agent-uri-claim sep
+                      agent-key-claim sep
                       capabilities-claim sep
                       iss-claim sep
                       iat-claim sep
@@ -86,6 +88,14 @@ agent-uri-claim     = %x22 "agent_uri" %x22 ":" ws %x22 agent-uri %x22
 agent-uri           = <defined in agent-uri-abnf.txt>
                       ; agent://trust-root/capability-path/agent-id[?query][#fragment]
                       ; Max 512 characters
+
+; agent_key: The agent's own Ed25519 public key
+; Format: Standard base64 of 32 bytes, with padding
+; The token binds to this key, so a token lifted from a public registration
+; record is useless without the private half.
+agent-key-claim     = %x22 "agent_key" %x22 ":" ws %x22 agent-key %x22
+agent-key           = 43( ALPHA / DIGIT / "+" / "/" ) "="
+                      ; 32 bytes base64-encoded: 44 characters including padding
 
 ; capabilities: Array of granted capability strings
 capabilities-claim  = %x22 "capabilities" %x22 ":" ws capabilities-array
@@ -209,6 +219,11 @@ LOWER               = %x61-7A              ; a-z
 ; 4. Trust root binding: The `iss` claim MUST match the trust-root in
 ;    `agent_uri`. Mismatches MUST be rejected.
 ;
+; 9. The `agent_key` claim MUST decode to a valid Ed25519 public key. A verifier
+;    that cannot read it MUST reject the token rather than treat the token as
+;    unbound, which would restore the bearer-credential behaviour the claim
+;    exists to remove.
+;
 ; 5. Capability binding: Every grant MUST equal the URI identity path or be a
 ;    descendant. Ancestor, sibling, and unrelated grants MUST be rejected.
 ;
@@ -233,6 +248,7 @@ LOWER               = %x61-7A              ; a-z
 ;   Decoded claims:
 ;     {
 ;       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
+;       "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
 ;       "capabilities": ["workflow/approval/read"],
 ;       "iss": "acme.com",
 ;       "iat": "2024-01-15T10:30:00.000Z",
@@ -244,6 +260,7 @@ LOWER               = %x61-7A              ; a-z
 ;   Decoded claims:
 ;     {
 ;       "agent_uri": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
+;       "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
 ;       "capabilities": [
 ;         "assistant/chat/respond",
 ;         "assistant/chat/stream"

@@ -130,7 +130,7 @@ proptest! {
             .into_iter()
             .map(|cap| format!("test/service/{cap}"))
             .collect();
-        let token = issuer.issue(&uri, scoped_caps.clone()).unwrap();
+        let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), scoped_caps.clone()).unwrap();
 
         // Verify token starts with correct header (per grammar: paseto-header = "v4.public")
         prop_assert!(token.starts_with("v4.public."), "token must start with v4.public.");
@@ -178,7 +178,7 @@ proptest! {
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
-        let token = issuer.issue(&uri, vec![]).unwrap();
+        let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec![]).unwrap();
         let claims = verifier.verify(&token).unwrap();
 
         prop_assert_eq!(claims.capabilities, vec!["test"]);
@@ -192,6 +192,7 @@ proptest! {
 
         let claims = AttestationClaimsBuilder::new()
             .agent_uri("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q")
+            .agent_key(&SigningKey::generate().verifying_key())
             .issuer("test.com")
             .audience(&aud)
             .build()
@@ -222,7 +223,7 @@ proptest! {
             let signing_key = SigningKey::generate();
             let issuer = Issuer::new(&domain, signing_key.clone(), Duration::from_secs(3600));
 
-            let token = issuer.issue(&uri, vec![]).unwrap();
+            let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec![]).unwrap();
 
             let mut verifier = Verifier::new();
             verifier.add_trusted_root(&domain, signing_key.verifying_key());
@@ -254,7 +255,7 @@ proptest! {
             format!("test/{nested}"),
             format!("test/{with_digits}"),
         ];
-        let token = issuer.issue(&uri, caps.clone()).unwrap();
+        let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), caps.clone()).unwrap();
         let claims = verifier.verify(&token).unwrap();
 
         prop_assert_eq!(claims.capabilities, caps);
@@ -272,7 +273,9 @@ fn token_header_format_is_v4_public() {
     let issuer = Issuer::new("test.com", signing_key, Duration::from_secs(3600));
     let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
-    let token = issuer.issue(&uri, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
 
     // Per grammar: attestation-token = paseto-header "." payload [ "." footer ]
     // paseto-header = "v4.public"
@@ -298,7 +301,9 @@ fn timestamp_format_is_iso8601() {
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
-    let token = issuer.issue(&uri, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
     let claims = verifier.verify(&token).unwrap();
 
     // Verify iat and exp are valid timestamps
@@ -328,7 +333,9 @@ fn agent_uri_field_format() {
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
-    let token = issuer.issue(&uri, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
     let claims = verifier.verify(&token).unwrap();
 
     // agent_uri must start with "agent://" per agent-uri ABNF
@@ -352,7 +359,9 @@ fn max_capabilities_accepted() {
     // Per grammar: 64 items practical limit
     let caps: Vec<String> = (0..64).map(|i| format!("test/cap{i}")).collect();
 
-    let token = issuer.issue(&uri, caps.clone()).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), caps.clone())
+        .unwrap();
     let claims = verifier.verify(&token).unwrap();
 
     assert_eq!(claims.capabilities.len(), 64);
@@ -378,7 +387,9 @@ fn capability_string_edge_cases() {
         "test/cap123".to_string(),
     ];
 
-    let token = issuer.issue(&uri, caps.clone()).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), caps.clone())
+        .unwrap();
     let claims = verifier.verify(&token).unwrap();
 
     assert_eq!(claims.capabilities, caps);
@@ -391,7 +402,13 @@ fn token_payload_is_base64url() {
     let issuer = Issuer::new("test.com", signing_key, Duration::from_secs(3600));
     let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
-    let token = issuer.issue(&uri, vec!["test/read".into()]).unwrap();
+    let token = issuer
+        .issue(
+            &uri,
+            &SigningKey::generate().verifying_key(),
+            vec!["test/read".into()],
+        )
+        .unwrap();
 
     // Extract payload (third dot-separated part)
     let parts: Vec<&str> = token.split('.').collect();
@@ -421,7 +438,9 @@ fn issuer_equals_trust_root() {
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-    let token = issuer.issue(&uri, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
     let claims = verifier.verify(&token).unwrap();
 
     // Per grammar: issuer = trust-root
@@ -444,7 +463,9 @@ fn localhost_with_port_trust_root() {
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("localhost:8472", signing_key.verifying_key());
 
-    let token = issuer.issue(&uri, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
     let claims = verifier.verify(&token).unwrap();
 
     assert_eq!(claims.iss, "localhost:8472");
@@ -480,7 +501,7 @@ proptest! {
 
         // Issue token with URI's capability path as capability
         let capability = uri.capability_path().as_str().to_string();
-        let token = issuer.issue(&uri, vec![capability.clone()]).unwrap();
+        let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec![capability.clone()]).unwrap();
 
         // Token format check
         prop_assert!(token.starts_with("v4.public."));
@@ -513,7 +534,7 @@ proptest! {
         let capabilities = build_scoped_capabilities(&uri, noise);
 
         let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
-        let token = issuer.issue(&uri, capabilities.clone()).unwrap();
+        let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), capabilities.clone()).unwrap();
 
         let mut verifier = Verifier::new();
         verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
@@ -544,7 +565,7 @@ proptest! {
         for depth in 0..=4 {
             let identity_path = uri.capability_path().as_str();
             let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
-            let token = issuer.issue(&uri, vec![identity_path.to_string()]).unwrap();
+            let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec![identity_path.to_string()]).unwrap();
 
             let suffix = std::iter::repeat_n("child", depth).collect::<Vec<_>>().join("/");
             let required_path = if suffix.is_empty() {
@@ -573,7 +594,7 @@ proptest! {
 
         // Issue with unrelated capability
         let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
-        let result = issuer.issue(&uri, vec!["zzz-unrelated".to_string()]);
+        let result = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec!["zzz-unrelated".to_string()]);
         prop_assert!(
             matches!(result, Err(AttestationError::CapabilityOutsideIdentity { .. })),
             "Expected CapabilityOutsideIdentity, got: {:?}",
@@ -605,7 +626,7 @@ proptest! {
         }
 
         let issuer = Issuer::new(&trust_root_a, signing_key.clone(), Duration::from_secs(3600));
-        let token = issuer.issue(&uri_a, vec![]).unwrap();
+        let token = issuer.issue(&uri_a, &SigningKey::generate().verifying_key(), vec![]).unwrap();
 
         // Verify against different URI should fail
         let result = verifier.verify_for_uri(&token, &uri_b);
@@ -631,7 +652,7 @@ proptest! {
 
         // Issue with key 1
         let issuer = Issuer::new(&trust_root, signing_key_1, Duration::from_secs(3600));
-        let token = issuer.issue(&uri, vec![]).unwrap();
+        let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec![]).unwrap();
 
         // Verify with key 2
         let mut verifier = Verifier::new();

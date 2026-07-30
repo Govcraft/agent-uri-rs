@@ -56,6 +56,11 @@ pub enum DhtError {
         /// The operation that was refused
         operation: MutationKind,
     },
+    /// The attestation names a different agent key than the registration.
+    AgentKeyMismatch {
+        /// The agent URI whose registration was refused
+        agent_uri: String,
+    },
     /// The write's sequence number did not advance past the record's.
     ///
     /// Either the write is a replay of one already applied, or two writers are
@@ -139,6 +144,14 @@ impl fmt::Display for DhtError {
                     "{operation} on agent '{agent_uri}' was not authorized by the agent key bound \
                      to its registration; the proof must be signed by that key over this exact \
                      operation"
+                )
+            }
+            Self::AgentKeyMismatch { agent_uri } => {
+                write!(
+                    f,
+                    "the attestation presented for agent '{agent_uri}' attests a different key \
+                     than the registration names; a token attests one agent's key and cannot be \
+                     presented for another"
                 )
             }
             Self::StaleSequence {
@@ -345,6 +358,12 @@ mod tests {
         assert!(!DhtError::expired("agent://a.com/b/c_1").is_transient());
         assert!(!DhtError::invalid_attestation("agent://a.com/b/c_1", "bad").is_transient());
         assert!(!DhtError::key_capacity_exceeded("k", 1).is_transient());
+        assert!(
+            !DhtError::AgentKeyMismatch {
+                agent_uri: "agent://a.com/b/c_1".to_string()
+            }
+            .is_transient()
+        );
         // Retrying an unauthorized write with the same proof is pure waste, and
         // a stale sequence needs a fresh signature rather than a repeat.
         assert!(
@@ -374,6 +393,16 @@ mod tests {
         assert!(shown.contains("update_endpoint"));
         assert!(shown.contains("agent://a.com/b/c_1"));
         assert!(shown.contains("agent key"));
+    }
+
+    #[test]
+    fn agent_key_mismatch_error_says_the_token_is_someone_elses() {
+        let err = DhtError::AgentKeyMismatch {
+            agent_uri: "agent://a.com/b/c_1".to_string(),
+        };
+        let shown = err.to_string();
+        assert!(shown.contains("agent://a.com/b/c_1"));
+        assert!(shown.contains("different key"));
     }
 
     #[test]

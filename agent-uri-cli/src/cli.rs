@@ -215,6 +215,10 @@ The issuer is the authority in the agent URI. A key may only attest URIs rooted
 at its own authority, so passing --issuer with anything else is refused here
 rather than producing a token that every verifier would reject.
 
+--agent-key is the agent's own public key, which the token binds to. Attest a key
+only after the agent has proven it holds the matching private half: a trust root
+that signs a key it was merely handed is vouching for whoever handed it over.
+
 The token is the only thing written to stdout, so it pipes cleanly. The summary
 of what you just signed goes to stderr, where a pipe will not swallow it.
 
@@ -225,11 +229,13 @@ EXAMPLES:
   Mint a token with the default 24h lifetime:
       agent-uri attest issue --key ./acme.key \\
           --agent agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q \\
+          --agent-key 3b6a... \\
           --capability workflow/approval/read
 
   Grant several capabilities, for 90 days, to one audience:
       agent-uri attest issue --key ./acme.key \\
           --agent agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q \\
+          --agent-key 3b6a... \\
           --capability workflow/approval/read \\
           --capability workflow/approval/execute \\
           --ttl 90d --audience api.acme.com
@@ -249,6 +255,14 @@ EXAMPLES:
         /// The agent URI to attest.
         #[arg(long, value_name = "URI")]
         agent: String,
+
+        /// The agent's own public key, as 64 hex characters.
+        ///
+        /// The token binds to this key, so only its holder can present the
+        /// token as their own. Without it a token lifted from a public
+        /// registration record would work for whoever read it.
+        #[arg(long, value_name = "HEX")]
+        agent_key: String,
 
         /// A capability to grant. Repeat to grant several.
         ///

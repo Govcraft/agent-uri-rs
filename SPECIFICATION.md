@@ -394,10 +394,16 @@ Registration {
 6. Registration write amplification is O(d), where d is path depth. Deployments
    MUST provision broad ancestor keys for higher load or impose capacity limits.
 7. Registration MUST name an Ed25519 `agent_key`. That key, and only that key,
-   is authorized to modify or remove the record.
-8. An agent that has previously held this URI SHOULD open the new record at a
-   `sequence` above every sequence it has ever signed for that URI. See
-   [Section 6.6](#66-write-authorization).
+   is authorized to write the record.
+8. Registration MUST carry a mutation proof over the record as submitted, and
+   DHT nodes MUST verify it. The attestation says a trust root vouched for a
+   key; the proof says the registering party holds it.
+9. Where an attestation is required, DHT nodes MUST reject a registration whose
+   `agent_key` differs from the attestation's `agent_key` claim. A token
+   attests one agent's key and cannot be presented for another.
+10. An agent that has previously held this URI SHOULD open the new record at a
+    `sequence` above every sequence it has ever signed for that URI. See
+    [Section 6.6](#66-write-authorization).
 
 ### 6.3 Lookup Protocol
 
@@ -468,16 +474,21 @@ encoding of:
 | Field | Purpose |
 |-------|---------|
 | Domain separator | Prevents a signature minted elsewhere from authorizing a DHT write |
-| Operation kind | Prevents a refresh proof from acting as a deregistration |
+| Operation kind | Prevents a refresh proof from acting as a deregistration, or a registration proof from acting as either |
 | `registered_at` | Identifies the record instance |
 | `sequence` | Identifies the position in that record's history |
 | `agent_uri` | Binds the proof to one record |
 | Operation arguments | Binds the proof to the endpoints or TTL requested |
 
+For registration, which creates the record rather than changing one, the proof
+covers the record as submitted: its `agent_key`, endpoints, and `expires_at`,
+at the `registered_at` and `sequence` the record opens with.
+
 **Requirements:**
 
-1. DHT nodes MUST reject a modification or removal whose proof does not verify
-   under the stored record's `agent_key`.
+1. DHT nodes MUST reject a write whose proof does not verify under the record's
+   `agent_key`: the stored record's for a modification or removal, the
+   submitted record's for a registration.
 2. DHT nodes MUST reject a write whose `sequence` does not exceed the stored
    record's `sequence`, and MUST record the accepted `sequence` on every
    ancestor-key copy.
@@ -493,7 +504,7 @@ encoding of:
 captured proof cannot be applied twice. The registration time identifies the
 record instance, so a proof captured before a deregistration cannot reach the
 record that replaces it. Two registrations of the same URI within the
-resolution of `registered_at` share an instance identity; requirement 8 of
+resolution of `registered_at` share an instance identity; requirement 10 of
 [Section 6.2](#62-registration-protocol) removes that dependence on the clock
 for agents that retain their sequence across re-registration.
 
@@ -515,6 +526,7 @@ v4.public.<payload>[.<footer>]
 |-------|------|----------|-------------|
 | `iss` | string | REQUIRED | Issuing trust root |
 | `agent_uri` | string | REQUIRED | Canonical Agent URI being attested |
+| `agent_key` | string | REQUIRED | Agent's own Ed25519 public key, base64-encoded |
 | `iat` | datetime | REQUIRED | Issued-at timestamp |
 | `exp` | datetime | REQUIRED | Expiration timestamp |
 | `aud` | string | OPTIONAL | Audience restriction |
@@ -526,11 +538,28 @@ v4.public.<payload>[.<footer>]
 {
   "iss": "acme.com",
   "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
+  "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
   "iat": "2026-01-20T00:00:00Z",
   "exp": "2026-02-19T00:00:00Z",
   "capabilities": ["workflow/approval/invoice"]
 }
 ```
+
+**Agent Key Binding:**
+
+The `agent_key` claim names the agent's own key, distinct from the trust root's
+signing key. Without it a token would be a bearer credential: registration
+records are world-readable and carry their token inline, so any lookup would
+hand the reader a credential naming a URI and its capabilities with nothing
+about who is entitled to present it.
+
+1. Trust roots MUST include `agent_key` in every issued token.
+2. Trust roots SHOULD attest a key only after the agent has demonstrated
+   possession of the matching private key. Attesting a key that was merely
+   supplied vouches for whoever supplied it.
+3. Verifiers MUST reject a token whose `agent_key` does not decode to a valid
+   Ed25519 public key. Treating an unreadable key as absent would restore the
+   bearer-credential behaviour this claim removes.
 
 ### 7.2 Key Publication
 
@@ -599,9 +628,14 @@ Complete verification of an agent presenting URI and attestation:
 4. Check `exp` > current time (not expired).
 5. Check `iss` == `trust_root` from URI.
 6. Check `agent_uri` == the canonical full agent URI.
-7. Check every capability equals the URI path or is its descendant.
-8. Check at least one capability covers the requested operation or registration path.
-9. If `aud` is present, require an explicit, exact verifier audience match.
+7. Check `agent_key` decodes to a valid Ed25519 public key.
+8. Check every capability equals the URI path or is its descendant.
+9. Check at least one capability covers the requested operation or registration path.
+10. If `aud` is present, require an explicit, exact verifier audience match.
+11. Where the presenter claims to *be* the agent, require proof of possession of
+    `agent_key`. Steps 1 to 10 authenticate the token; only this authenticates
+    the presenter. For registration that proof is the mutation proof of
+    [Section 6.6](#66-write-authorization).
 
 All checks MUST pass. Failure at any step MUST reject the attestation.
 
@@ -709,7 +743,35 @@ This is the denial of service described in
 points somewhere new requires a signature over those endpoints, which no
 capture supplies.
 
-### 8.8 Cross-Namespace Issuance
+### 8.8 Attestation Token Replay
+
+**Threat:** Registration records are world-readable and carry their attestation
+token inline, so any lookup returns one. A token that named only a URI and its
+capabilities would be a bearer credential: whoever read a record could
+re-register that URI, pointing at their own endpoints, for as long as the token
+remained valid.
+
+**Mitigations:**
+
+1. **Agent key binding**: the `agent_key` claim names the key the trust root
+   vouched for, and DHT nodes reject a registration whose record names a
+   different one. A lifted token can only produce a record naming its rightful
+   agent's key.
+
+2. **Proof of possession**: registration carries a mutation proof signed by
+   that key, so keeping the rightful key in the record does not help either.
+
+3. **Endpoint binding in the proof, not the claims**: the proof covers the
+   endpoints, so a lifted token cannot be paired with substituted ones. Binding
+   endpoints into the *attestation* instead would force re-issuance from the
+   trust root on every migration, which [Section 6.5](#65-migration) exists to
+   avoid.
+
+**Residual Risk:** A trust root that attests a key without first seeing the
+agent prove possession of it vouches for whoever supplied that key. The binding
+is only as good as the enrolment that precedes it.
+
+### 8.9 Cross-Namespace Issuance
 
 **Threat:** In a multi-root deployment, a verifier trusts several trust roots. A valid signing key for one authority (e.g. `marketing.acme.com`) mints an attestation whose `agent_uri` is rooted at a *different* authority (e.g. `finance.acme.com`). Authenticating `iss` alone proves only which trusted key signed the token, not that the signer owns the attested namespace.
 

@@ -11,7 +11,7 @@ use async_trait::async_trait;
 
 use crate::{
     Cursor, Dht, DhtError, DhtKey, DhtStats, Endpoint, MatchMode, MigrationResult, Mutation,
-    MutationProof, NodeId, Page, PeerAddr, Query, Quorum, ReadOptions, Registration,
+    MutationKind, MutationProof, NodeId, Page, PeerAddr, Query, Quorum, ReadOptions, Registration,
     SimulationConfig, WriteOptions, WriteReceipt,
 };
 
@@ -37,8 +37,8 @@ static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 /// use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
 /// use agent_uri_attestation::SigningKey;
 /// use agent_uri_dht::{
-///     Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig,
-///     WriteOptions,
+///     Dht, Endpoint, MutationProof, Query, ReadOptions, Registration, SimulatedDht,
+///     SimulationConfig, WriteOptions,
 /// };
 /// use futures::executor::block_on;
 ///
@@ -55,7 +55,9 @@ static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 ///     vec![Endpoint::https("agent.anthropic.com")],
 /// );
 ///
-/// block_on(dht.register(registration, WriteOptions::default())).unwrap();
+/// let proof = MutationProof::sign_registration(&agent_key, &registration);
+///
+/// block_on(dht.register(registration, &proof, WriteOptions::default())).unwrap();
 ///
 /// let query = Query::exact(
 ///     TrustRoot::parse("anthropic.com").unwrap(),
@@ -159,10 +161,13 @@ impl SimulatedDht {
     ///
     /// Returns `DhtError` if a critical error occurs (though individual
     /// registration failures are silently counted).
-    pub fn register_batch(&self, registrations: Vec<Registration>) -> Result<usize, DhtError> {
+    pub fn register_batch(
+        &self,
+        registrations: Vec<(Registration, MutationProof)>,
+    ) -> Result<usize, DhtError> {
         let mut count = 0;
-        for registration in registrations {
-            if self.do_register(&registration).is_ok() {
+        for (registration, proof) in registrations {
+            if self.do_register(&registration, &proof).is_ok() {
                 count += 1;
             }
         }
@@ -361,7 +366,11 @@ impl SimulatedDht {
 impl SimulatedDht {
     /// Applies a registration to the indices. Shared by the async trait method
     /// and by the synchronous evaluation helpers.
-    fn do_register(&self, registration: &Registration) -> Result<(), DhtError> {
+    fn do_register(
+        &self,
+        registration: &Registration,
+        proof: &MutationProof,
+    ) -> Result<(), DhtError> {
         if registration.endpoints().is_empty() {
             return Err(DhtError::NoEndpoints);
         }
@@ -370,17 +379,33 @@ impl SimulatedDht {
         let keys = Self::ancestor_keys(registration.agent_uri());
         let identity = Self::identity_key(registration.agent_uri());
 
+        // Possession first. The attestation says the trust root vouches for a
+        // key; the proof says the party registering holds it. Checking the
+        // token alone would accept a token lifted from any public record.
+        proof.authorizes_registration(registration)?;
+
         if self.config.verify_attestations {
             let token = registration.attestation().ok_or_else(|| {
                 DhtError::invalid_attestation(&uri_str, "registration has no attestation token")
             })?;
-            self.verifier
+            let claims = self
+                .verifier
                 .verify_for_capability(
                     token,
                     registration.agent_uri(),
                     registration.agent_uri().capability_path(),
                 )
                 .map_err(|error| DhtError::invalid_attestation(&uri_str, error.to_string()))?;
+
+            // The token has to be about this record's key, or it is somebody
+            // else's token: an attestation is world-readable and says nothing
+            // about who presented it.
+            let attested = claims
+                .agent_verifying_key()
+                .map_err(|error| DhtError::invalid_attestation(&uri_str, error.to_string()))?;
+            if attested != *registration.agent_key() {
+                return Err(DhtError::AgentKeyMismatch { agent_uri: uri_str });
+            }
         }
 
         // Check and insert while holding every write lock. The identity
@@ -541,6 +566,12 @@ impl SimulatedDht {
                 by_identity.remove(&Self::identity_key(agent_uri));
                 Ok(())
             }
+            // Registration creates a record rather than changing one, so it
+            // never reaches here; `do_register` authorizes it directly.
+            Mutation::Register { .. } => Err(DhtError::Unauthorized {
+                agent_uri: uri_str,
+                operation: MutationKind::Register,
+            }),
         }
     }
 
@@ -604,9 +635,10 @@ impl Dht for SimulatedDht {
     async fn register(
         &self,
         registration: Registration,
+        proof: &MutationProof,
         options: WriteOptions,
     ) -> Result<WriteReceipt, DhtError> {
-        self.do_register(&registration)?;
+        self.do_register(&registration, proof)?;
         Ok(self.receipt(options.quorum))
     }
 
@@ -707,8 +739,15 @@ mod tests {
     // The trait is async so that a distributed backend can implement it. The
     // simulator never actually yields, so these drive it to completion without
     // a runtime and keep the tests reading like the operations they describe.
-    fn register(dht: &SimulatedDht, registration: Registration) -> Result<WriteReceipt, DhtError> {
-        block_on(dht.register(registration, WriteOptions::default()))
+    /// Registers with a proof from `key`. Tests that pass a key other than the
+    /// record's own are checking that registration is a write like any other.
+    fn register(
+        dht: &SimulatedDht,
+        registration: Registration,
+        key: &SigningKey,
+    ) -> Result<WriteReceipt, DhtError> {
+        let proof = MutationProof::sign_registration(key, &registration);
+        block_on(dht.register(registration, &proof, WriteOptions::default()))
     }
 
     /// Returns the record the DHT currently holds, which is what a caller
@@ -812,7 +851,7 @@ mod tests {
         let key = SigningKey::generate();
         let uri = test_uri("2q");
 
-        register(&dht, registration(&uri, &key)).unwrap();
+        register(&dht, registration(&uri, &key), &key).unwrap();
 
         let results = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
 
@@ -826,7 +865,7 @@ mod tests {
         let key = SigningKey::generate();
         let registration = Registration::new(test_uri("2q"), key.verifying_key(), vec![]);
 
-        let result = register(&dht, registration);
+        let result = register(&dht, registration, &key);
 
         assert!(matches!(result, Err(DhtError::NoEndpoints)));
     }
@@ -837,9 +876,9 @@ mod tests {
         let key = SigningKey::generate();
         let uri = test_uri("2q");
 
-        register(&dht, registration(&uri, &key)).unwrap();
+        register(&dht, registration(&uri, &key), &key).unwrap();
 
-        let result = register(&dht, registration(&uri, &key));
+        let result = register(&dht, registration(&uri, &key), &key);
 
         assert!(matches!(result, Err(DhtError::AlreadyRegistered { .. })));
     }
@@ -850,7 +889,7 @@ mod tests {
         let key = SigningKey::generate();
         let uri = test_uri("2q");
 
-        register(&dht, registration(&uri, &key)).unwrap();
+        register(&dht, registration(&uri, &key), &key).unwrap();
         deregister(&dht, &uri, &key, 1).unwrap();
 
         let results = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
@@ -870,8 +909,8 @@ mod tests {
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
 
-        register(&dht, registration(&uri1, &key)).unwrap();
-        register(&dht, registration(&uri2, &key)).unwrap();
+        register(&dht, registration(&uri1, &key), &key).unwrap();
+        register(&dht, registration(&uri2, &key), &key).unwrap();
 
         let results = lookup(&dht, &prefix("anthropic.com", "assistant"));
 
@@ -890,8 +929,8 @@ mod tests {
             AgentUri::parse("agent://openai.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
 
-        register(&dht, registration(&uri1, &key)).unwrap();
-        register(&dht, registration(&uri2, &key)).unwrap();
+        register(&dht, registration(&uri1, &key), &key).unwrap();
+        register(&dht, registration(&uri2, &key), &key).unwrap();
 
         // Identical capability paths under two authorities derive two distinct
         // keys, so neither lookup can observe the other's registration. This is
@@ -914,7 +953,7 @@ mod tests {
         let key = SigningKey::generate();
         let uri = test_uri("2q");
 
-        register(&dht, registration(&uri, &key)).unwrap();
+        register(&dht, registration(&uri, &key), &key).unwrap();
 
         let new_endpoint = Endpoint::grpc("agent.anthropic.com:50051");
         update_endpoint(&dht, &uri, &key, 1, vec![new_endpoint.clone()]).unwrap();
@@ -935,8 +974,8 @@ mod tests {
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
 
-        register(&dht, registration(&uri1, &key)).unwrap();
-        register(&dht, registration(&uri2, &key)).unwrap();
+        register(&dht, registration(&uri1, &key), &key).unwrap();
+        register(&dht, registration(&uri2, &key), &key).unwrap();
 
         let stats = dht.stats();
         assert_eq!(stats.total_registrations(), 2);
@@ -951,9 +990,9 @@ mod tests {
         let dht = SimulatedDht::new(config);
         let key = SigningKey::generate();
 
-        register(&dht, registration(&test_uri("2q"), &key)).unwrap();
+        register(&dht, registration(&test_uri("2q"), &key), &key).unwrap();
 
-        let result = register(&dht, registration(&test_uri("2r"), &key));
+        let result = register(&dht, registration(&test_uri("2r"), &key), &key);
 
         assert!(matches!(result, Err(DhtError::KeyCapacityExceeded { .. })));
     }
@@ -963,7 +1002,7 @@ mod tests {
         let dht = unverified_dht();
         let key = SigningKey::generate();
 
-        register(&dht, registration(&test_uri("2q"), &key)).unwrap();
+        register(&dht, registration(&test_uri("2q"), &key), &key).unwrap();
 
         dht.clear();
 
@@ -981,7 +1020,13 @@ mod tests {
             registration(&test_uri("2r"), &key),
             // Will fail - no endpoints
             Registration::new(test_uri("2s"), key.verifying_key(), vec![]),
-        ];
+        ]
+        .into_iter()
+        .map(|r| {
+            let proof = MutationProof::sign_registration(&key, &r);
+            (r, proof)
+        })
+        .collect();
 
         let count = dht.register_batch(registrations).unwrap();
 
@@ -993,7 +1038,7 @@ mod tests {
         let dht = SimulatedDht::with_defaults();
         let key = SigningKey::generate();
 
-        let result = register(&dht, registration(&test_uri("2q"), &key));
+        let result = register(&dht, registration(&test_uri("2q"), &key), &key);
 
         assert!(matches!(result, Err(DhtError::InvalidAttestation { .. })));
     }
@@ -1012,16 +1057,170 @@ mod tests {
         let agent_key = SigningKey::generate();
         let uri = test_uri("2q");
         let token = issuer
-            .issue(&uri, vec!["assistant/chat".to_string()])
+            .issue(
+                &uri,
+                &agent_key.verifying_key(),
+                vec!["assistant/chat".to_string()],
+            )
             .unwrap();
 
-        register(&dht, registration(&uri, &agent_key).with_attestation(token)).unwrap();
+        register(
+            &dht,
+            registration(&uri, &agent_key).with_attestation(token),
+            &agent_key,
+        )
+        .unwrap();
 
         let results = lookup(
             &dht,
             &Query::exact(uri.trust_root().clone(), uri.capability_path().clone()),
         );
         assert_eq!(results.len(), 1);
+    }
+
+    /// A trust root that vouches for `agent_key`, and a DHT that trusts it.
+    fn attesting_dht(agent_key: &SigningKey, uri: &AgentUri) -> (SimulatedDht, String) {
+        let root_key = SigningKey::generate();
+        let issuer = Issuer::new("anthropic.com", root_key.clone(), Duration::from_hours(1));
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("anthropic.com", root_key.verifying_key());
+        let token = issuer
+            .issue(
+                uri,
+                &agent_key.verifying_key(),
+                vec!["assistant/chat".to_string()],
+            )
+            .unwrap();
+        (
+            SimulatedDht::with_verifier(SimulationConfig::default(), verifier),
+            token,
+        )
+    }
+
+    #[test]
+    fn a_lifted_token_does_not_register_the_thief_at_its_own_endpoints() {
+        // The replay this binding exists to stop. Registration records are
+        // world-readable by design, so assume the attacker read one and kept
+        // the token. Presenting it under their own key must fail, because the
+        // trust root attested the victim's key, not theirs.
+        let victim = SigningKey::generate();
+        let attacker = SigningKey::generate();
+        let uri = test_uri("2q");
+        let (dht, lifted) = attesting_dht(&victim, &uri);
+
+        let hijack = Registration::new(
+            uri.clone(),
+            attacker.verifying_key(),
+            vec![Endpoint::https("attacker.example")],
+        )
+        .with_attestation(lifted);
+
+        let result = register(&dht, hijack, &attacker);
+
+        assert!(matches!(result, Err(DhtError::AgentKeyMismatch { .. })));
+    }
+
+    #[test]
+    fn a_lifted_token_does_not_register_the_thief_under_the_victims_key_either() {
+        // Keeping the victim's key in the record satisfies the token, so the
+        // register proof is what has to stop this one: the attacker cannot
+        // sign for a key they do not hold.
+        let victim = SigningKey::generate();
+        let attacker = SigningKey::generate();
+        let uri = test_uri("2q");
+        let (dht, lifted) = attesting_dht(&victim, &uri);
+
+        let hijack = Registration::new(
+            uri.clone(),
+            victim.verifying_key(),
+            vec![Endpoint::https("attacker.example")],
+        )
+        .with_attestation(lifted);
+
+        let result = register(&dht, hijack, &attacker);
+
+        assert!(matches!(
+            result,
+            Err(DhtError::Unauthorized {
+                operation: MutationKind::Register,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn the_attested_agent_registers_normally() {
+        let agent = SigningKey::generate();
+        let uri = test_uri("2q");
+        let (dht, token) = attesting_dht(&agent, &uri);
+
+        register(
+            &dht,
+            registration(&uri, &agent).with_attestation(token),
+            &agent,
+        )
+        .unwrap();
+
+        assert_eq!(
+            lookup(&dht, &exact("anthropic.com", "assistant/chat")).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_registration_proof_does_not_cover_endpoints_it_did_not_sign() {
+        // Signed by the right key, for the right URI, but over other
+        // endpoints. Without binding them, a relay could forward a
+        // registration pointing somewhere else.
+        let dht = unverified_dht();
+        let agent = SigningKey::generate();
+        let uri = test_uri("2q");
+        let honest = Registration::new(
+            uri.clone(),
+            agent.verifying_key(),
+            vec![Endpoint::https("honest.example")],
+        );
+        let proof = MutationProof::sign_registration(&agent, &honest);
+
+        let substituted = Registration::new(
+            uri,
+            agent.verifying_key(),
+            vec![Endpoint::https("attacker.example")],
+        )
+        .with_registered_at(honest.registered_at());
+
+        let result = block_on(dht.register(substituted, &proof, WriteOptions::default()));
+
+        assert!(matches!(result, Err(DhtError::Unauthorized { .. })));
+    }
+
+    #[test]
+    fn a_registration_proof_does_not_cover_a_different_expiry() {
+        let dht = unverified_dht();
+        let agent = SigningKey::generate();
+        let uri = test_uri("2q");
+        let honest = registration(&uri, &agent).with_ttl(Duration::from_mins(1));
+        let proof = MutationProof::sign_registration(&agent, &honest);
+
+        let stretched = honest.clone().with_ttl(Duration::from_hours(24));
+
+        let result = block_on(dht.register(stretched, &proof, WriteOptions::default()));
+
+        assert!(matches!(result, Err(DhtError::Unauthorized { .. })));
+    }
+
+    #[test]
+    fn a_registration_proof_does_not_transfer_to_another_agent() {
+        let dht = unverified_dht();
+        let agent = SigningKey::generate();
+        let mine = registration(&test_uri("2q"), &agent);
+        let proof = MutationProof::sign_registration(&agent, &mine);
+
+        let theirs = registration(&test_uri("2r"), &agent).with_registered_at(mine.registered_at());
+
+        let result = block_on(dht.register(theirs, &proof, WriteOptions::default()));
+
+        assert!(matches!(result, Err(DhtError::Unauthorized { .. })));
     }
 
     #[test]
@@ -1032,6 +1231,7 @@ mod tests {
         register(
             &dht,
             registration(&uri, &key).with_ttl(Duration::from_millis(50)),
+            &key,
         )
         .unwrap();
 
@@ -1056,6 +1256,7 @@ mod tests {
         register(
             &dht,
             registration(&uri, &key).with_ttl(Duration::from_millis(50)),
+            &key,
         )
         .unwrap();
 
@@ -1083,7 +1284,7 @@ mod tests {
         let key = SigningKey::generate();
 
         for suffix in ["2q", "2r", "2s", "2t", "2v"] {
-            register(&dht, registration(&test_uri(suffix), &key)).unwrap();
+            register(&dht, registration(&test_uri(suffix), &key), &key).unwrap();
         }
 
         let query = exact("anthropic.com", "assistant/chat");
@@ -1120,7 +1321,7 @@ mod tests {
         let dht = SimulatedDht::new(config);
         let key = SigningKey::generate();
         for suffix in ["2v", "2q", "2s", "2r"] {
-            register(&dht, registration(&test_uri(suffix), &key)).unwrap();
+            register(&dht, registration(&test_uri(suffix), &key), &key).unwrap();
         }
 
         let query = exact("anthropic.com", "assistant/chat");
@@ -1145,7 +1346,7 @@ mod tests {
     fn cursor_past_the_end_yields_an_exhausted_page() {
         let dht = unverified_dht();
         let key = SigningKey::generate();
-        register(&dht, registration(&test_uri("2q"), &key)).unwrap();
+        register(&dht, registration(&test_uri("2q"), &key), &key).unwrap();
 
         let page = block_on(dht.lookup(
             &exact("anthropic.com", "assistant/chat"),
@@ -1161,7 +1362,7 @@ mod tests {
     fn write_receipt_reports_the_resolved_quorum() {
         let dht = unverified_dht();
         let key = SigningKey::generate();
-        let receipt = register(&dht, registration(&test_uri("2q"), &key)).unwrap();
+        let receipt = register(&dht, registration(&test_uri("2q"), &key), &key).unwrap();
 
         // One authoritative copy, so every quorum resolves to one against it.
         assert_eq!(receipt.acknowledged(), 1);
@@ -1193,8 +1394,9 @@ mod tests {
         // so it needs a test that actually fails if that regresses.
         let key = SigningKey::generate();
         let dht: Box<dyn Dht> = Box::new(unverified_dht());
-        block_on(dht.register(registration(&test_uri("2q"), &key), WriteOptions::default()))
-            .unwrap();
+        let record = registration(&test_uri("2q"), &key);
+        let proof = MutationProof::sign_registration(&key, &record);
+        block_on(dht.register(record, &proof, WriteOptions::default())).unwrap();
 
         let page = block_on(dht.lookup(
             &exact("anthropic.com", "assistant/chat"),
@@ -1214,9 +1416,9 @@ mod tests {
         let reclassified =
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02q")
                 .unwrap();
-        register(&dht, registration(&first, &key)).unwrap();
+        register(&dht, registration(&first, &key), &key).unwrap();
 
-        let result = register(&dht, registration(&reclassified, &key));
+        let result = register(&dht, registration(&reclassified, &key), &key);
 
         assert!(matches!(
             result,
@@ -1232,9 +1434,9 @@ mod tests {
         let ancestor_reuse =
             AgentUri::parse("agent://anthropic.com/assistant/llm_01h455vb4pex5vsknk084sn02q")
                 .unwrap();
-        register(&dht, registration(&first, &key)).unwrap();
+        register(&dht, registration(&first, &key), &key).unwrap();
 
-        let result = register(&dht, registration(&ancestor_reuse, &key));
+        let result = register(&dht, registration(&ancestor_reuse, &key), &key);
 
         assert!(matches!(
             result,
@@ -1250,7 +1452,7 @@ mod tests {
         let agent = SigningKey::generate();
         let attacker = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &agent)).unwrap();
+        register(&dht, registration(&uri, &agent), &agent).unwrap();
 
         let result = update_endpoint(
             &dht,
@@ -1273,7 +1475,7 @@ mod tests {
         let agent = SigningKey::generate();
         let attacker = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &agent)).unwrap();
+        register(&dht, registration(&uri, &agent), &agent).unwrap();
 
         let result = deregister(&dht, &uri, &attacker, 1);
 
@@ -1292,7 +1494,7 @@ mod tests {
         let agent = SigningKey::generate();
         let attacker = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &agent)).unwrap();
+        register(&dht, registration(&uri, &agent), &agent).unwrap();
 
         let result = refresh(&dht, &uri, &attacker, 1, Duration::from_hours(9));
 
@@ -1307,7 +1509,7 @@ mod tests {
         let dht = unverified_dht();
         let agent = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &agent)).unwrap();
+        register(&dht, registration(&uri, &agent), &agent).unwrap();
 
         let honest = vec![Endpoint::https("honest.example")];
         let proof = MutationProof::sign_next(
@@ -1331,7 +1533,7 @@ mod tests {
         let dht = unverified_dht();
         let key = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &key)).unwrap();
+        register(&dht, registration(&uri, &key), &key).unwrap();
 
         assert_eq!(
             lookup(&dht, &exact("anthropic.com", "assistant/chat"))[0].sequence(),
@@ -1355,7 +1557,7 @@ mod tests {
         let dht = unverified_dht();
         let key = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &key)).unwrap();
+        register(&dht, registration(&uri, &key), &key).unwrap();
 
         refresh(&dht, &uri, &key, 3, Duration::from_hours(1)).unwrap();
 
@@ -1370,7 +1572,7 @@ mod tests {
         let dht = unverified_dht();
         let key = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &key)).unwrap();
+        register(&dht, registration(&uri, &key), &key).unwrap();
 
         let endpoints = vec![Endpoint::https("first.example")];
         let proof = MutationProof::sign_next(
@@ -1404,7 +1606,7 @@ mod tests {
         let dht = unverified_dht();
         let key = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &key)).unwrap();
+        register(&dht, registration(&uri, &key), &key).unwrap();
 
         let captured = MutationProof::sign_next(&key, &record(&dht, &uri), &Mutation::Deregister);
         block_on(dht.deregister(&uri, &captured, WriteOptions::default())).unwrap();
@@ -1414,6 +1616,7 @@ mod tests {
         register(
             &dht,
             registration(&uri, &key).with_registered_at(SystemTime::now() + Duration::from_secs(1)),
+            &key,
         )
         .unwrap();
         let replay = block_on(dht.deregister(&uri, &captured, WriteOptions::default()));
@@ -1435,7 +1638,12 @@ mod tests {
         let key = SigningKey::generate();
         let uri = test_uri("2q");
         let opened_at = SystemTime::now();
-        register(&dht, registration(&uri, &key).with_registered_at(opened_at)).unwrap();
+        register(
+            &dht,
+            registration(&uri, &key).with_registered_at(opened_at),
+            &key,
+        )
+        .unwrap();
 
         let captured = MutationProof::sign_next(&key, &record(&dht, &uri), &Mutation::Deregister);
         block_on(dht.deregister(&uri, &captured, WriteOptions::default())).unwrap();
@@ -1446,6 +1654,7 @@ mod tests {
             registration(&uri, &key)
                 .with_registered_at(opened_at)
                 .with_sequence(captured.sequence()),
+            &key,
         )
         .unwrap();
         let replay = block_on(dht.deregister(&uri, &captured, WriteOptions::default()));
@@ -1462,7 +1671,7 @@ mod tests {
         let dht = unverified_dht();
         let key = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &key)).unwrap();
+        register(&dht, registration(&uri, &key), &key).unwrap();
 
         // The record opens at 0, so 0 is already spent.
         let result = refresh(&dht, &uri, &key, 0, Duration::from_hours(1));
@@ -1483,7 +1692,7 @@ mod tests {
         let agent = SigningKey::generate();
         let attacker = SigningKey::generate();
         let uri = test_uri("2q");
-        register(&dht, registration(&uri, &agent)).unwrap();
+        register(&dht, registration(&uri, &agent), &agent).unwrap();
 
         let moved = Endpoint::https("eu-west-1.agent.anthropic.com");
         assert!(

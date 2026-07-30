@@ -23,7 +23,11 @@ fn round_trip_issue_and_verify() {
 
     // Act
     let token = issuer
-        .issue(&uri, vec!["workflow/approval/read".into()])
+        .issue(
+            &uri,
+            &SigningKey::generate().verifying_key(),
+            vec!["workflow/approval/read".into()],
+        )
         .unwrap();
     let claims = verifier.verify(&token).unwrap();
 
@@ -43,7 +47,9 @@ fn verify_for_uri_matches() {
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-    let token = issuer.issue(&uri, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
     let claims = verifier.verify_for_uri(&token, &uri).unwrap();
 
     assert_eq!(claims.agent_uri, uri.to_string());
@@ -60,7 +66,9 @@ fn verify_for_uri_rejects_mismatch() {
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-    let token = issuer.issue(&uri1, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri1, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
     let result = verifier.verify_for_uri(&token, &uri2);
 
     assert!(matches!(result, Err(AttestationError::UriMismatch { .. })));
@@ -76,7 +84,9 @@ fn rejects_untrusted_issuer() {
     let mut verifier = Verifier::new();
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-    let token = issuer.issue(&uri, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
     let result = verifier.verify(&token);
 
     // Token signed by key we know, but issuer claim doesn't match
@@ -98,7 +108,9 @@ fn rejects_invalid_signature() {
     // Register different key than what signed the token
     verifier.add_trusted_root("acme.com", signing_key2.verifying_key());
 
-    let token = issuer.issue(&uri, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
     let result = verifier.verify(&token);
 
     // The token is structurally sound and only its signature fails to check
@@ -122,7 +134,9 @@ fn expired_token_rejected() {
     let mut verifier = Verifier::with_leeway(Duration::ZERO);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
-    let token = issuer.issue(&uri, vec![]).unwrap();
+    let token = issuer
+        .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
 
     // Small delay to ensure expiration
     std::thread::sleep(Duration::from_millis(50));
@@ -150,6 +164,7 @@ fn claims_builder_requires_agent_uri() {
 fn claims_builder_requires_issuer() {
     let result = AttestationClaimsBuilder::new()
         .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+        .agent_key(&SigningKey::generate().verifying_key())
         .build();
 
     assert!(matches!(
@@ -173,7 +188,13 @@ fn multiple_capabilities() {
         "workflow/approval/admin".to_string(),
     ];
 
-    let token = issuer.issue(&uri, capabilities.clone()).unwrap();
+    let token = issuer
+        .issue(
+            &uri,
+            &SigningKey::generate().verifying_key(),
+            capabilities.clone(),
+        )
+        .unwrap();
     let claims = verifier.verify(&token).unwrap();
 
     assert_eq!(claims.capabilities, capabilities);
@@ -211,6 +232,7 @@ fn token_with_audience() {
 
     let claims = AttestationClaimsBuilder::new()
         .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+        .agent_key(&SigningKey::generate().verifying_key())
         .issuer("acme.com")
         .audience("api.acme.com")
         .build()
@@ -234,7 +256,11 @@ fn issuer_generate_creates_working_issuer() {
     let uri = test_uri();
 
     let token = issuer
-        .issue(&uri, vec!["workflow/approval/read".into()])
+        .issue(
+            &uri,
+            &SigningKey::generate().verifying_key(),
+            vec!["workflow/approval/read".into()],
+        )
         .unwrap();
 
     // Should be able to verify with the issuer's own public key
@@ -261,8 +287,12 @@ fn multiple_trusted_roots() {
     verifier.add_trusted_root("other.com", signing_key2.verifying_key());
 
     // Both tokens should verify
-    let token1 = issuer1.issue(&uri1, vec![]).unwrap();
-    let token2 = issuer2.issue(&uri2, vec![]).unwrap();
+    let token1 = issuer1
+        .issue(&uri1, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
+    let token2 = issuer2
+        .issue(&uri2, &SigningKey::generate().verifying_key(), vec![])
+        .unwrap();
 
     assert!(verifier.verify(&token1).is_ok());
     assert!(verifier.verify(&token2).is_ok());
@@ -272,6 +302,7 @@ fn multiple_trusted_roots() {
 fn trust_root_extraction_from_claims() {
     let claims = AttestationClaimsBuilder::new()
         .agent_uri("agent://acme.com:8080/test/agent_01h455vb4pex5vsknk084sn02q")
+        .agent_key(&SigningKey::generate().verifying_key())
         .issuer("acme.com:8080")
         .build()
         .unwrap();

@@ -116,7 +116,11 @@ mod tests {
         let issuer = Issuer::new("acme.com", SigningKey::generate(), ttl);
         let uri = AgentUri::parse(URI).unwrap();
         issuer
-            .issue(&uri, vec!["workflow/approval/read".into()])
+            .issue(
+                &uri,
+                &SigningKey::generate().verifying_key(),
+                vec!["workflow/approval/read".into()],
+            )
             .unwrap()
     }
 

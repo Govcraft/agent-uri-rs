@@ -23,7 +23,7 @@ use futures::executor::block_on;
 use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
 use agent_uri_attestation::{SigningKey, VerifyingKey};
 use agent_uri_dht::{
-    Dht, DhtKey, Endpoint, PathTrie, Query, ReadOptions, Registration, SimulatedDht,
+    Dht, DhtKey, Endpoint, MutationProof, PathTrie, Query, ReadOptions, Registration, SimulatedDht,
     SimulationConfig, WriteOptions,
 };
 
@@ -239,9 +239,22 @@ fn make_agent_uri(index: usize) -> AgentUri {
 /// One key for the whole run, generated once: these benchmarks measure
 /// indexing, and none of them mutates a record, so per-registration key
 /// generation would only add Ed25519 cost to numbers that are not about it.
-fn benchmark_agent_key() -> VerifyingKey {
+fn benchmark_signing_key() -> &'static SigningKey {
     static KEY: OnceLock<SigningKey> = OnceLock::new();
-    KEY.get_or_init(SigningKey::generate).verifying_key()
+    KEY.get_or_init(SigningKey::generate)
+}
+
+fn benchmark_agent_key() -> VerifyingKey {
+    benchmark_signing_key().verifying_key()
+}
+
+/// Signs a registration, as the agent submitting it would.
+///
+/// Registration now costs a signature on the way in and a verification on the
+/// way through, which is part of what these numbers should reflect. Setup
+/// blocks that only need a populated DHT sign outside the timed region.
+fn signed(registration: &Registration) -> MutationProof {
+    MutationProof::sign_registration(benchmark_signing_key(), registration)
 }
 
 /// Benchmarks `SimulatedDht::register()` for a single agent.
@@ -261,7 +274,8 @@ fn bench_simulated_dht_register(c: &mut Criterion) {
                 (dht, registration)
             },
             |(dht, registration)| {
-                block_on(dht.register(registration, WriteOptions::default()))
+                let proof = signed(&registration);
+                block_on(dht.register(registration, &proof, WriteOptions::default()))
                     .expect("registration succeeds");
                 dht
             },
@@ -290,7 +304,9 @@ fn bench_simulated_dht_lookup_exact(c: &mut Criterion) {
                             vec![Endpoint::https(format!("agent{i}.anthropic.com"))],
                         );
                         // Ignore errors for duplicates at same path
-                        let _ = block_on(dht.register(registration, WriteOptions::default()));
+                        let proof = signed(&registration);
+                        let _ =
+                            block_on(dht.register(registration, &proof, WriteOptions::default()));
                     }
                     dht
                 },
@@ -334,7 +350,8 @@ fn bench_simulated_dht_lookup_prefix(c: &mut Criterion) {
                     ))],
                 );
                 // Ignore duplicate errors
-                let _ = block_on(dht.register(registration, WriteOptions::default()));
+                let proof = signed(&registration);
+                let _ = block_on(dht.register(registration, &proof, WriteOptions::default()));
             }
         }
     }
@@ -408,14 +425,16 @@ fn bench_dht_memory_scaling(c: &mut Criterion) {
                 b.iter_batched(
                     || {
                         let dht = benchmark_dht();
-                        let registrations: Vec<Registration> = (0..count)
+                        let registrations: Vec<(Registration, MutationProof)> = (0..count)
                             .map(|i| {
                                 let uri = make_agent_uri(i);
-                                Registration::new(
+                                let registration = Registration::new(
                                     uri,
                                     benchmark_agent_key(),
                                     vec![Endpoint::https(format!("agent{i}.anthropic.com"))],
-                                )
+                                );
+                                let proof = signed(&registration);
+                                (registration, proof)
                             })
                             .collect();
                         (dht, registrations)

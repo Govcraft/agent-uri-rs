@@ -16,9 +16,10 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-attestation"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "agent-uri",
+ "base64",
  "chrono",
  "ed25519-dalek",
  "kani-verifier",
@@ -31,7 +32,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -50,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-dht"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -63,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-eval"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",

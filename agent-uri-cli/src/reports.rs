@@ -268,6 +268,7 @@ mod tests {
     fn claims() -> AttestationClaims {
         AttestationClaims::builder()
             .agent_uri(URI)
+            .agent_key(&agent_uri_attestation::SigningKey::generate().verifying_key())
             .issuer("acme.com")
             .add_capability("workflow/approval/read")
             .ttl(Duration::from_hours(24))

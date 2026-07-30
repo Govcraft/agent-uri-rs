@@ -5,7 +5,8 @@ use std::collections::{HashMap, HashSet};
 use agent_uri::{AgentId, AgentUriBuilder, CapabilityPath, TrustRoot};
 use agent_uri_attestation::SigningKey;
 use agent_uri_dht::{
-    Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig, WriteOptions,
+    Dht, Endpoint, MutationProof, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig,
+    WriteOptions,
 };
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
@@ -174,12 +175,15 @@ impl DiscoveryEvaluator {
         let endpoint = Endpoint::https("agent.eval.example.com:443");
         let registration =
             Registration::new(uri.clone(), self.agent_key.verifying_key(), vec![endpoint]);
+        let proof = MutationProof::sign_registration(&self.agent_key, &registration);
 
-        block_on(self.dht.register(registration, WriteOptions::default())).map_err(|e| {
-            DiscoveryError::Dht {
-                operation: "register".to_string(),
-                message: e.to_string(),
-            }
+        block_on(
+            self.dht
+                .register(registration, &proof, WriteOptions::default()),
+        )
+        .map_err(|e| DiscoveryError::Dht {
+            operation: "register".to_string(),
+            message: e.to_string(),
         })?;
 
         // Track registration for ground truth
