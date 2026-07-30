@@ -94,6 +94,38 @@
 //! | Discovery precision | >= 0.80 |
 //! | Discovery recall | >= 0.70 |
 //! | Discovery F1 | >= 0.75 |
+//!
+//! # What Eval 2 Measures
+//!
+//! Discovery precision and recall are measured against [`SimulatedDht`], a
+//! single in-process index holding one authoritative copy. Nothing in the
+//! harness partitions, replicates, drops a peer, or times out, and every
+//! registration is visible to every query that follows it. Two limits follow,
+//! and both bear on how the figures may be reported (issue #57).
+//!
+//! **They are a conformance check, not a retrieval-quality result.**
+//! [`DiscoveryEvaluator::ground_truth`] decides relevance by path containment,
+//! and the store answers a prefix query by path containment, so the two sets
+//! agree by construction. Precision and recall come out at 1.00 with zero
+//! variance, and will for any corpus the simulator accepts. What that
+//! demonstrates is real but narrow: prefix semantics hold at scale, across every
+//! materialized ancestor key and across paging, and a departure from 1.00 is a
+//! defect in one of those. It is not evidence that capability paths retrieve the
+//! agents a task needs, because there is no gap between what the query asks and
+//! what ground truth counts for a metric to measure. The number that carries
+//! information about the corpus is mean result size, which is why the exact-mode
+//! ablation is worth running: it reports how much of a subtree a prefix query
+//! pulls in, not a better or worse score.
+//!
+//! **They say nothing about distributed deployment.** A real overlay answers a
+//! lookup from whichever replicas it reached, and a Kademlia record cannot hold
+//! a whole subtree, so an ancestor key holds sharded pointers a lookup has to
+//! dereference. Those mechanisms have their own failure modes, and none of them
+//! run here. Recall against a deployment is bounded above by what is measured
+//! here, not estimated by it.
+//!
+//! [`SimulatedDht`]: agent_uri_dht::SimulatedDht
+//! [`DiscoveryEvaluator::ground_truth`]: crate::DiscoveryEvaluator::ground_truth
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]

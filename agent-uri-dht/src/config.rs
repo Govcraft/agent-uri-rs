@@ -23,6 +23,16 @@ pub struct SimulationConfig {
     /// does bound a value is required to shard instead, per SPECIFICATION.md
     /// §6.2.
     ///
+    /// The default of 1000 is therefore a simulator affordance, not a figure a
+    /// deployment can be sized against. A Kademlia overlay bounds a record at
+    /// the wire size a peer will accept, which for `libp2p-kad` is 1 to 27
+    /// registrations, which is exactly why `agent-uri-dht-libp2p` shards rather
+    /// than storing a subtree at one key. Code that handles
+    /// [`DhtError::KeyCapacityExceeded`] ports to it. A capacity chosen against
+    /// this number does not.
+    ///
+    /// [`DhtError::KeyCapacityExceeded`]: crate::DhtError::KeyCapacityExceeded
+    ///
     /// Default: 1000
     pub max_registrations_per_capability: usize,
 

@@ -3,6 +3,11 @@
 //! This example generates synthetic agents with capability paths and evaluates
 //! how well the DHT-based discovery returns relevant results.
 //!
+//! The store underneath is `SimulatedDht`, a single in-process index, and ground
+//! truth is computed by the rule that store answers queries by, so the scores
+//! check that prefix semantics hold rather than rank retrieval quality. See the
+//! `agent_uri_eval` crate docs before quoting them.
+//!
 //! # Configuration
 //!
 //! Environment variables (with defaults):
@@ -41,8 +46,10 @@ const OUTPUT_FILE: &str = "eval2_discovery.json";
 
 /// Default number of agents.
 ///
-/// The simulated DHT has a default capacity of 1000 registrations per key,
-/// allowing large-scale evaluations with 10,000+ agents.
+/// A corpus this size fits under the simulator's 1000-per-key default because
+/// capacity is charged to the exact key an agent registers at, not to the
+/// ancestor keys it is also materialized at. An overlay bounds a record far
+/// lower and shards, so this figure sizes an evaluation and nothing else.
 const DEFAULT_NUM_AGENTS: usize = 10_000;
 
 /// Default number of queries.
@@ -224,6 +231,20 @@ fn print_summary(
         status_str(prefix.mean_f1 >= 0.75),
         prefix.mean_f1
     );
+    println!();
+
+    // Printed beside the numbers, because that is where they are read from and
+    // quoted (issue #57). A caveat that lives only in the crate docs does not
+    // reach whoever pastes this output into a paper.
+    println!("=== Scope ===");
+    println!("  Measured against SimulatedDht: one in-process index, one copy,");
+    println!("  no partitions, no replication, no timeouts. Ground truth uses the");
+    println!("  same path-containment rule the store answers queries by, so these");
+    println!("  scores confirm that prefix semantics hold across ancestor keys and");
+    println!("  paging. They are not a retrieval-quality result, and not evidence");
+    println!("  about distributed deployment, where a lookup reaches a subset of");
+    println!("  replicas and ancestor keys hold sharded pointers. Mean result size");
+    println!("  is the figure above that varies with the corpus.");
 }
 
 /// Converts a boolean to a status string.
