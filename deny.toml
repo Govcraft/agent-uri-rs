@@ -48,6 +48,12 @@ skip = [
     # while newer crates in the graph use rand_core 0.9 / getrandom 0.3.
     { crate = "getrandom@0.2.17", reason = "rand_core 0.6 chain required by ed25519-dalek 2.x" },
     { crate = "rand_core@0.6.4", reason = "ed25519-dalek 2.x pins rand_core 0.6" },
+    # async-trait 0.1.91 is the only crate in the graph on syn 3; clap_derive,
+    # serde_derive, and curve25519-dalek-derive are all still on syn 2. Build
+    # dependency, proc-macro only, so it costs compile time and nothing else.
+    # Collapses when the derive ecosystem moves to syn 3, or when async fn in
+    # trait becomes dyn-compatible and async-trait can be dropped entirely.
+    { crate = "syn@3.0.3", reason = "async-trait 0.1.91; see agent-uri-dht Dht trait dyn-compatibility" },
 ]
 
 [sources]

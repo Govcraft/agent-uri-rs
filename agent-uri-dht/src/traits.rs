@@ -40,7 +40,7 @@ use crate::{
 ///
 /// # Object safety
 ///
-/// This trait uses [`async_trait`] rather than native `async fn` so that it
+/// This trait uses `#[async_trait]` rather than native `async fn` so that it
 /// stays dyn-compatible. Selecting a backend at runtime behind
 /// `Box<dyn Dht>` is the reason the trait exists, and native `async fn` in
 /// trait cannot express that.
