@@ -28,7 +28,11 @@ use crate::error::AgentIdError;
 
 /// Base32 alphabet for `TypeID` suffix (Crockford-derived).
 /// Excludes: i, l, o, u (visually ambiguous).
-const BASE32_ALPHABET: &[u8] = b"0123456789abcdefghjkmnpqrstvwxyz";
+///
+/// A `str` rather than a byte string so membership is asked of a whole
+/// character. Asking it of `c as u8` truncates: `'İ'` (U+0130) becomes `0x30`,
+/// which is `'0'`, and twelve of them read as twelve zeros (issue #33).
+const BASE32_ALPHABET: &str = "0123456789abcdefghjkmnpqrstvwxyz";
 
 /// A validated agent identifier in `TypeID` format.
 ///
@@ -174,7 +178,11 @@ impl AgentId {
     }
 
     fn validate_suffix(suffix: &str) -> Result<(), AgentIdError> {
-        if suffix.len() != AGENT_SUFFIX_LENGTH {
+        // Characters, not bytes. An upper bound on bytes only ever rejects more
+        // than it means to, but this is an equality: a suffix of thirteen
+        // two-byte characters occupies twenty-six bytes and would pass a check
+        // that counted them, having answered a question nobody asked.
+        if suffix.chars().count() != AGENT_SUFFIX_LENGTH {
             return Err(AgentIdError::InvalidSuffix {
                 value: suffix.to_string(),
                 reason: "suffix must be exactly 26 characters",
@@ -195,7 +203,7 @@ impl AgentId {
 
         // All characters must be valid base32
         for c in suffix.chars() {
-            if !BASE32_ALPHABET.contains(&(c as u8)) {
+            if !BASE32_ALPHABET.contains(c) {
                 return Err(AgentIdError::InvalidSuffix {
                     value: suffix.to_string(),
                     reason: "contains invalid base32 character",
@@ -336,6 +344,48 @@ mod tests {
         // 'i' is not in base32 alphabet
         let result = AgentId::parse("llm_01h455vb4pex5vsknk084sn0iq");
         assert!(matches!(result, Err(AgentIdError::InvalidSuffix { .. })));
+    }
+
+    #[test]
+    fn a_non_ascii_char_cannot_impersonate_an_alphabet_byte() {
+        // 'İ' (U+0130) truncates to 0x30 under `as u8`, which is ASCII '0', a
+        // member of the alphabet, so a validator that casts before comparing
+        // reads it as a zero. Twenty-six characters and a valid first one, so
+        // neither the length check nor the first-character check can answer
+        // this: the alphabet check has to. Nothing downstream of this crate is
+        // entitled to catch it for us (issue #33).
+        let suffix = format!("0{}\u{0130}", "1".repeat(24));
+        assert_eq!(suffix.chars().count(), AGENT_SUFFIX_LENGTH);
+
+        let result = AgentId::parse(&format!("llm_{suffix}"));
+
+        let Err(AgentIdError::InvalidSuffix { reason, .. }) = result else {
+            panic!("a non-ASCII character in the suffix must be refused: {result:?}");
+        };
+        assert!(
+            reason.contains("base32"),
+            "refused for the wrong reason: {reason}"
+        );
+    }
+
+    #[test]
+    fn suffix_length_is_counted_in_characters() {
+        // Fourteen characters occupying twenty-six bytes. This is what made the
+        // truncation above reachable in the first place: a byte count is the
+        // only reading under which this string is the right length.
+        let suffix = format!("0{}1", "\u{0130}".repeat(12));
+        assert_eq!(suffix.len(), AGENT_SUFFIX_LENGTH);
+        assert_eq!(suffix.chars().count(), 14);
+
+        let result = AgentId::parse(&format!("llm_{suffix}"));
+
+        let Err(AgentIdError::InvalidSuffix { reason, .. }) = result else {
+            panic!("a fourteen-character suffix must be refused: {result:?}");
+        };
+        assert!(
+            reason.contains("26 characters"),
+            "refused for the wrong reason: {reason}"
+        );
     }
 
     #[test]
