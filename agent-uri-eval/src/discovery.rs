@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use agent_uri::{AgentId, AgentUriBuilder, CapabilityPath, TrustRoot};
+use agent_uri_attestation::SigningKey;
 use agent_uri_dht::{
     Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig, WriteOptions,
 };
@@ -95,6 +96,12 @@ pub struct DiscoveryResults {
 pub struct DiscoveryEvaluator {
     dht: SimulatedDht,
     trust_root: TrustRoot,
+    /// The key every agent in this run is registered under.
+    ///
+    /// One key for the whole harness: this evaluation measures which records a
+    /// query returns, and it never mutates one, so the key is never exercised.
+    /// A key per agent would only add Ed25519 cost to a precision measurement.
+    agent_key: SigningKey,
     /// Map from path string to registered agent URIs.
     registrations: HashMap<String, Vec<String>>,
 }
@@ -116,6 +123,7 @@ impl DiscoveryEvaluator {
             // cryptographic verification is covered by DHT integration tests.
             dht: SimulatedDht::new(SimulationConfig::default().with_verify_attestations(false)),
             trust_root,
+            agent_key: SigningKey::generate(),
             registrations: HashMap::new(),
         })
     }
@@ -164,7 +172,8 @@ impl DiscoveryEvaluator {
 
         let uri_str = uri.as_str().to_string();
         let endpoint = Endpoint::https("agent.eval.example.com:443");
-        let registration = Registration::new(uri.clone(), vec![endpoint]);
+        let registration =
+            Registration::new(uri.clone(), self.agent_key.verifying_key(), vec![endpoint]);
 
         block_on(self.dht.register(registration, WriteOptions::default())).map_err(|e| {
             DiscoveryError::Dht {

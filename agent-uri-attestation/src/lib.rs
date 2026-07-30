@@ -125,7 +125,7 @@ pub use claims::{AttestationClaims, AttestationClaimsBuilder};
 pub use constants::MAX_TOKEN_LENGTH;
 pub use error::AttestationError;
 pub use issuer::Issuer;
-pub use keys::{SigningKey, VerifyingKey};
+pub use keys::{Signature, SigningKey, VerifyingKey};
 pub use verification::{
     capability_covers, check_capability_coverage, check_expiration, check_expiration_with_leeway,
     check_not_before, check_token_length, check_validity_window, validate_audience,
@@ -143,8 +143,8 @@ pub use verifier::Verifier;
 pub mod prelude {
     pub use crate::{
         AttestationClaims, AttestationClaimsBuilder, AttestationError, Issuer, MAX_TOKEN_LENGTH,
-        SigningKey, Verifier, VerifyingKey, capability_covers, check_capability_coverage,
-        check_expiration, check_token_length, check_validity_window, validate_issuer,
-        validate_subject,
+        Signature, SigningKey, Verifier, VerifyingKey, capability_covers,
+        check_capability_coverage, check_expiration, check_token_length, check_validity_window,
+        validate_issuer, validate_subject,
     };
 }

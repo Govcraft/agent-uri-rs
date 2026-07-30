@@ -375,10 +375,12 @@ makes a prefix query one ordinary exact-key DHT lookup.
 ```rust
 Registration {
     agent_uri: AgentUri,          // Full agent URI
+    agent_key: PublicKey,         // Ed25519 key authorized to write this record
     endpoints: Vec<Endpoint>,     // Current network endpoints
     attestation: Option<String>,  // PASETO token
     expires_at: Timestamp,        // Registration TTL
-    registered_at: Timestamp,     // Creation time
+    registered_at: Timestamp,     // Creation time; identifies the record instance
+    sequence: u64,                // Position in this record's write history
 }
 ```
 
@@ -391,6 +393,11 @@ Registration {
 5. The reference in-memory index MUST write the record atomically to the exact key and all ancestor keys. A distributed backend MUST either tolerate transient divergence between these keys or define an additional coordination protocol; this specification does not require cross-node multi-key atomicity.
 6. Registration write amplification is O(d), where d is path depth. Deployments
    MUST provision broad ancestor keys for higher load or impose capacity limits.
+7. Registration MUST name an Ed25519 `agent_key`. That key, and only that key,
+   is authorized to modify or remove the record.
+8. An agent that has previously held this URI SHOULD open the new record at a
+   `sequence` above every sequence it has ever signed for that URI. See
+   [Section 6.6](#66-write-authorization).
 
 ### 6.3 Lookup Protocol
 
@@ -436,14 +443,59 @@ upper bound.
 
 Agent migration updates only the DHT record; the URI remains stable:
 
-1. Agent updates its DHT record with new endpoint(s).
-2. Kademlia replicates to k closest nodes.
-3. After propagation, lookups return new endpoint.
-4. Cached references continue to resolve correctly.
+1. Agent reads its current record to learn its `registered_at` and `sequence`.
+2. Agent signs a mutation proof over the new endpoint(s) at the next sequence.
+3. Agent submits the update with that proof; nodes verify it per
+   [Section 6.6](#66-write-authorization).
+4. Kademlia replicates to k closest nodes.
+5. After propagation, lookups return new endpoint.
+6. Cached references continue to resolve correctly.
 
 The agent's identity (URI) does not change for endpoint migration. A trust-root
 or capability-path change creates a new identity and requires a new Agent ID and
 attestation.
+
+### 6.6 Write Authorization
+
+Registration records are world-readable, so an agent URI identifies a record
+but authorizes nothing. Every write that modifies or removes an existing
+record MUST carry a **mutation proof**: an Ed25519 signature, made by the
+record's `agent_key`, over the operation being requested.
+
+**Signed payload.** The proof signs a domain-separated, length-prefixed
+encoding of:
+
+| Field | Purpose |
+|-------|---------|
+| Domain separator | Prevents a signature minted elsewhere from authorizing a DHT write |
+| Operation kind | Prevents a refresh proof from acting as a deregistration |
+| `registered_at` | Identifies the record instance |
+| `sequence` | Identifies the position in that record's history |
+| `agent_uri` | Binds the proof to one record |
+| Operation arguments | Binds the proof to the endpoints or TTL requested |
+
+**Requirements:**
+
+1. DHT nodes MUST reject a modification or removal whose proof does not verify
+   under the stored record's `agent_key`.
+2. DHT nodes MUST reject a write whose `sequence` does not exceed the stored
+   record's `sequence`, and MUST record the accepted `sequence` on every
+   ancestor-key copy.
+3. The signature MUST be checked before the sequence. Reporting a sequence
+   mismatch for an unsigned write discloses the record's position to a party
+   that has proven nothing.
+4. The encoding MUST be injective: every variable-length field length-prefixed,
+   so that no two distinct operations produce the same signed bytes.
+5. `registered_at` MUST NOT change over a record's lifetime. In particular,
+   refreshing a registration extends `expires_at` only.
+
+**Rationale.** The sequence number orders writes within one record's life, so a
+captured proof cannot be applied twice. The registration time identifies the
+record instance, so a proof captured before a deregistration cannot reach the
+record that replaces it. Two registrations of the same URI within the
+resolution of `registered_at` share an instance identity; requirement 8 of
+[Section 6.2](#62-registration-protocol) removes that dependence on the clock
+for agents that retain their sequence across re-registration.
 
 ---
 
@@ -638,7 +690,26 @@ Deployments requiring query privacy SHOULD consider private information retrieva
 
 **Mitigation:** Trust roots MAY restrict prefix queries to authorized requesters.
 
-### 8.7 Cross-Namespace Issuance
+### 8.7 Registration Hijack
+
+**Threat:** An agent URI is public, so any party that can reach a storing node
+knows which record to write to. Without authorization on modification, that
+party can repoint an agent's endpoints at infrastructure it controls, or evict
+the agent entirely, without holding any key.
+
+**Mitigation:** Every modification and removal carries a mutation proof signed
+by the record's `agent_key`, per [Section 6.6](#66-write-authorization). The
+proof covers the operation's arguments, so an intercepted migration cannot be
+re-aimed at other endpoints while keeping the agent's signature.
+
+**Residual Risk:** A captured proof that has already been applied cannot be
+applied again, but an adversary who suppresses a legitimate write can delay it.
+This is the denial of service described in
+[Section 8.1](#81-dht-eclipse-attacks), not a hijack: producing a record that
+points somewhere new requires a signature over those endpoints, which no
+capture supplies.
+
+### 8.8 Cross-Namespace Issuance
 
 **Threat:** In a multi-root deployment, a verifier trusts several trust roots. A valid signing key for one authority (e.g. `marketing.acme.com`) mints an attestation whose `agent_uri` is rooted at a *different* authority (e.g. `finance.acme.com`). Authenticating `iss` alone proves only which trusted key signed the token, not that the signer owns the attested namespace.
 

@@ -1,8 +1,61 @@
 //! Key types for attestation signing and verification.
 
-use ed25519_dalek::{SigningKey as DalekSigningKey, VerifyingKey as DalekVerifyingKey};
+use ed25519_dalek::{
+    Signature as DalekSignature, Signer, SigningKey as DalekSigningKey, Verifier as DalekVerifier,
+    VerifyingKey as DalekVerifyingKey,
+};
 
 use crate::error::AttestationError;
+
+/// A detached Ed25519 signature over an arbitrary message.
+///
+/// Attestation tokens carry their own signature inside the PASETO envelope.
+/// This type exists for the messages that are *not* tokens: proofs that the
+/// holder of an agent's private key authorized a specific operation, which
+/// [`agent-uri-dht`](https://docs.rs/agent-uri-dht) requires on every write.
+///
+/// # Example
+///
+/// ```
+/// use agent_uri_attestation::SigningKey;
+///
+/// let key = SigningKey::generate();
+/// let signature = key.sign(b"authorize this");
+///
+/// assert!(key.verifying_key().verify(b"authorize this", &signature).is_ok());
+/// assert!(key.verifying_key().verify(b"authorize that", &signature).is_err());
+/// ```
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Signature([u8; 64]);
+
+impl Signature {
+    /// Creates a signature from its 64-byte wire form.
+    ///
+    /// Every 64-byte string is accepted here; whether it is a *valid*
+    /// signature is decided by [`VerifyingKey::verify`], which is the only
+    /// place that can answer the question.
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; 64]) -> Self {
+        Self(bytes)
+    }
+
+    /// Returns the 64-byte wire form.
+    #[must_use]
+    pub const fn to_bytes(self) -> [u8; 64] {
+        self.0
+    }
+}
+
+impl std::fmt::Debug for Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Enough to correlate two signatures in a log, not enough to retype one.
+        write!(
+            f,
+            "Signature({:02x}{:02x}{:02x}{:02x}...)",
+            self.0[0], self.0[1], self.0[2], self.0[3]
+        )
+    }
+}
 
 /// A signing key for creating attestation tokens.
 ///
@@ -58,6 +111,17 @@ impl SigningKey {
         VerifyingKey {
             inner: self.inner.verifying_key(),
         }
+    }
+
+    /// Signs an arbitrary message.
+    ///
+    /// The message is signed verbatim. Callers signing structured data are
+    /// responsible for encoding it unambiguously and for prefixing a domain
+    /// separator, so that a signature minted for one purpose cannot be
+    /// presented as authorization for another.
+    #[must_use]
+    pub fn sign(&self, message: &[u8]) -> Signature {
+        Signature(self.inner.sign(message).to_bytes())
     }
 
     /// Returns a reference to the inner dalek signing key.
@@ -117,6 +181,21 @@ impl VerifyingKey {
     #[must_use]
     pub fn to_bytes(&self) -> [u8; 32] {
         self.inner.to_bytes()
+    }
+
+    /// Verifies a detached signature over `message`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AttestationError::InvalidSignature`] if the signature was not
+    /// produced over exactly this message by the corresponding private key.
+    /// The error deliberately carries no detail: distinguishing a malformed
+    /// signature from a well-formed one over different bytes tells an attacker
+    /// which half of the guess was wrong.
+    pub fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), AttestationError> {
+        self.inner
+            .verify(message, &DalekSignature::from_bytes(&signature.0))
+            .map_err(|_| AttestationError::InvalidSignature)
     }
 }
 
@@ -203,6 +282,84 @@ mod tests {
 
         assert!(debug_output.contains("SigningKey"));
         assert!(debug_output.contains("VerifyingKey"));
+    }
+
+    #[test]
+    fn a_signature_verifies_under_its_own_key_and_message() {
+        let key = SigningKey::generate();
+        let signature = key.sign(b"authorize this");
+
+        assert!(
+            key.verifying_key()
+                .verify(b"authorize this", &signature)
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_signature_does_not_verify_over_different_bytes() {
+        // The whole point of signing a mutation is that the signature covers
+        // the mutation. A signature that survived an edit would authorize
+        // whatever the edit said.
+        let key = SigningKey::generate();
+        let signature = key.sign(b"endpoint: honest.example");
+
+        assert_eq!(
+            key.verifying_key()
+                .verify(b"endpoint: attacker.example", &signature),
+            Err(AttestationError::InvalidSignature)
+        );
+    }
+
+    #[test]
+    fn a_signature_does_not_verify_under_another_key() {
+        let mine = SigningKey::generate();
+        let theirs = SigningKey::generate();
+        let signature = mine.sign(b"authorize this");
+
+        assert_eq!(
+            theirs.verifying_key().verify(b"authorize this", &signature),
+            Err(AttestationError::InvalidSignature)
+        );
+    }
+
+    #[test]
+    fn a_forged_signature_is_rejected_rather_than_panicking() {
+        // from_bytes accepts any 64 bytes by design, so verify has to be the
+        // component that survives arbitrary attacker input.
+        let key = SigningKey::generate();
+
+        for pattern in [[0x00u8; 64], [0xffu8; 64], [0xaau8; 64]] {
+            assert_eq!(
+                key.verifying_key()
+                    .verify(b"authorize this", &Signature::from_bytes(pattern)),
+                Err(AttestationError::InvalidSignature)
+            );
+        }
+    }
+
+    #[test]
+    fn signature_round_trips_its_wire_form() {
+        let key = SigningKey::generate();
+        let signature = key.sign(b"authorize this");
+        let recovered = Signature::from_bytes(signature.to_bytes());
+
+        assert_eq!(signature, recovered);
+        assert!(
+            key.verifying_key()
+                .verify(b"authorize this", &recovered)
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn signature_debug_does_not_print_the_whole_signature() {
+        let key = SigningKey::generate();
+        let shown = format!("{:?}", key.sign(b"authorize this"));
+
+        assert!(shown.starts_with("Signature("));
+        assert!(shown.contains("..."));
+        assert!(shown.len() < 32);
     }
 
     #[test]

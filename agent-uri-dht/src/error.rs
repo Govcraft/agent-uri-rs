@@ -3,6 +3,8 @@
 use std::fmt;
 use std::time::Duration;
 
+use crate::MutationKind;
+
 /// Errors that can occur during DHT operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DhtError {
@@ -46,6 +48,26 @@ pub enum DhtError {
     },
     /// The endpoints list is empty.
     NoEndpoints,
+    /// The write presented no valid proof that the agent's key holder
+    /// authorized it.
+    Unauthorized {
+        /// The agent URI whose record the write targeted
+        agent_uri: String,
+        /// The operation that was refused
+        operation: MutationKind,
+    },
+    /// The write's sequence number did not advance past the record's.
+    ///
+    /// Either the write is a replay of one already applied, or two writers are
+    /// racing against the same record.
+    StaleSequence {
+        /// The agent URI whose record the write targeted
+        agent_uri: String,
+        /// The sequence number the write presented
+        presented: u64,
+        /// The sequence number the record already holds
+        current: u64,
+    },
     /// The operation did not complete within its deadline.
     Timeout {
         /// The operation that timed out
@@ -107,6 +129,29 @@ impl fmt::Display for DhtError {
             }
             Self::NoEndpoints => {
                 write!(f, "registration must have at least one endpoint")
+            }
+            Self::Unauthorized {
+                agent_uri,
+                operation,
+            } => {
+                write!(
+                    f,
+                    "{operation} on agent '{agent_uri}' was not authorized by the agent key bound \
+                     to its registration; the proof must be signed by that key over this exact \
+                     operation"
+                )
+            }
+            Self::StaleSequence {
+                agent_uri,
+                presented,
+                current,
+            } => {
+                write!(
+                    f,
+                    "write to agent '{agent_uri}' presented sequence {presented}, which does not \
+                     advance past the record's {current}; re-read the registration and sign a \
+                     higher sequence"
+                )
             }
             Self::Timeout { operation, after } => {
                 write!(
@@ -300,5 +345,46 @@ mod tests {
         assert!(!DhtError::expired("agent://a.com/b/c_1").is_transient());
         assert!(!DhtError::invalid_attestation("agent://a.com/b/c_1", "bad").is_transient());
         assert!(!DhtError::key_capacity_exceeded("k", 1).is_transient());
+        // Retrying an unauthorized write with the same proof is pure waste, and
+        // a stale sequence needs a fresh signature rather than a repeat.
+        assert!(
+            !DhtError::Unauthorized {
+                agent_uri: "agent://a.com/b/c_1".to_string(),
+                operation: MutationKind::Deregister,
+            }
+            .is_transient()
+        );
+        assert!(
+            !DhtError::StaleSequence {
+                agent_uri: "agent://a.com/b/c_1".to_string(),
+                presented: 1,
+                current: 4,
+            }
+            .is_transient()
+        );
+    }
+
+    #[test]
+    fn unauthorized_error_names_the_refused_operation() {
+        let err = DhtError::Unauthorized {
+            agent_uri: "agent://a.com/b/c_1".to_string(),
+            operation: MutationKind::UpdateEndpoint,
+        };
+        let shown = err.to_string();
+        assert!(shown.contains("update_endpoint"));
+        assert!(shown.contains("agent://a.com/b/c_1"));
+        assert!(shown.contains("agent key"));
+    }
+
+    #[test]
+    fn stale_sequence_error_reports_both_sequences() {
+        let err = DhtError::StaleSequence {
+            agent_uri: "agent://a.com/b/c_1".to_string(),
+            presented: 3,
+            current: 9,
+        };
+        let shown = err.to_string();
+        assert!(shown.contains('3'));
+        assert!(shown.contains('9'));
     }
 }

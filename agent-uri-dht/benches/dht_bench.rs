@@ -15,10 +15,13 @@
 //! | SimulatedDht lookup_exact | Fast | From populated DHT |
 //! | SimulatedDht lookup_prefix | Scales | With result count |
 
+use std::sync::OnceLock;
+
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use futures::executor::block_on;
 
 use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
+use agent_uri_attestation::{SigningKey, VerifyingKey};
 use agent_uri_dht::{
     Dht, DhtKey, Endpoint, PathTrie, Query, ReadOptions, Registration, SimulatedDht,
     SimulationConfig, WriteOptions,
@@ -231,6 +234,16 @@ fn make_agent_uri(index: usize) -> AgentUri {
     .expect("valid URI")
 }
 
+/// The agent key every benchmark registration is bound to.
+///
+/// One key for the whole run, generated once: these benchmarks measure
+/// indexing, and none of them mutates a record, so per-registration key
+/// generation would only add Ed25519 cost to numbers that are not about it.
+fn benchmark_agent_key() -> VerifyingKey {
+    static KEY: OnceLock<SigningKey> = OnceLock::new();
+    KEY.get_or_init(SigningKey::generate).verifying_key()
+}
+
 /// Benchmarks `SimulatedDht::register()` for a single agent.
 ///
 /// Expected: Fast single registration.
@@ -244,7 +257,7 @@ fn bench_simulated_dht_register(c: &mut Criterion) {
                 )
                 .expect("valid URI");
                 let endpoint = Endpoint::https("agent.anthropic.com:443");
-                let registration = Registration::new(uri, vec![endpoint]);
+                let registration = Registration::new(uri, benchmark_agent_key(), vec![endpoint]);
                 (dht, registration)
             },
             |(dht, registration)| {
@@ -273,6 +286,7 @@ fn bench_simulated_dht_lookup_exact(c: &mut Criterion) {
                         let uri = make_agent_uri(i);
                         let registration = Registration::new(
                             uri,
+                            benchmark_agent_key(),
                             vec![Endpoint::https(format!("agent{i}.anthropic.com"))],
                         );
                         // Ignore errors for duplicates at same path
@@ -314,6 +328,7 @@ fn bench_simulated_dht_lookup_prefix(c: &mut Criterion) {
                 .expect("valid URI");
                 let registration = Registration::new(
                     uri,
+                    benchmark_agent_key(),
                     vec![Endpoint::https(format!(
                         "agent{cat}{sub}{item}.anthropic.com"
                     ))],
@@ -369,9 +384,9 @@ fn bench_memory_per_registration(c: &mut Criterion) {
                 )
                 .expect("valid URI");
                 let endpoint = Endpoint::https("agent.anthropic.com:443");
-                (uri, endpoint)
+                (uri, endpoint, benchmark_agent_key())
             },
-            |(uri, endpoint)| Registration::new(uri, vec![endpoint]),
+            |(uri, endpoint, key)| Registration::new(uri, key, vec![endpoint]),
             BatchSize::SmallInput,
         );
     });
@@ -398,6 +413,7 @@ fn bench_dht_memory_scaling(c: &mut Criterion) {
                                 let uri = make_agent_uri(i);
                                 Registration::new(
                                     uri,
+                                    benchmark_agent_key(),
                                     vec![Endpoint::https(format!("agent{i}.anthropic.com"))],
                                 )
                             })
