@@ -7,7 +7,9 @@
 //! - **Registration records**: [`Registration`] with endpoints and attestations
 //! - **Trait interface**: [`Dht`] trait for abstracting DHT implementations
 //! - **In-memory simulation**: [`SimulatedDht`] for evaluation and testing
-//! - **Prefix matching**: [`PathTrie`] for efficient hierarchical discovery
+//! - **Prefix matching**: [`PathTrie`], a standalone helper for callers that
+//!   want a local hierarchical index. Discovery itself does not use it: prefix
+//!   lookup reads one materialized ancestor key.
 //!
 //! # Overview
 //!
