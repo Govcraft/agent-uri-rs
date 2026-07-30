@@ -44,9 +44,9 @@ Registration, migration, refresh, deregistration, and lookup are the `Dht` trait
 
 ## How a registration is stored
 
-`SPECIFICATION.md` §6.2 derives one key per capability path and materializes a registration at its exact path and every ancestor, so that a prefix query is one exact-key read. That does not survive contact with a real overlay: `libp2p-kad`'s wire limit is 16 KiB, which the spike in [#72](https://github.com/Govcraft/agent-uri-rs/issues/72) measured at 1 to 27 registrations, against a broad ancestor key meant to hold an entire subtree.
+This crate implements the **sharded** record model of `SPECIFICATION.md` §6.2, which every Kademlia deployment is required to use. The alternative, materializing a registration at its exact path and every ancestor so that a prefix query is one exact-key read, does not survive contact with a real overlay: `libp2p-kad`'s wire limit is 16 KiB, which the spike in [#72](https://github.com/Govcraft/agent-uri-rs/issues/72) measured at 1 to 27 registrations, against a broad ancestor key meant to hold an entire subtree.
 
-The design that does fit splits the two jobs the spec's single record was doing:
+The sharded model splits the two jobs one record was doing:
 
 | key | holds | written by |
 |---|---|---|
@@ -54,11 +54,13 @@ The design that does fit splits the two jobs the spec's single record was doing:
 | page | pointers to agents beneath a path | every agent, at every ancestor |
 | descriptor | how many pages a path is spread over | whoever widens it |
 
-A pointer is about 80 bytes against a registration's 600, so a page holds roughly 200 agents rather than 27. Beyond that, pages shard: a path's pointers spread across `2^level` pages, and whichever publisher finds a full page raises the level for everyone.
+A pointer is about 74 bytes against a registration's 600, so a page holds roughly 220 agents rather than 27. That moves the ceiling; it does not remove one. Sharding does: a path's pointers spread across `2^level` pages, and whichever publisher finds a full page raises the level for everyone.
 
-The level is a power of two on purpose. With `page = hash mod P`, raising `P` moves nearly every existing publisher to a different page and every pointer already written becomes unreadable until its publisher happens to rewrite it. With `page = hash & (2^level - 1)`, raising the level splits each page in two and leaves every existing pointer where a wider reader still looks. Growth is backward compatible, and a stale level costs coverage rather than correctness.
+The level is a power of two on purpose, and §6.1.1 requirement 5 makes that normative. With `page = hash mod P`, raising `P` moves nearly every existing publisher to a different page and every pointer already written becomes unreadable until its publisher happens to rewrite it. With `page = hash & (2^level - 1)`, raising the level splits each page in two and leaves every existing pointer where a wider reader still looks. Growth is backward compatible, and a stale level costs coverage rather than correctness.
 
-**Cost of a lookup:** one descriptor read, one page read per shard, and one read per agent found. Each is still `O(log N)` hops, so §6.4's per-operation claim survives; its one-operation claim does not.
+The key derivations are in §6.1.1 and their test vectors in Appendix B.4.1; `keys.rs` asserts them, because an implementation that derives one key differently sees none of this one's registrations and the failure looks like an empty namespace rather than a disagreement.
+
+**Cost of a lookup:** one descriptor read, one page read per shard, and one read per agent found, which is what §6.4 costs the sharded model at. Each is one exact-key read, so each is still `O(log N)` hops.
 
 ## What makes this safe under replication
 

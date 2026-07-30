@@ -3,18 +3,17 @@
 //!
 //! # A registration is several records
 //!
-//! One `register` call writes the agent's own signed record, and a pointer to
-//! it at the agent's capability path and every ancestor. That is
-//! SPECIFICATION.md §6.2's materialization, with the record itself lifted out
-//! of the ancestor keys, because a broad ancestor key cannot hold its subtree
-//! on a real overlay (issue #72).
+//! One `register` call writes the agent's own signed record at its identity
+//! key, and a pointer to it at the agent's capability path and every ancestor.
+//! That is SPECIFICATION.md §6.2's sharded model, which a Kademlia overlay is
+//! required to use: a broad ancestor key cannot hold its subtree under a 16 KiB
+//! wire limit (issue #72).
 //!
-//! # A lookup is two rounds, not one
+//! # A lookup is three rounds, not one
 //!
-//! §6.4 describes prefix lookup as one exact-key read. Against pointer pages it
-//! is a descriptor read, then a page read per shard, then one read per agent
-//! found. Each of those is still `O(log N)` hops, so the per-operation claim
-//! survives; the one-operation claim does not.
+//! A prefix lookup is a descriptor read, then a page read per shard, then one
+//! read per agent found, which is what §6.4 costs the sharded model at. Each of
+//! those is one exact-key read, so each is still `O(log N)` hops.
 //!
 //! # A lookup verifies what it is given
 //!

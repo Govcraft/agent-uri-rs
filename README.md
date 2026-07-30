@@ -218,7 +218,7 @@ let page = block_on(dht.lookup(&query, &ReadOptions::default())).unwrap();
 assert!(!page.is_empty());
 ```
 
-DHT keys are derived as `SHA-256(trust_root || "/" || capability_path)`. A registration is replicated to its exact path key and every ancestor key, so a prefix query reads one exact key and gets that subtree. This costs O(path depth) writes and can make broad ancestor keys hot.
+DHT keys are derived as `SHA-256(trust_root || "/" || capability_path)`. This crate implements the **direct** record model of `SPECIFICATION.md` §6.2: a registration is replicated to its exact path key and every ancestor key, so a prefix query reads one exact key and gets that subtree. That works where one store owns the namespace and a stored value has no practical size bound. It costs O(path depth) writes and can make broad ancestor keys hot.
 
 Every query is scoped to one trust root, because every key is derived from one. There is deliberately no cross-trust-root lookup: cross-trust-root isolation bounds the blast radius of a trust-root key compromise.
 
@@ -262,7 +262,7 @@ node.bootstrap(&[PeerAddr::new("/ip4/198.51.100.7/tcp/4001/p2p/12D3KooWExample")
 
 A separate crate because `libp2p` is a large dependency and the core crate is useful without it.
 
-The storage layout differs from the one `agent-uri-dht` describes, because a broad ancestor key cannot hold its subtree on a real overlay: `libp2p-kad`'s wire limit caps a record at 1 to 27 registrations. Ancestor keys therefore hold pointers rather than records, sharded across pages that double as they fill, and a prefix lookup dereferences them. Every node validates what it is asked to store, and every reader validates what it is given.
+The storage layout differs from `agent-uri-dht`'s, because a broad ancestor key cannot hold its subtree on a real overlay: `libp2p-kad`'s wire limit caps a record at 1 to 27 registrations. This crate therefore implements the **sharded** record model of `SPECIFICATION.md` §6.2, which every Kademlia deployment is required to use. Ancestor keys hold pointers rather than records, sharded across pages that double as they fill, and a prefix lookup dereferences them. Every node validates what it is asked to store, and every reader validates what it is given.
 
 See [its README](agent-uri-dht-libp2p/README.md) for the record model, the reconciliation rules that make replication safe, and the limits that remain.
 

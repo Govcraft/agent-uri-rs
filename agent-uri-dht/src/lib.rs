@@ -13,11 +13,19 @@
 //!
 //! # Overview
 //!
-//! Agents register at keys for their exact capability path and every ancestor:
+//! [`SimulatedDht`] implements the **direct** record model of SPECIFICATION.md
+//! §6.2: agents register at keys for their exact capability path and every
+//! ancestor, and a prefix lookup is one exact-key read.
 //!
 //! ```text
 //! key = SHA256(trust_root || "/" || capability_path)
 //! ```
+//!
+//! That model holds where one store owns the namespace and a stored value has
+//! no practical size bound, which is what an in-process index is. A Kademlia
+//! overlay is not, and is required to use the sharded model instead; see
+//! [`agent-uri-dht-libp2p`](https://crates.io/crates/agent-uri-dht-libp2p). The
+//! [`Dht`] trait is the same either way.
 //!
 //! This enables capability-based discovery: "find me an agent at
 //! `anthropic.com` that can do `assistant/chat`".

@@ -562,4 +562,32 @@ mod tests {
             encoded.len()
         );
     }
+
+    #[test]
+    fn a_page_holds_the_pointer_count_the_spec_publishes() {
+        // SPECIFICATION.md Appendix C.3 publishes ~220 pointers per 16 KiB page
+        // at typical URI lengths, and that figure is what §6.2 requirement 6's
+        // case for sharding rests on. An encoding change that halved it would
+        // leave the spec quoting a number nothing produces.
+        let uri = "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q";
+        let now = SystemTime::now();
+        let page = PointerPage::new((0..220).map(|_| Pointer::new(uri, now)).collect());
+        let encoded = page.encode().unwrap().len();
+        assert!(
+            encoded <= 16 * 1024,
+            "220 pointers encoded to {encoded} bytes, over the 16 KiB wire limit"
+        );
+
+        // And the other end of the range: a page of maximum-length URIs holds
+        // far fewer, which is why pointers move the ceiling rather than remove
+        // it. Only sharding removes it.
+        let long = format!(
+            "agent://{}/{}/{}_01h455vb4pex5vsknk084sn02q",
+            "a".repeat(115) + ".example.com",
+            vec!["s".repeat(51); 5].join("/"),
+            "p".repeat(63)
+        );
+        let page = PointerPage::new((0..33).map(|_| Pointer::new(long.clone(), now)).collect());
+        assert!(page.encode().unwrap().len() <= 16 * 1024);
+    }
 }
