@@ -1,6 +1,6 @@
 //! DHT trait definition for capability-based agent discovery.
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use agent_uri::AgentUri;
 use async_trait::async_trait;
@@ -94,7 +94,11 @@ pub trait Dht: Send + Sync {
     /// identity.
     ///
     /// `proof` must be signed by the record's agent key over exactly these
-    /// endpoints, so an intercepted migration cannot be re-aimed.
+    /// endpoints, so an intercepted migration cannot be re-aimed. It must also
+    /// name the expiry the record already carries, which is the expiry it
+    /// keeps: a migration moves an agent, it does not change when the record
+    /// lapses. A backend takes that instant from the record it holds rather
+    /// than from the caller, so there is no second opinion about it.
     ///
     /// # Errors
     ///
@@ -117,6 +121,14 @@ pub trait Dht: Send + Sync {
     /// republish before its TTL elapses. Without this a long-lived agent has to
     /// deregister and re-register, which makes it briefly undiscoverable.
     ///
+    /// `expires_at` is the instant the record ends up holding, and a backend
+    /// applies it verbatim; `ttl` is the lifetime the agent asked for. Both are
+    /// signed, and the caller supplies both because a backend deriving the
+    /// instant from the TTL would arrive at one the agent never signed. Only
+    /// the signer knows when it signed. Callers ordinarily pass
+    /// `SystemTime::now() + ttl` for the instant, computed once and used for
+    /// both the proof and this call.
+    ///
     /// # Errors
     ///
     /// Returns `DhtError` if the agent is not registered (`NotFound`), the
@@ -126,6 +138,7 @@ pub trait Dht: Send + Sync {
         &self,
         agent_uri: &AgentUri,
         ttl: Duration,
+        expires_at: SystemTime,
         proof: &MutationProof,
         options: WriteOptions,
     ) -> Result<WriteReceipt, DhtError>;

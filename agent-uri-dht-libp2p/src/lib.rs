@@ -146,8 +146,6 @@
 //!   A lookup dereferences each pointer and checks the agent's own URI against
 //!   the path queried, so an injected pointer costs a wasted read and nothing
 //!   more.
-//! - **`expires_at` is not fully covered by a signature on migrations and
-//!   refreshes.** The bound, and what it costs, are stated in [`validate`].
 //! - **Shard growth is opportunistic.** A page over its high-water mark is
 //!   widened by whoever notices; until then it keeps accepting pointers.
 

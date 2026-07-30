@@ -215,6 +215,28 @@ pub async fn proof_for(
     MutationProof::sign_next(key, &current, mutation)
 }
 
+/// A proof for moving an agent to `endpoints`.
+///
+/// The expiry named is the one the record already carries, because a migration
+/// moves an agent and not the moment its record lapses. Signing a different one
+/// produces a proof no node will accept.
+pub async fn migration_proof_for(
+    node: &Libp2pDht,
+    uri: &AgentUri,
+    key: &SigningKey,
+    endpoints: &[Endpoint],
+) -> MutationProof {
+    let current = current(node, uri).await;
+    MutationProof::sign_next(
+        key,
+        &current,
+        &Mutation::UpdateEndpoint {
+            endpoints,
+            expires_at: current.expires_at(),
+        },
+    )
+}
+
 /// Reads the registration a node currently holds for an agent.
 pub async fn current(node: &Libp2pDht, uri: &AgentUri) -> Registration {
     let query = Query::exact(uri.trust_root().clone(), uri.capability_path().clone());

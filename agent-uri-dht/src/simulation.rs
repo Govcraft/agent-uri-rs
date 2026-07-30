@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use agent_uri::AgentUri;
 use agent_uri_attestation::{SigningKey, Verifier};
@@ -316,12 +316,23 @@ impl SimulatedDht {
         let old_endpoints = current.endpoints().to_vec();
 
         let endpoints = std::slice::from_ref(&new_endpoint);
-        let mutation = Mutation::UpdateEndpoint { endpoints };
-        let proof = MutationProof::sign_next(agent_key, &current, &mutation);
+        // Migrating leaves the expiry where it is, so the proof names the one
+        // the record already carries.
+        let proof = MutationProof::sign_next(
+            agent_key,
+            &current,
+            &Mutation::UpdateEndpoint {
+                endpoints,
+                expires_at: current.expires_at(),
+            },
+        );
 
         // Time the update
         let start = Instant::now();
-        self.apply_mutation(agent_uri, &mutation, &proof)?;
+        self.apply_mutation(agent_uri, &proof, |record| Mutation::UpdateEndpoint {
+            endpoints,
+            expires_at: record.expires_at(),
+        })?;
         let update_latency = start.elapsed();
 
         Ok(MigrationResult::success(
@@ -536,11 +547,18 @@ impl SimulatedDht {
     /// happen under one acquisition of the write lock: split apart, two
     /// writers could clear the same sequence check and both proceed, and the
     /// second would overwrite the first while its proof said otherwise.
-    fn apply_mutation(
+    ///
+    /// `describe` builds the mutation from the record as the store holds it,
+    /// rather than taking one ready-made. A migration's signed `expires_at` is
+    /// the record's own, and a caller that supplied it separately could
+    /// describe the same write differently from the record it targets. Reading
+    /// it off the record under the same lock that applies the write means it
+    /// cannot.
+    fn apply_mutation<'m>(
         &self,
         agent_uri: &AgentUri,
-        mutation: &Mutation<'_>,
         proof: &MutationProof,
+        describe: impl FnOnce(&Registration) -> Mutation<'m>,
     ) -> Result<(), DhtError> {
         let uri_str = agent_uri.canonical();
 
@@ -567,22 +585,36 @@ impl SimulatedDht {
             return Err(DhtError::expired(&uri_str));
         }
 
-        proof.authorizes(&current, mutation)?;
+        let mutation = describe(&current);
+        proof.authorizes(&current, &mutation)?;
 
         match mutation {
-            Mutation::UpdateEndpoint { endpoints } => Self::rewrite_copies(
+            // The expiry is applied as well as the endpoints, so that the
+            // stored record is exactly the record the proof describes and not
+            // merely one the proof permitted.
+            Mutation::UpdateEndpoint {
+                endpoints,
+                expires_at,
+            } => Self::rewrite_copies(
                 &mut indices.records,
                 &keys,
                 &uri_str,
                 proof.sequence(),
-                |registration| registration.update_endpoints((*endpoints).to_vec()),
+                |registration| {
+                    registration.update_endpoints(endpoints.to_vec());
+                    registration.set_expires_at(expires_at);
+                },
             ),
-            Mutation::Refresh { ttl } => Self::rewrite_copies(
+            // The signed instant, not `now + ttl`. A store that recomputed it
+            // would write an expiry the agent never signed, and on a wire
+            // protocol that field would then be open to anyone who relays the
+            // record (issue #81).
+            Mutation::Refresh { expires_at, .. } => Self::rewrite_copies(
                 &mut indices.records,
                 &keys,
                 &uri_str,
                 proof.sequence(),
-                |registration| registration.refresh(*ttl),
+                |registration| registration.set_expires_at(expires_at),
             ),
             Mutation::Deregister => {
                 Self::remove_copies(&mut indices.records, &keys, &uri_str);
@@ -681,13 +713,10 @@ impl Dht for SimulatedDht {
         if new_endpoints.is_empty() {
             return Err(DhtError::NoEndpoints);
         }
-        self.apply_mutation(
-            agent_uri,
-            &Mutation::UpdateEndpoint {
-                endpoints: &new_endpoints,
-            },
-            proof,
-        )?;
+        self.apply_mutation(agent_uri, proof, |record| Mutation::UpdateEndpoint {
+            endpoints: &new_endpoints,
+            expires_at: record.expires_at(),
+        })?;
         Ok(self.receipt(options.quorum))
     }
 
@@ -695,10 +724,11 @@ impl Dht for SimulatedDht {
         &self,
         agent_uri: &AgentUri,
         ttl: Duration,
+        expires_at: SystemTime,
         proof: &MutationProof,
         options: WriteOptions,
     ) -> Result<WriteReceipt, DhtError> {
-        self.apply_mutation(agent_uri, &Mutation::Refresh { ttl }, proof)?;
+        self.apply_mutation(agent_uri, proof, |_| Mutation::Refresh { ttl, expires_at })?;
         Ok(self.receipt(options.quorum))
     }
 
@@ -708,7 +738,7 @@ impl Dht for SimulatedDht {
         proof: &MutationProof,
         _options: WriteOptions,
     ) -> Result<(), DhtError> {
-        self.apply_mutation(agent_uri, &Mutation::Deregister, proof)
+        self.apply_mutation(agent_uri, proof, |_| Mutation::Deregister)
     }
 
     async fn lookup(
@@ -738,6 +768,9 @@ impl Dht for SimulatedDht {
 mod tests {
     use super::*;
     use crate::RecordVersion;
+    // Comparing at millisecond resolution, which is what the signed payload and
+    // the serde representation both round to.
+    use crate::registration::system_time_to_millis;
     use agent_uri::{CapabilityPath, TrustRoot};
     use agent_uri_attestation::Issuer;
     use futures::executor::block_on;
@@ -818,6 +851,12 @@ mod tests {
         block_on(dht.deregister(uri, &proof, WriteOptions::default()))
     }
 
+    /// The expiry a migration proof has to name: the one the record already
+    /// carries, because a migration does not move it.
+    fn expiry_of(dht: &SimulatedDht, uri: &AgentUri) -> SystemTime {
+        stored(dht, uri).map_or_else(SystemTime::now, |r| r.expires_at())
+    }
+
     fn update_endpoint(
         dht: &SimulatedDht,
         uri: &AgentUri,
@@ -831,6 +870,7 @@ mod tests {
             version_at(dht, uri, sequence),
             &Mutation::UpdateEndpoint {
                 endpoints: &endpoints,
+                expires_at: expiry_of(dht, uri),
             },
         );
         block_on(dht.update_endpoint(uri, endpoints, &proof, WriteOptions::default()))
@@ -843,13 +883,17 @@ mod tests {
         sequence: u64,
         ttl: Duration,
     ) -> Result<WriteReceipt, DhtError> {
+        // Computed once and used for both the proof and the call, which is
+        // what every caller has to do: the store applies the instant the agent
+        // signed rather than deriving one of its own.
+        let expires_at = SystemTime::now() + ttl;
         let proof = MutationProof::sign(
             key,
             uri,
             version_at(dht, uri, sequence),
-            &Mutation::Refresh { ttl },
+            &Mutation::Refresh { ttl, expires_at },
         );
-        block_on(dht.refresh(uri, ttl, &proof, WriteOptions::default()))
+        block_on(dht.refresh(uri, ttl, expires_at, &proof, WriteOptions::default()))
     }
 
     fn lookup(dht: &SimulatedDht, query: &Query) -> Vec<Registration> {
@@ -1273,6 +1317,68 @@ mod tests {
     }
 
     #[test]
+    fn a_refresh_lands_on_the_instant_the_agent_signed() {
+        // The store applies the expiry from the proof rather than deriving one
+        // from the TTL. A store that recomputed `now + ttl` would write an
+        // instant the agent never signed, which is invisible here but leaves
+        // the field open to anyone relaying the record on a real overlay
+        // (issue #81).
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &key), &key).unwrap();
+
+        let ttl = Duration::from_hours(1);
+        // Deliberately not `now + ttl`: only a store honouring the signed
+        // instant lands here.
+        let chosen = SystemTime::now() + Duration::from_hours(9);
+        let proof = MutationProof::sign(
+            &key,
+            &uri,
+            version_at(&dht, &uri, 1),
+            &Mutation::Refresh {
+                ttl,
+                expires_at: chosen,
+            },
+        );
+        block_on(dht.refresh(&uri, ttl, chosen, &proof, WriteOptions::default())).unwrap();
+
+        let stored = lookup(&dht, &exact("anthropic.com", "assistant/chat"))[0].expires_at();
+        assert_eq!(
+            system_time_to_millis(stored),
+            system_time_to_millis(chosen),
+            "the store wrote an expiry the agent did not sign"
+        );
+    }
+
+    #[test]
+    fn a_migration_leaves_the_expiry_where_it_was() {
+        // A migration moves an agent, not the moment its record lapses. The
+        // proof names the record's own expiry, so a store that wrote a
+        // different one would be writing a record its own proof does not
+        // describe.
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &key), &key).unwrap();
+        let before = record(&dht, &uri).expires_at();
+
+        update_endpoint(
+            &dht,
+            &uri,
+            &key,
+            1,
+            vec![Endpoint::https("eu-west-1.example")],
+        )
+        .unwrap();
+
+        assert_eq!(
+            system_time_to_millis(record(&dht, &uri).expires_at()),
+            system_time_to_millis(before)
+        );
+    }
+
+    #[test]
     fn refresh_updates_every_ancestor_copy() {
         // The record is materialized at each ancestor key. A refresh that
         // touched only one would leave the others to expire, silently pruning
@@ -1539,10 +1645,14 @@ mod tests {
         register(&dht, registration(&uri, &agent), &agent).unwrap();
 
         let honest = vec![Endpoint::https("honest.example")];
+        let held = record(&dht, &uri);
         let proof = MutationProof::sign_next(
             &agent,
-            &record(&dht, &uri),
-            &Mutation::UpdateEndpoint { endpoints: &honest },
+            &held,
+            &Mutation::UpdateEndpoint {
+                endpoints: &honest,
+                expires_at: held.expires_at(),
+            },
         );
 
         let result = block_on(dht.update_endpoint(
@@ -1602,11 +1712,13 @@ mod tests {
         register(&dht, registration(&uri, &key), &key).unwrap();
 
         let endpoints = vec![Endpoint::https("first.example")];
+        let held = record(&dht, &uri);
         let proof = MutationProof::sign_next(
             &key,
-            &record(&dht, &uri),
+            &held,
             &Mutation::UpdateEndpoint {
                 endpoints: &endpoints,
+                expires_at: held.expires_at(),
             },
         );
 

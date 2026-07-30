@@ -2,11 +2,12 @@
 
 mod support;
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use agent_uri_dht::{Dht, Mutation};
 use support::{
-    Overlay, exact, lookup, lookup_until_found, prefix, proof_for, register, write_options,
+    Overlay, exact, lookup, lookup_until_found, migration_proof_for, prefix, proof_for, register,
+    write_options,
 };
 
 #[tokio::test(flavor = "multi_thread")]
@@ -116,13 +117,7 @@ async fn a_migration_is_visible_across_the_overlay() {
     let _ = lookup_until_found(&overlay.nodes[3], &exact(&uri)).await;
 
     let moved = vec![agent_uri_dht::Endpoint::https("eu-west.example:443")];
-    let proof = proof_for(
-        &overlay.nodes[0],
-        &uri,
-        &key,
-        &Mutation::UpdateEndpoint { endpoints: &moved },
-    )
-    .await;
+    let proof = migration_proof_for(&overlay.nodes[0], &uri, &key, &moved).await;
     overlay.nodes[0]
         .update_endpoint(&uri, moved, &proof, write_options())
         .await
@@ -156,9 +151,19 @@ async fn a_refresh_extends_the_registration() {
     let _ = lookup_until_found(&overlay.nodes[2], &exact(&uri)).await;
 
     let ttl = Duration::from_hours(4);
-    let proof = proof_for(&overlay.nodes[0], &uri, &key, &Mutation::Refresh { ttl }).await;
+    // One clock reading, signed and submitted. The node applies the instant it
+    // is given rather than deriving one, so there is nothing here for a relay
+    // to rewrite.
+    let expires_at = SystemTime::now() + ttl;
+    let proof = proof_for(
+        &overlay.nodes[0],
+        &uri,
+        &key,
+        &Mutation::Refresh { ttl, expires_at },
+    )
+    .await;
     overlay.nodes[0]
-        .refresh(&uri, ttl, &proof, write_options())
+        .refresh(&uri, ttl, expires_at, &proof, write_options())
         .await
         .unwrap();
 

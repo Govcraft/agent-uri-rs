@@ -14,6 +14,16 @@
 //! disagree with the operation it accompanies, because there is nothing in it
 //! to disagree with: it is a sequence number and a signature.
 //!
+//! Every mutation names the **resulting** record's `expires_at`, not only the
+//! arguments that produced it. A store that holds the record and applies the
+//! change itself has no use for that: it computes the new expiry locally and
+//! there is nothing for anyone to substitute. On a wire protocol the resulting
+//! record travels whole, so any field outside the payload is a field an
+//! observer can rewrite before passing the record on. Leaving `expires_at`
+//! outside let an attacker who watched a legitimate migration hold a real,
+//! agent-signed record open past the moment the agent chose to let it lapse
+//! (issue #81).
+//!
 //! # Replay
 //!
 //! Proofs travel in the clear alongside the operations they authorize, so any
@@ -54,7 +64,12 @@ use crate::{DhtError, Endpoint, Registration};
 
 /// Domain separator. A signature minted for a DHT mutation must never verify
 /// as authorization for anything else the agent key is used to sign.
-const DOMAIN: &[u8] = b"agent-uri/dht-mutation/v1\x00";
+///
+/// The version moved to `v2` when `expires_at` entered the update and refresh
+/// payloads. Every proof signed under `v1` is now unverifiable, which is the
+/// point: a `v1` update proof says nothing about the expiry of the record it
+/// produces, and accepting one would leave that field open on the wire.
+const DOMAIN: &[u8] = b"agent-uri/dht-mutation/v2\x00";
 
 /// The operation a proof authorizes.
 ///
@@ -109,7 +124,9 @@ impl std::fmt::Display for MutationKind {
 ///
 /// This mirrors the mutating [`crate::Dht`] methods so that the parameters
 /// which distinguish two calls of the same kind (which endpoints, how much
-/// TTL) are inside what the signature covers.
+/// TTL) are inside what the signature covers, and it names the resulting
+/// record's `expires_at` so that no field of the record a write produces sits
+/// outside the signature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mutation<'a> {
     /// Create the record with exactly this content.
@@ -127,14 +144,31 @@ pub enum Mutation<'a> {
         expires_at: SystemTime,
     },
     /// Replace the record's endpoints with these.
+    ///
+    /// A migration does not change when the record lapses, so `expires_at` is
+    /// the expiry the record already carries. A store derives it from the
+    /// record it holds rather than accepting it from the caller, so the two
+    /// cannot describe the same write differently.
     UpdateEndpoint {
         /// The endpoints the record will hold.
         endpoints: &'a [Endpoint],
+        /// When the record will expire, unchanged by this write.
+        expires_at: SystemTime,
     },
-    /// Extend the record's lifetime by this much, measured from acceptance.
+    /// Extend the record's lifetime to this instant.
+    ///
+    /// `expires_at` is what a store applies. `ttl` is what the agent asked
+    /// for, and is signed alongside it because it is an argument of the call:
+    /// a backend that reports the requested lifetime, or carries it on the
+    /// wire, must not be able to report one the agent never asked for. The
+    /// instant is what the record ends up holding, so the instant is what
+    /// stores act on. Only the signer knows both, because only the signer
+    /// knows when it signed.
     Refresh {
-        /// The new time-to-live.
+        /// The lifetime the agent asked for.
         ttl: Duration,
+        /// When the record will expire once this write is applied.
+        expires_at: SystemTime,
     },
     /// Remove the record.
     Deregister,
@@ -269,10 +303,15 @@ pub fn signing_payload(
             out.extend_from_slice(&system_time_to_millis(*expires_at).to_be_bytes());
             push_endpoints(&mut out, endpoints);
         }
-        Mutation::UpdateEndpoint { endpoints } => {
+        Mutation::UpdateEndpoint {
+            endpoints,
+            expires_at,
+        } => {
+            out.extend_from_slice(&system_time_to_millis(*expires_at).to_be_bytes());
             push_endpoints(&mut out, endpoints);
         }
-        Mutation::Refresh { ttl } => {
+        Mutation::Refresh { ttl, expires_at } => {
+            out.extend_from_slice(&system_time_to_millis(*expires_at).to_be_bytes());
             out.extend_from_slice(&ttl.as_secs().to_be_bytes());
             out.extend_from_slice(&ttl.subsec_nanos().to_be_bytes());
         }
@@ -311,7 +350,12 @@ pub fn signing_payload(
 /// );
 ///
 /// let endpoints = vec![Endpoint::https("eu-west-1.agent.anthropic.com")];
-/// let mutation = Mutation::UpdateEndpoint { endpoints: &endpoints };
+/// // Migrating does not change when the record lapses, so the expiry signed
+/// // is the one the record already carries.
+/// let mutation = Mutation::UpdateEndpoint {
+///     endpoints: &endpoints,
+///     expires_at: record.expires_at(),
+/// };
 /// let proof = MutationProof::sign_next(&key, &record, &mutation);
 ///
 /// assert!(proof.authorizes(&record, &mutation).is_ok());
@@ -489,14 +533,39 @@ mod tests {
         Registration::new(uri.clone(), key.clone(), vec![Endpoint::https("a.example")])
     }
 
+    /// A migration of `record` to `endpoints`, naming the expiry a store would
+    /// read off the record.
+    fn migration<'a>(record: &Registration, endpoints: &'a [Endpoint]) -> Mutation<'a> {
+        Mutation::UpdateEndpoint {
+            endpoints,
+            expires_at: record.expires_at(),
+        }
+    }
+
+    /// A migration to `endpoints` at a fixed expiry, for tests about how the
+    /// payload encodes the endpoints rather than about the expiry.
+    fn moved_to(endpoints: &[Endpoint]) -> Mutation<'_> {
+        Mutation::UpdateEndpoint {
+            endpoints,
+            expires_at: SystemTime::UNIX_EPOCH,
+        }
+    }
+
+    /// A renewal to a fixed instant, so that a test asserting on the payload
+    /// does not depend on when it ran.
+    fn renewal(ttl: Duration) -> Mutation<'static> {
+        Mutation::Refresh {
+            ttl,
+            expires_at: SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000),
+        }
+    }
+
     #[test]
     fn a_proof_authorizes_the_mutation_it_signed() {
         let key = SigningKey::generate();
         let record = record(&test_uri(), &key.verifying_key());
         let endpoints = vec![Endpoint::https("b.example")];
-        let mutation = Mutation::UpdateEndpoint {
-            endpoints: &endpoints,
-        };
+        let mutation = migration(&record, &endpoints);
 
         let proof = MutationProof::sign_next(&key, &record, &mutation);
 
@@ -511,16 +580,52 @@ mod tests {
         let record = record(&test_uri(), &key.verifying_key());
         let honest = vec![Endpoint::https("honest.example")];
         let attacker = vec![Endpoint::https("attacker.example")];
-        let proof = MutationProof::sign_next(
-            &key,
-            &record,
-            &Mutation::UpdateEndpoint { endpoints: &honest },
-        );
+        let proof = MutationProof::sign_next(&key, &record, &migration(&record, &honest));
+
+        let result = proof.authorizes(&record, &migration(&record, &attacker));
+
+        assert!(matches!(result, Err(DhtError::Unauthorized { .. })));
+    }
+
+    #[test]
+    fn a_migration_proof_does_not_authorize_a_different_expiry() {
+        // The gap #81 closed. On a wire protocol the record a migration
+        // produces travels whole, so an expiry outside the signature is one
+        // any relay can rewrite: an observer could hold a real, agent-signed
+        // record open long past the moment the agent chose to let it lapse.
+        let key = SigningKey::generate();
+        let record = record(&test_uri(), &key.verifying_key());
+        let endpoints = vec![Endpoint::https("b.example")];
+        let proof = MutationProof::sign_next(&key, &record, &migration(&record, &endpoints));
 
         let result = proof.authorizes(
             &record,
             &Mutation::UpdateEndpoint {
-                endpoints: &attacker,
+                endpoints: &endpoints,
+                expires_at: record.expires_at() + Duration::from_hours(23),
+            },
+        );
+
+        assert!(matches!(result, Err(DhtError::Unauthorized { .. })));
+    }
+
+    #[test]
+    fn a_refresh_proof_does_not_authorize_a_different_expiry() {
+        // Same gap on the other write that moves an expiry. The TTL matching
+        // is not enough: the instant is what the record ends up holding.
+        let key = SigningKey::generate();
+        let record = record(&test_uri(), &key.verifying_key());
+        let ttl = Duration::from_hours(1);
+        let proof = MutationProof::sign_next(&key, &record, &renewal(ttl));
+
+        let Mutation::Refresh { expires_at, .. } = renewal(ttl) else {
+            unreachable!("renewal builds a refresh")
+        };
+        let result = proof.authorizes(
+            &record,
+            &Mutation::Refresh {
+                ttl,
+                expires_at: expires_at + Duration::from_hours(23),
             },
         );
 
@@ -531,13 +636,7 @@ mod tests {
     fn a_proof_does_not_cross_operations() {
         let key = SigningKey::generate();
         let record = record(&test_uri(), &key.verifying_key());
-        let proof = MutationProof::sign_next(
-            &key,
-            &record,
-            &Mutation::Refresh {
-                ttl: Duration::from_hours(1),
-            },
-        );
+        let proof = MutationProof::sign_next(&key, &record, &renewal(Duration::from_hours(1)));
 
         let result = proof.authorizes(&record, &Mutation::Deregister);
 
@@ -605,20 +704,23 @@ mod tests {
 
     #[test]
     fn a_refresh_proof_is_bound_to_its_ttl() {
+        // The TTL is bound as well as the resulting instant. A store applies
+        // the instant, but the TTL is an argument of the call and a backend
+        // that reports the requested lifetime, or carries it on the wire, must
+        // not be able to report one the agent never asked for.
         let key = SigningKey::generate();
         let record = record(&test_uri(), &key.verifying_key());
-        let proof = MutationProof::sign_next(
-            &key,
-            &record,
-            &Mutation::Refresh {
-                ttl: Duration::from_mins(1),
-            },
-        );
+        let short = Duration::from_mins(1);
+        let proof = MutationProof::sign_next(&key, &record, &renewal(short));
 
+        let Mutation::Refresh { expires_at, .. } = renewal(short) else {
+            unreachable!("renewal builds a refresh")
+        };
         let result = proof.authorizes(
             &record,
             &Mutation::Refresh {
                 ttl: Duration::from_hours(24),
+                expires_at,
             },
         );
 
@@ -704,20 +806,8 @@ mod tests {
         let split_two = vec![Endpoint::https("a"), Endpoint::https("bc")];
 
         assert_ne!(
-            signing_payload(
-                &uri,
-                version,
-                &Mutation::UpdateEndpoint {
-                    endpoints: &split_one
-                }
-            ),
-            signing_payload(
-                &uri,
-                version,
-                &Mutation::UpdateEndpoint {
-                    endpoints: &split_two
-                }
-            )
+            signing_payload(&uri, version, &moved_to(&split_one)),
+            signing_payload(&uri, version, &moved_to(&split_two))
         );
     }
 
@@ -729,20 +819,8 @@ mod tests {
         let in_address = vec![Endpoint::https("a.example/v1")];
 
         assert_ne!(
-            signing_payload(
-                &uri,
-                version,
-                &Mutation::UpdateEndpoint {
-                    endpoints: &with_path
-                }
-            ),
-            signing_payload(
-                &uri,
-                version,
-                &Mutation::UpdateEndpoint {
-                    endpoints: &in_address
-                }
-            )
+            signing_payload(&uri, version, &moved_to(&with_path)),
+            signing_payload(&uri, version, &moved_to(&in_address))
         );
     }
 

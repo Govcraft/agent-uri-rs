@@ -160,7 +160,10 @@
 //! // record as it stands, so an intercepted migration cannot be re-aimed at
 //! // other endpoints, applied twice, or replayed after the agent re-registers.
 //! let endpoints = vec![Endpoint::https("eu-west-1.agent.anthropic.com")];
-//! let mutation = Mutation::UpdateEndpoint { endpoints: &endpoints };
+//! let mutation = Mutation::UpdateEndpoint {
+//!     endpoints: &endpoints,
+//!     expires_at: registration.expires_at(),
+//! };
 //! let proof = MutationProof::sign_next(&agent_key, &registration, &mutation);
 //!
 //! block_on(dht.update_endpoint(
