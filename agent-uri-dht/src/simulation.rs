@@ -9,6 +9,7 @@ use agent_uri::AgentUri;
 use agent_uri_attestation::{SigningKey, Verifier};
 use async_trait::async_trait;
 
+use crate::expiration::Expirations;
 use crate::{
     Cursor, Dht, DhtError, DhtKey, DhtStats, Endpoint, MatchMode, MigrationResult, Mutation,
     MutationKind, MutationProof, NodeId, Page, PeerAddr, Query, Quorum, ReadOptions, Registration,
@@ -20,16 +21,16 @@ use crate::{
 /// themselves carry no meaning.
 static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 
-/// The three indices that together hold the simulator's state.
+/// The indices that together hold the simulator's state.
 ///
-/// They live behind one lock rather than three. Every path that mutates state
-/// touches all three, so a lock apiece never let two writers run concurrently;
-/// it only created an order to acquire them in, and therefore an order to get
-/// wrong. One lock has no order to get wrong.
+/// They live behind one lock rather than one apiece. Every path that mutates
+/// state touches all of them, so a lock each never let two writers run
+/// concurrently; it only created an order to acquire them in, and therefore an
+/// order to get wrong. One lock has no order to get wrong.
 ///
 /// The indices are consistent with each other only between operations, which
-/// is why they are grouped: a registration exists in all three or in none, and
-/// nothing may observe the state in between.
+/// is why they are grouped: a registration exists in all of them or in none,
+/// and nothing may observe the state in between.
 struct Indices {
     /// Primary index: `DhtKey` -> Registrations
     records: HashMap<DhtKey, Vec<Registration>>,
@@ -39,6 +40,10 @@ struct Indices {
 
     /// Enforces that a stable trust-root/agent-ID pair has one immutable path.
     path_by_identity: HashMap<String, String>,
+
+    /// When each registration lapses. Eviction consults this instead of
+    /// walking `records`, so it costs what is due rather than what is stored.
+    expirations: Expirations,
 }
 
 impl Indices {
@@ -47,6 +52,7 @@ impl Indices {
             records: HashMap::new(),
             keys_by_uri: HashMap::new(),
             path_by_identity: HashMap::new(),
+            expirations: Expirations::default(),
         }
     }
 
@@ -54,12 +60,52 @@ impl Indices {
         self.records.clear();
         self.keys_by_uri.clear();
         self.path_by_identity.clear();
+        self.expirations.clear();
+    }
+
+    /// Removes one registration from every index.
+    ///
+    /// Every removal goes through here. The indices only agree with each other
+    /// between operations, so a removal that updated three of the four would
+    /// leave the fourth speaking for a record that no longer exists: a name
+    /// still taken, a path still bound to an identity, or a deadline still
+    /// scheduled against nothing.
+    fn forget(&mut self, uri_str: &str) {
+        self.expirations.forget(uri_str);
+        if let Ok(uri) = AgentUri::parse(uri_str) {
+            self.path_by_identity
+                .remove(&SimulatedDht::identity_key(&uri));
+        }
+        let Some(keys) = self.keys_by_uri.remove(uri_str) else {
+            return;
+        };
+        for key in keys {
+            if let Some(registrations) = self.records.get_mut(&key) {
+                registrations.retain(|r| r.agent_uri().canonical() != *uri_str);
+                if registrations.is_empty() {
+                    self.records.remove(&key);
+                }
+            }
+        }
+    }
+
+    /// Removes every registration due at or before `now`, returning how many.
+    ///
+    /// Proportional to what is due, not to what is stored, which is what lets
+    /// writes carry it: see [`Expirations`] (issue #55).
+    fn evict_due(&mut self, now: SystemTime) -> usize {
+        let lapsed = self.expirations.take_due(now);
+        for uri_str in &lapsed {
+            self.forget(uri_str);
+        }
+        lapsed.len()
     }
 
     fn estimate_memory_usage(&self) -> usize {
         // Rough estimate:
         // - Each DhtKey: 32 bytes
         // - Each Registration: ~500 bytes (URI + endpoints + attestation)
+        // - Each queued deadline: 16 bytes plus the URI it names
         // - HashMap overhead: ~64 bytes per entry
 
         let key_bytes = self.records.len() * (32 + 64);
@@ -69,8 +115,13 @@ impl Indices {
             .values()
             .map(|keys| 100 + keys.len() * 32 + 64)
             .sum::<usize>();
+        // Counted because it is one entry per expiry ever assigned, not one
+        // per record: a simulation that refreshes often carries superseded
+        // deadlines until they pass, and an estimate that ignored them would
+        // read lowest exactly when it mattered most.
+        let expiry_bytes = self.expirations.queued() * (16 + 100 + 64);
 
-        key_bytes + registration_bytes + uri_index_bytes
+        key_bytes + registration_bytes + uri_index_bytes + expiry_bytes
     }
 }
 
@@ -356,43 +407,25 @@ impl SimulatedDht {
     ///
     /// Returns the number of registrations removed.
     ///
+    /// A simulation under load does not need this call: writes evict what has
+    /// lapsed as they go, when [`SimulationConfig::auto_expire`] is set. It is
+    /// here for a store that has gone quiet with garbage still in it, and for
+    /// one that has turned automatic expiry off. It removes what is due either
+    /// way, because the configuration decides whether expiry happens unasked,
+    /// not whether it happens when asked.
+    ///
+    /// The cost is the number of records actually due rather than the number
+    /// stored: deadlines are kept in order, so a store where nothing has
+    /// lapsed costs one comparison (issue #55).
+    ///
     /// # Panics
     ///
     /// Panics if the internal lock is poisoned.
     pub fn expire_stale(&self) -> usize {
-        let mut indices = self.indices.write().expect("lock poisoned");
-
-        let mut expired_uris: Vec<String> = Vec::new();
-
-        // Find expired registrations
-        for registrations in indices.records.values() {
-            for reg in registrations {
-                if reg.is_expired() {
-                    expired_uris.push(reg.agent_uri().canonical());
-                }
-            }
-        }
-        expired_uris.sort();
-        expired_uris.dedup();
-
-        // Remove from all indices
-        for uri_str in &expired_uris {
-            if let Ok(uri) = AgentUri::parse(uri_str) {
-                indices.path_by_identity.remove(&Self::identity_key(&uri));
-            }
-            if let Some(keys) = indices.keys_by_uri.remove(uri_str) {
-                for key in keys {
-                    if let Some(registrations) = indices.records.get_mut(&key) {
-                        registrations.retain(|r| r.agent_uri().canonical() != *uri_str);
-                        if registrations.is_empty() {
-                            indices.records.remove(&key);
-                        }
-                    }
-                }
-            }
-        }
-
-        expired_uris.len()
+        self.indices
+            .write()
+            .expect("lock poisoned")
+            .evict_due(SystemTime::now())
     }
 }
 
@@ -451,6 +484,15 @@ impl SimulatedDht {
         {
             let mut indices = self.indices.write().expect("lock poisoned");
 
+            // Before the checks, not after: a lapsed record is garbage, and
+            // garbage does not hold a name. Left in place it would keep the
+            // URI taken, the identity bound to its path, and a slot at its key
+            // occupied until somebody remembered to call `expire_stale`, which
+            // is the accumulation issue #55 reports.
+            if self.config.auto_expire {
+                indices.evict_due(SystemTime::now());
+            }
+
             if indices.keys_by_uri.contains_key(&uri_str) {
                 return Err(DhtError::already_registered(&uri_str));
             }
@@ -494,6 +536,7 @@ impl SimulatedDht {
                     .push(registration.clone());
             }
 
+            indices.expirations.set(&uri_str, registration.expires_at());
             indices.keys_by_uri.insert(uri_str, keys);
             indices.path_by_identity.insert(
                 identity,
@@ -531,22 +574,6 @@ impl SimulatedDht {
             registration.set_sequence(sequence);
         }
         Ok(())
-    }
-
-    /// Removes every ancestor-key copy of a registration.
-    fn remove_copies(
-        records: &mut HashMap<DhtKey, Vec<Registration>>,
-        keys: &[DhtKey],
-        uri_str: &str,
-    ) {
-        for key in keys {
-            if let Some(registrations) = records.get_mut(key) {
-                registrations.retain(|r| r.agent_uri().canonical() != uri_str);
-                if registrations.is_empty() {
-                    records.remove(key);
-                }
-            }
-        }
     }
 
     /// Authorizes a write against the record it targets, then applies it.
@@ -604,42 +631,54 @@ impl SimulatedDht {
             Mutation::UpdateEndpoint {
                 endpoints,
                 expires_at,
-            } => Self::rewrite_copies(
-                &mut indices.records,
-                &keys,
-                &uri_str,
-                proof.sequence(),
-                |registration| {
-                    registration.update_endpoints(endpoints.to_vec());
-                    registration.set_expires_at(expires_at);
-                },
-            ),
+            } => {
+                Self::rewrite_copies(
+                    &mut indices.records,
+                    &keys,
+                    &uri_str,
+                    proof.sequence(),
+                    |registration| {
+                        registration.update_endpoints(endpoints.to_vec());
+                        registration.set_expires_at(expires_at);
+                    },
+                )?;
+                indices.expirations.set(&uri_str, expires_at);
+            }
             // The signed instant, not `now + ttl`. A store that recomputed it
             // would write an expiry the agent never signed, and on a wire
             // protocol that field would then be open to anyone who relays the
             // record (issue #81).
-            Mutation::Refresh { expires_at, .. } => Self::rewrite_copies(
-                &mut indices.records,
-                &keys,
-                &uri_str,
-                proof.sequence(),
-                |registration| registration.set_expires_at(expires_at),
-            ),
-            Mutation::Deregister => {
-                Self::remove_copies(&mut indices.records, &keys, &uri_str);
-                indices.keys_by_uri.remove(&uri_str);
-                indices
-                    .path_by_identity
-                    .remove(&Self::identity_key(agent_uri));
-                Ok(())
+            Mutation::Refresh { expires_at, .. } => {
+                Self::rewrite_copies(
+                    &mut indices.records,
+                    &keys,
+                    &uri_str,
+                    proof.sequence(),
+                    |registration| registration.set_expires_at(expires_at),
+                )?;
+                indices.expirations.set(&uri_str, expires_at);
             }
+            Mutation::Deregister => indices.forget(&uri_str),
             // Registration creates a record rather than changing one, so it
             // never reaches here; `do_register` authorizes it directly.
-            Mutation::Register { .. } => Err(DhtError::Unauthorized {
-                agent_uri: uri_str,
-                operation: MutationKind::Register,
-            }),
+            Mutation::Register { .. } => {
+                return Err(DhtError::Unauthorized {
+                    agent_uri: uri_str,
+                    operation: MutationKind::Register,
+                });
+            }
         }
+
+        // After the write rather than before it. A write against a record that
+        // has lapsed is reported as expired above, and sweeping first would
+        // have taken that record out and reported it missing instead. Sweeping
+        // here is what keeps eviction paced by writes rather than by however
+        // long it has been since anyone called `expire_stale` (issue #55).
+        if self.config.auto_expire {
+            indices.evict_due(SystemTime::now());
+        }
+
+        Ok(())
     }
 
     fn do_lookup(
@@ -1491,6 +1530,185 @@ mod tests {
         let from_ancestor = lookup(&dht, &prefix("anthropic.com", "assistant"));
         assert_eq!(from_ancestor.len(), 1);
         assert!(!from_ancestor[0].is_expired());
+    }
+
+    /// A registration that lapsed before it was ever looked at. Every test
+    /// below about eviction needs one, and none of them should have to wait
+    /// for a TTL to run out to get it.
+    fn lapsed(uri: &AgentUri, key: &SigningKey) -> Registration {
+        registration(uri, key).with_expires_at(SystemTime::now() - Duration::from_secs(1))
+    }
+
+    /// What the store is holding, expired records included. `lookup` filters
+    /// those out, so it cannot tell eviction from concealment.
+    fn held(dht: &SimulatedDht) -> usize {
+        dht.stats().total_registrations()
+    }
+
+    #[test]
+    fn expire_stale_removes_a_lapsed_record_from_every_index() {
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, lapsed(&uri, &key), &key).unwrap();
+
+        assert_eq!(dht.expire_stale(), 1);
+
+        assert_eq!(held(&dht), 0, "the record is still indexed by URI");
+        assert_eq!(dht.stats().unique_keys(), 0, "an ancestor key outlived it");
+        assert!(lookup(&dht, &prefix("anthropic.com", "assistant")).is_empty());
+    }
+
+    #[test]
+    fn expire_stale_leaves_a_live_record_alone() {
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &key), &key).unwrap();
+
+        assert_eq!(dht.expire_stale(), 0);
+        assert!(stored(&dht, &uri).is_some());
+    }
+
+    #[test]
+    fn a_write_evicts_what_has_lapsed_without_being_asked() {
+        // The accumulation issue #55 reports: eviction used to happen only
+        // when someone remembered to ask for it, so a simulation that ran for
+        // a day and never called `expire_stale` held a day of garbage.
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        register(&dht, lapsed(&test_uri("2q"), &key), &key).unwrap();
+
+        register(&dht, registration(&test_uri("2r"), &key), &key).unwrap();
+
+        assert_eq!(held(&dht), 1, "the lapsed record is still stored");
+    }
+
+    #[test]
+    fn a_lapsed_registration_does_not_hold_its_name() {
+        // Garbage that is merely filtered still occupies the namespace: the
+        // URI reads as taken, and the agent coming back to it is told so.
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, lapsed(&uri, &key), &key).unwrap();
+
+        register(&dht, registration(&uri, &key), &key)
+            .expect("a lapsed record does not keep its URI registered");
+
+        assert_eq!(held(&dht), 1);
+        assert!(stored(&dht, &uri).is_some_and(|r| !r.is_expired()));
+    }
+
+    #[test]
+    fn a_lapsed_registration_does_not_hold_its_capacity() {
+        // The same thing one level out: the slot a lapsed record occupies at
+        // its key was being counted against agents that arrived after it.
+        let dht = dht_with_capacity_for_one();
+        let key = SigningKey::generate();
+        register(&dht, lapsed(&test_uri("2q"), &key), &key).unwrap();
+
+        register(&dht, registration(&test_uri("2r"), &key), &key)
+            .expect("a lapsed record does not keep its slot");
+    }
+
+    #[test]
+    fn an_expiry_moved_earlier_is_evicted_at_the_instant_it_names() {
+        // Deadlines are queued in order, so the entry this write supersedes
+        // sits ahead of it. A schedule that waited for the entry it already
+        // held would keep this record for the hour it was originally given.
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &key), &key).unwrap();
+
+        let ttl = Duration::from_hours(1);
+        let lapsed_at = SystemTime::now() - Duration::from_secs(1);
+        let proof = MutationProof::sign(
+            &key,
+            &uri,
+            version_at(&dht, &uri, 1),
+            &Mutation::Refresh {
+                ttl,
+                expires_at: lapsed_at,
+            },
+        );
+        block_on(dht.refresh(&uri, ttl, lapsed_at, &proof, WriteOptions::default())).unwrap();
+
+        assert_eq!(held(&dht), 0, "the record lapsed the moment it was written");
+    }
+
+    #[test]
+    fn a_renewed_record_outlives_the_deadline_it_replaced() {
+        // The other direction, and the reason a queued deadline is checked
+        // against the record before it is acted on: the deadline this refresh
+        // replaces still arrives, and acting on it would evict a record that
+        // was renewed well before it lapsed.
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(
+            &dht,
+            registration(&uri, &key).with_ttl(Duration::from_millis(40)),
+            &key,
+        )
+        .unwrap();
+
+        refresh(&dht, &uri, &key, 1, Duration::from_hours(1)).unwrap();
+        std::thread::sleep(Duration::from_millis(60));
+
+        assert_eq!(dht.expire_stale(), 0, "the renewed record was evicted");
+        assert!(stored(&dht, &uri).is_some());
+    }
+
+    #[test]
+    fn expiry_waits_to_be_asked_when_auto_expire_is_off() {
+        // An evaluation measuring how much of a namespace has gone stale needs
+        // the stale part still there to measure. Turning expiry off stops it
+        // happening unasked; it does not stop it happening.
+        let dht = SimulatedDht::new(
+            SimulationConfig::new()
+                .with_verify_attestations(false)
+                .with_auto_expire(false),
+        );
+        let key = SigningKey::generate();
+        register(&dht, lapsed(&test_uri("2q"), &key), &key).unwrap();
+
+        register(&dht, registration(&test_uri("2r"), &key), &key).unwrap();
+        assert_eq!(held(&dht), 2, "a write evicted what the caller kept");
+
+        assert_eq!(dht.expire_stale(), 1);
+        assert_eq!(held(&dht), 1);
+    }
+
+    #[test]
+    fn every_stored_registration_has_a_deadline() {
+        // The invariant the whole schedule rests on. A record that reaches the
+        // store without one is never evicted; a deadline left behind by a
+        // record that has gone is a name that cannot be registered again, once
+        // some later write re-uses it.
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        for suffix in ["2q", "2r", "2s"] {
+            register(&dht, registration(&test_uri(suffix), &key), &key).unwrap();
+        }
+        refresh(&dht, &test_uri("2q"), &key, 1, Duration::from_hours(2)).unwrap();
+        deregister(&dht, &test_uri("2s"), &key, 1).unwrap();
+        update_endpoint(
+            &dht,
+            &test_uri("2r"),
+            &key,
+            1,
+            vec![Endpoint::https("eu-west-1.example")],
+        )
+        .unwrap();
+
+        let indices = dht.indices.read().expect("lock poisoned");
+        assert_eq!(
+            indices.expirations.tracked(),
+            indices.keys_by_uri.len(),
+            "the schedule and the store disagree about what is registered"
+        );
     }
 
     #[test]

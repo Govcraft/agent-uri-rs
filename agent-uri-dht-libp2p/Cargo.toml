@@ -10,7 +10,7 @@ categories = ["network-programming"]
 [dependencies]
 agent-uri = { version = "0.5.0", path = "../agent-uri" }
 agent-uri-attestation = { version = "0.5.0", path = "../agent-uri-attestation" }
-agent-uri-dht = { version = "0.8.0", path = "../agent-uri-dht", features = ["serde"] }
+agent-uri-dht = { version = "0.9.0", path = "../agent-uri-dht", features = ["serde"] }
 async-trait = "0.1.91"
 futures = "0.3.33"
 libp2p = { version = "0.56.0", default-features = false, features = ["tokio", "tcp", "noise", "yamux", "kad", "identify", "macros"] }
