@@ -1,14 +1,20 @@
 //! DHT trait definition for capability-based agent discovery.
 
-use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
+use std::time::Duration;
 
-use crate::{DhtError, Endpoint, Registration};
+use agent_uri::AgentUri;
+use async_trait::async_trait;
+
+use crate::{
+    DhtError, Endpoint, NodeId, Page, PeerAddr, Query, ReadOptions, Registration, WriteOptions,
+    WriteReceipt,
+};
 
 /// Abstract DHT operations.
 ///
-/// This trait defines the interface for capability-based agent discovery.
-/// Implementations may be in-memory (for testing/evaluation) or distributed
-/// (using libp2p Kademlia, for example).
+/// Implementations may be in-process ([`crate::SimulatedDht`]) or distributed
+/// over a real overlay. Every method is asynchronous because every operation on
+/// a real backend crosses the network.
 ///
 /// # Scope
 ///
@@ -18,20 +24,33 @@ use crate::{DhtError, Endpoint, Registration};
 /// cross-trust-root isolation is a security property that bounds the blast
 /// radius of a trust-root key compromise.
 ///
-/// # Async Considerations
+/// # Failure is normal
 ///
-/// This trait uses synchronous methods for simplicity in the simulated
-/// implementation. For async/distributed implementations, wrap in a
-/// runtime-specific async layer.
+/// A distributed lookup does not simply succeed or find nothing. It can time
+/// out, reach too few replicas, or find no peers at all, and each is a distinct
+/// [`DhtError`]. Callers that collapse these into "not found" will treat a
+/// partitioned network as an empty one.
+///
+/// # Pagination
+///
+/// A broad capability path can hold more registrations than one read can
+/// return, so [`Dht::lookup`] returns a [`Page`]. Callers that need every
+/// result must follow [`Page::next_cursor`] until it is `None`; a caller that
+/// reads only the first page is sampling, not enumerating.
+///
+/// # Object safety
+///
+/// This trait uses [`async_trait`] rather than native `async fn` so that it
+/// stays dyn-compatible. Selecting a backend at runtime behind
+/// `Box<dyn Dht>` is the reason the trait exists, and native `async fn` in
+/// trait cannot express that.
+#[async_trait]
 pub trait Dht: Send + Sync {
     /// Registers an agent at its capability path.
     ///
-    /// The agent is indexed by the DHT key derived from its trust root
-    /// and capability path, enabling discovery by capability.
-    ///
-    /// # Arguments
-    ///
-    /// * `registration` - The registration record
+    /// The agent is indexed by the DHT key derived from its trust root and
+    /// capability path, and at every ancestor path, enabling discovery by
+    /// capability prefix.
     ///
     /// # Errors
     ///
@@ -40,83 +59,81 @@ pub trait Dht: Send + Sync {
     /// - The endpoints list is empty (`NoEndpoints`)
     /// - The DHT key is at capacity (`KeyCapacityExceeded`)
     /// - Attestation verification fails (`InvalidAttestation`)
-    fn register(&self, registration: Registration) -> Result<(), DhtError>;
+    /// - The operation times out, finds no peers, or misses quorum
+    ///   (`Timeout`, `NoPeers`, `QuorumFailed`)
+    async fn register(
+        &self,
+        registration: Registration,
+        options: WriteOptions,
+    ) -> Result<WriteReceipt, DhtError>;
 
     /// Updates an existing registration's endpoints.
     ///
-    /// Used for agent migration (changing network location without
-    /// changing identity).
-    ///
-    /// # Arguments
-    ///
-    /// * `agent_uri` - The agent's URI
-    /// * `new_endpoints` - The new network endpoints
+    /// Used for agent migration: changing network location without changing
+    /// identity.
     ///
     /// # Errors
     ///
-    /// Returns `DhtError` if:
-    /// - The agent is not registered (`NotFound`)
-    /// - The registration has expired (`Expired`)
-    /// - The endpoints list is empty (`NoEndpoints`)
-    fn update_endpoint(
+    /// Returns `DhtError` if the agent is not registered (`NotFound`), the
+    /// registration has expired (`Expired`), the endpoints list is empty
+    /// (`NoEndpoints`), or the operation fails to reach the network.
+    async fn update_endpoint(
         &self,
         agent_uri: &AgentUri,
         new_endpoints: Vec<Endpoint>,
-    ) -> Result<(), DhtError>;
+        options: WriteOptions,
+    ) -> Result<WriteReceipt, DhtError>;
+
+    /// Extends an existing registration's lifetime.
+    ///
+    /// Registrations expire, so an agent that intends to remain reachable must
+    /// republish before its TTL elapses. Without this a long-lived agent has to
+    /// deregister and re-register, which makes it briefly undiscoverable.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DhtError` if the agent is not registered (`NotFound`) or the
+    /// operation fails to reach the network.
+    async fn refresh(
+        &self,
+        agent_uri: &AgentUri,
+        ttl: Duration,
+        options: WriteOptions,
+    ) -> Result<WriteReceipt, DhtError>;
 
     /// Removes a registration.
     ///
-    /// # Arguments
-    ///
-    /// * `agent_uri` - The agent's URI
-    ///
     /// # Errors
     ///
-    /// Returns `DhtError::NotFound` if the agent is not registered.
-    fn deregister(&self, agent_uri: &AgentUri) -> Result<(), DhtError>;
+    /// Returns `DhtError::NotFound` if the agent is not registered, or a
+    /// network error if the operation fails to reach the network.
+    async fn deregister(&self, agent_uri: &AgentUri, options: WriteOptions)
+    -> Result<(), DhtError>;
 
-    /// Looks up agents at exact capability path.
+    /// Looks up agents matching a capability query.
     ///
-    /// Returns only agents registered at exactly the specified path.
-    ///
-    /// # Arguments
-    ///
-    /// * `trust_root` - The trust root to search within
-    /// * `capability_path` - The exact capability path
-    ///
-    /// # Returns
-    ///
-    /// A list of registrations matching the exact path. May be empty.
+    /// Returns one page of results. An empty page with no cursor means no
+    /// agents matched; an empty page *with* a cursor means the shard read was
+    /// empty and more shards remain.
     ///
     /// # Errors
     ///
-    /// Returns `DhtError` if an internal error occurs.
-    fn lookup_exact(
+    /// Returns `DhtError` if the lookup times out, finds no peers, or fails to
+    /// reach the requested quorum.
+    async fn lookup(
         &self,
-        trust_root: &TrustRoot,
-        capability_path: &CapabilityPath,
-    ) -> Result<Vec<Registration>, DhtError>;
+        query: &Query,
+        options: &ReadOptions,
+    ) -> Result<Page<Registration>, DhtError>;
 
-    /// Looks up agents at capability path and all child paths.
-    ///
-    /// Returns agents registered at the specified path and any paths
-    /// that start with it (prefix match).
-    ///
-    /// # Arguments
-    ///
-    /// * `trust_root` - The trust root to search within
-    /// * `capability_path` - The capability path prefix
-    ///
-    /// # Returns
-    ///
-    /// A list of registrations whose paths start with the query path.
+    /// Returns this node's identity in the overlay.
+    fn local_id(&self) -> NodeId;
+
+    /// Joins the overlay through the given peers.
     ///
     /// # Errors
     ///
-    /// Returns `DhtError` if an internal error occurs.
-    fn lookup_prefix(
-        &self,
-        trust_root: &TrustRoot,
-        capability_path: &CapabilityPath,
-    ) -> Result<Vec<Registration>, DhtError>;
+    /// Returns `DhtError::NoPeers` if no peer could be reached, or
+    /// `DhtError::Timeout` if the attempt did not complete in time.
+    async fn bootstrap(&self, peers: &[PeerAddr]) -> Result<(), DhtError>;
 }

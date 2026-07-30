@@ -3,7 +3,10 @@
 use std::collections::{HashMap, HashSet};
 
 use agent_uri::{AgentId, AgentUriBuilder, CapabilityPath, TrustRoot};
-use agent_uri_dht::{Dht, Endpoint, Registration, SimulatedDht, SimulationConfig};
+use agent_uri_dht::{
+    Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig, WriteOptions,
+};
+use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
 
 use crate::error::DiscoveryError;
@@ -163,12 +166,12 @@ impl DiscoveryEvaluator {
         let endpoint = Endpoint::https("agent.eval.example.com:443");
         let registration = Registration::new(uri.clone(), vec![endpoint]);
 
-        self.dht
-            .register(registration)
-            .map_err(|e| DiscoveryError::Dht {
+        block_on(self.dht.register(registration, WriteOptions::default())).map_err(|e| {
+            DiscoveryError::Dht {
                 operation: "register".to_string(),
                 message: e.to_string(),
-            })?;
+            }
+        })?;
 
         // Track registration for ground truth
         self.registrations
@@ -198,19 +201,34 @@ impl DiscoveryEvaluator {
         path: &CapabilityPath,
         mode: MatchMode,
     ) -> Result<HashSet<String>, DiscoveryError> {
-        let results = match mode {
-            MatchMode::Exact => self.dht.lookup_exact(&self.trust_root, path),
-            MatchMode::Prefix => self.dht.lookup_prefix(&self.trust_root, path),
-        }
-        .map_err(|e| DiscoveryError::Dht {
-            operation: "lookup".to_string(),
-            message: e.to_string(),
-        })?;
+        let query = match mode {
+            MatchMode::Exact => Query::exact(self.trust_root.clone(), path.clone()),
+            MatchMode::Prefix => Query::prefix(self.trust_root.clone(), path.clone()),
+        };
 
-        Ok(results
-            .into_iter()
-            .map(|r| r.agent_uri().as_str().to_string())
-            .collect())
+        // Every page, not just the first. A recall measurement that stops at
+        // one page reports the page size as the ceiling and calls it a result.
+        let mut found = HashSet::new();
+        let mut options = ReadOptions::default();
+        loop {
+            let page =
+                block_on(self.dht.lookup(&query, &options)).map_err(|e| DiscoveryError::Dht {
+                    operation: "lookup".to_string(),
+                    message: e.to_string(),
+                })?;
+            let next = page.next_cursor();
+            found.extend(
+                page.into_items()
+                    .into_iter()
+                    .map(|r| r.agent_uri().as_str().to_string()),
+            );
+            match next {
+                Some(cursor) => options = options.with_cursor(cursor),
+                None => break,
+            }
+        }
+
+        Ok(found)
     }
 
     /// Computes ground truth for a query (which agents should match).

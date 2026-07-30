@@ -1,10 +1,11 @@
 //! Configuration for the simulated DHT.
 
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
 /// Configuration for the simulated DHT.
 ///
-/// Controls behavior such as replication factor, TTL, and verification.
+/// Controls behavior such as replication factor, TTL, paging, and verification.
 #[derive(Debug, Clone)]
 pub struct SimulationConfig {
     /// Maximum registrations per DHT key.
@@ -24,11 +25,21 @@ pub struct SimulationConfig {
     /// Default: true
     pub verify_attestations: bool,
 
-    /// Simulated network delay for operations.
+    /// How many copies the simulator claims to hold.
     ///
-    /// Used for latency experiments. None means no delay.
-    /// Default: None
-    pub simulated_delay: Option<Duration>,
+    /// The simulator holds exactly one authoritative copy, so this is 1 and
+    /// every [`crate::Quorum`] resolves to 1 against it. It exists so that
+    /// quorum arithmetic is exercised rather than bypassed.
+    /// Default: 1
+    pub replication_factor: NonZeroUsize,
+
+    /// Maximum registrations returned in one lookup page.
+    ///
+    /// The simulator could return every match at once, but a distributed
+    /// backend cannot, so it pages deliberately. Callers written against an
+    /// unpaged simulator break on a real backend.
+    /// Default: 64
+    pub page_size: NonZeroUsize,
 
     /// Whether to automatically remove expired registrations.
     ///
@@ -42,7 +53,8 @@ impl Default for SimulationConfig {
             max_registrations_per_key: 1000,
             default_ttl: Duration::from_hours(1),
             verify_attestations: true,
-            simulated_delay: None,
+            replication_factor: NonZeroUsize::new(1).unwrap(),
+            page_size: NonZeroUsize::new(64).unwrap(),
             auto_expire: true,
         }
     }
@@ -76,10 +88,17 @@ impl SimulationConfig {
         self
     }
 
-    /// Sets the simulated network delay.
+    /// Sets the number of copies the simulator claims to hold.
     #[must_use]
-    pub const fn with_simulated_delay(mut self, delay: Duration) -> Self {
-        self.simulated_delay = Some(delay);
+    pub const fn with_replication_factor(mut self, factor: NonZeroUsize) -> Self {
+        self.replication_factor = factor;
+        self
+    }
+
+    /// Sets the maximum number of registrations returned per lookup page.
+    #[must_use]
+    pub const fn with_page_size(mut self, page_size: NonZeroUsize) -> Self {
+        self.page_size = page_size;
         self
     }
 
@@ -101,7 +120,8 @@ mod tests {
         assert_eq!(config.max_registrations_per_key, 1000);
         assert_eq!(config.default_ttl, Duration::from_hours(1));
         assert!(config.verify_attestations);
-        assert!(config.simulated_delay.is_none());
+        assert_eq!(config.replication_factor.get(), 1);
+        assert_eq!(config.page_size.get(), 64);
         assert!(config.auto_expire);
     }
 
@@ -111,13 +131,13 @@ mod tests {
             .with_max_registrations_per_key(10)
             .with_default_ttl(Duration::from_mins(30))
             .with_verify_attestations(true)
-            .with_simulated_delay(Duration::from_millis(50))
+            .with_page_size(NonZeroUsize::new(8).unwrap())
             .with_auto_expire(false);
 
         assert_eq!(config.max_registrations_per_key, 10);
         assert_eq!(config.default_ttl, Duration::from_mins(30));
         assert!(config.verify_attestations);
-        assert_eq!(config.simulated_delay, Some(Duration::from_millis(50)));
+        assert_eq!(config.page_size.get(), 8);
         assert!(!config.auto_expire);
     }
 }

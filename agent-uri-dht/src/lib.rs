@@ -5,7 +5,7 @@
 //!
 //! - **Key derivation**: [`DhtKey`] for Kademlia-style routing
 //! - **Registration records**: [`Registration`] with endpoints and attestations
-//! - **Trait interface**: [`Dht`] trait for abstracting DHT implementations
+//! - **Trait interface**: [`Dht`], an async trait abstracting DHT backends
 //! - **In-memory simulation**: [`SimulatedDht`] for evaluation and testing
 //! - **Prefix matching**: [`PathTrie`], a standalone helper for callers that
 //!   want a local hierarchical index. Discovery itself does not use it: prefix
@@ -26,7 +26,11 @@
 //!
 //! ```rust
 //! use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
-//! use agent_uri_dht::{Dht, Endpoint, Registration, SimulatedDht, SimulationConfig};
+//! use agent_uri_dht::{
+//!     Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig,
+//!     WriteOptions,
+//! };
+//! use futures::executor::block_on;
 //!
 //! // Disable verification only for this isolated indexing example. Production
 //! // registration uses the secure default and a configured Verifier.
@@ -41,16 +45,40 @@
 //! let endpoint = Endpoint::https("agent.anthropic.com:443");
 //! let registration = Registration::new(uri, vec![endpoint]);
 //!
-//! dht.register(registration).unwrap();
+//! // Every operation is async, because a real backend crosses the network.
+//! block_on(dht.register(registration, WriteOptions::default())).unwrap();
 //!
-//! // Discover agents by capability
-//! let results = dht.lookup_prefix(
-//!     &TrustRoot::parse("anthropic.com").unwrap(),
-//!     &CapabilityPath::parse("assistant").unwrap(),
-//! ).unwrap();
+//! // Discover agents by capability. Results are paged.
+//! let query = Query::prefix(
+//!     TrustRoot::parse("anthropic.com").unwrap(),
+//!     CapabilityPath::parse("assistant").unwrap(),
+//! );
+//! let page = block_on(dht.lookup(&query, &ReadOptions::default())).unwrap();
 //!
-//! assert_eq!(results.len(), 1);
+//! assert_eq!(page.len(), 1);
+//! assert!(!page.has_more());
 //! ```
+//!
+//! # Operating Against a Network
+//!
+//! [`Dht`] describes a distributed store, not a map, and its shape reflects
+//! that even when the backend is [`SimulatedDht`]:
+//!
+//! - **Every operation is async and takes a deadline.** [`WriteOptions`] and
+//!   [`ReadOptions`] carry a timeout; a call that does not finish returns
+//!   [`DhtError::Timeout`], which does not mean the write failed to apply.
+//! - **Writes name a [`Quorum`].** How many replicas must acknowledge is the
+//!   caller's latency-versus-durability trade, and [`WriteReceipt`] reports
+//!   what was actually reached.
+//! - **Lookups are paged.** [`Dht::lookup`] returns a [`Page`]; follow
+//!   [`Page::next_cursor`] until it is `None` or you are sampling rather than
+//!   enumerating.
+//! - **Failures are distinguishable.** [`DhtError::is_transient`] separates a
+//!   slow or partitioned network from a rejected request. Collapsing the two
+//!   turns a partition into an apparently empty namespace.
+//!
+//! `SimulatedDht` honors all of this against one in-process copy, so code
+//! written against it does not acquire habits a real backend will punish.
 //!
 //! # Key Derivation
 //!
@@ -86,7 +114,10 @@
 //!
 //! ```rust
 //! use agent_uri::AgentUri;
-//! use agent_uri_dht::{Dht, Endpoint, Registration, SimulatedDht, SimulationConfig};
+//! use agent_uri_dht::{
+//!     Dht, Endpoint, Registration, SimulatedDht, SimulationConfig, WriteOptions,
+//! };
+//! use futures::executor::block_on;
 //!
 //! let dht = SimulatedDht::new(
 //!     SimulationConfig::default().with_verify_attestations(false)
@@ -101,13 +132,14 @@
 //!     uri.clone(),
 //!     vec![Endpoint::https("us-east-1.agent.anthropic.com")]
 //! );
-//! dht.register(registration).unwrap();
+//! block_on(dht.register(registration, WriteOptions::default())).unwrap();
 //!
 //! // Migrate to new location (same identity)
-//! dht.update_endpoint(
+//! block_on(dht.update_endpoint(
 //!     &uri,
-//!     vec![Endpoint::https("eu-west-1.agent.anthropic.com")]
-//! ).unwrap();
+//!     vec![Endpoint::https("eu-west-1.agent.anthropic.com")],
+//!     WriteOptions::default(),
+//! )).unwrap();
 //! ```
 
 #![deny(missing_docs)]
@@ -119,6 +151,10 @@ mod config;
 mod endpoint;
 mod error;
 mod key;
+mod node;
+mod options;
+mod page;
+mod query;
 mod registration;
 mod simulation;
 mod stats;
@@ -129,6 +165,10 @@ pub use config::SimulationConfig;
 pub use endpoint::Endpoint;
 pub use error::DhtError;
 pub use key::DhtKey;
+pub use node::{NodeId, PeerAddr, WriteReceipt};
+pub use options::{Quorum, ReadOptions, WriteOptions};
+pub use page::{Cursor, Page};
+pub use query::{MatchMode, Query};
 pub use registration::Registration;
 pub use simulation::SimulatedDht;
 pub use stats::{DhtStats, MigrationResult};

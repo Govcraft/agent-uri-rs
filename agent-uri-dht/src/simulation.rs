@@ -2,14 +2,23 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
-use std::time::Instant;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
-use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
+use agent_uri::AgentUri;
 use agent_uri_attestation::Verifier;
+use async_trait::async_trait;
 
 use crate::{
-    Dht, DhtError, DhtKey, DhtStats, Endpoint, MigrationResult, Registration, SimulationConfig,
+    Cursor, Dht, DhtError, DhtKey, DhtStats, Endpoint, MatchMode, MigrationResult, NodeId, Page,
+    PeerAddr, Query, Quorum, ReadOptions, Registration, SimulationConfig, WriteOptions,
+    WriteReceipt,
 };
+
+/// Hands each simulator instance a distinct identity without pulling in a
+/// random-number dependency. Distinctness is what callers rely on; the values
+/// themselves carry no meaning.
+static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Simulated DHT for evaluation.
 ///
@@ -26,7 +35,11 @@ use crate::{
 ///
 /// ```
 /// use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
-/// use agent_uri_dht::{Endpoint, Registration, SimulatedDht, SimulationConfig, Dht};
+/// use agent_uri_dht::{
+///     Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig,
+///     WriteOptions,
+/// };
+/// use futures::executor::block_on;
 ///
 /// // Explicitly unverified because this example isolates indexing behavior.
 /// let dht = SimulatedDht::new(
@@ -36,14 +49,15 @@ use crate::{
 /// let uri = AgentUri::parse("agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
 /// let registration = Registration::new(uri.clone(), vec![Endpoint::https("agent.anthropic.com")]);
 ///
-/// dht.register(registration).unwrap();
+/// block_on(dht.register(registration, WriteOptions::default())).unwrap();
 ///
-/// let results = dht.lookup_exact(
-///     &TrustRoot::parse("anthropic.com").unwrap(),
-///     &CapabilityPath::parse("assistant/chat").unwrap(),
-/// ).unwrap();
+/// let query = Query::exact(
+///     TrustRoot::parse("anthropic.com").unwrap(),
+///     CapabilityPath::parse("assistant/chat").unwrap(),
+/// );
+/// let page = block_on(dht.lookup(&query, &ReadOptions::default())).unwrap();
 ///
-/// assert_eq!(results.len(), 1);
+/// assert_eq!(page.len(), 1);
 /// ```
 pub struct SimulatedDht {
     /// Primary index: `DhtKey` -> Registrations
@@ -58,11 +72,25 @@ pub struct SimulatedDht {
     /// Trusted roots used for registration-time attestation verification.
     verifier: Verifier,
 
+    /// This instance's identity in the (notional) overlay.
+    node_id: NodeId,
+
     /// Configuration
     config: SimulationConfig,
 }
 
 impl SimulatedDht {
+    fn next_node_id() -> NodeId {
+        NodeId::from_bytes(NEXT_NODE_ID.fetch_add(1, Ordering::Relaxed).to_be_bytes())
+    }
+
+    /// The simulator holds one authoritative copy, so every quorum resolves to
+    /// one against it and every accepted write acknowledges exactly that.
+    fn receipt(&self, quorum: Quorum) -> WriteReceipt {
+        let required = quorum.resolve(self.config.replication_factor);
+        WriteReceipt::new(self.config.replication_factor.get(), required)
+    }
+
     fn identity_key(uri: &AgentUri) -> String {
         format!("{}/{}", uri.trust_root(), uri.agent_id())
     }
@@ -83,6 +111,7 @@ impl SimulatedDht {
             by_uri: RwLock::new(HashMap::new()),
             by_identity: RwLock::new(HashMap::new()),
             verifier: Verifier::new(),
+            node_id: Self::next_node_id(),
             config,
         }
     }
@@ -95,6 +124,7 @@ impl SimulatedDht {
             by_uri: RwLock::new(HashMap::new()),
             by_identity: RwLock::new(HashMap::new()),
             verifier,
+            node_id: Self::next_node_id(),
             config,
         }
     }
@@ -126,7 +156,7 @@ impl SimulatedDht {
     pub fn register_batch(&self, registrations: Vec<Registration>) -> Result<usize, DhtError> {
         let mut count = 0;
         for registration in registrations {
-            if self.register(registration).is_ok() {
+            if self.do_register(&registration).is_ok() {
                 count += 1;
             }
         }
@@ -219,13 +249,8 @@ impl SimulatedDht {
 
         // Time the update
         let start = Instant::now();
-        self.update_endpoint(agent_uri, vec![new_endpoint.clone()])?;
+        self.do_update_endpoint(agent_uri, std::slice::from_ref(&new_endpoint))?;
         let update_latency = start.elapsed();
-
-        // Add simulated delay if configured
-        if let Some(delay) = self.config.simulated_delay {
-            std::thread::sleep(delay);
-        }
 
         Ok(MigrationResult::success(
             uri_str,
@@ -315,9 +340,10 @@ impl SimulatedDht {
     }
 }
 
-impl Dht for SimulatedDht {
-    fn register(&self, registration: Registration) -> Result<(), DhtError> {
-        // Validate
+impl SimulatedDht {
+    /// Applies a registration to the indices. Shared by the async trait method
+    /// and by the synchronous evaluation helpers.
+    fn do_register(&self, registration: &Registration) -> Result<(), DhtError> {
         if registration.endpoints().is_empty() {
             return Err(DhtError::NoEndpoints);
         }
@@ -337,11 +363,6 @@ impl Dht for SimulatedDht {
                     registration.agent_uri().capability_path(),
                 )
                 .map_err(|error| DhtError::invalid_attestation(&uri_str, error.to_string()))?;
-        }
-
-        // Simulate delay if configured
-        if let Some(delay) = self.config.simulated_delay {
-            std::thread::sleep(delay);
         }
 
         // Check and insert while holding every write lock. The identity
@@ -385,7 +406,6 @@ impl Dht for SimulatedDht {
                 by_key.entry(*key).or_default().push(registration.clone());
             }
 
-            // Tertiary index
             by_uri.insert(uri_str, keys);
             by_identity.insert(
                 identity,
@@ -400,23 +420,17 @@ impl Dht for SimulatedDht {
         Ok(())
     }
 
-    fn update_endpoint(
+    /// Rewrites every ancestor-key copy of a registration in place.
+    ///
+    /// `mutate` runs once per copy and must be idempotent across copies: the
+    /// copies are the same logical record, so they must end up identical.
+    fn mutate_registration(
         &self,
         agent_uri: &AgentUri,
-        new_endpoints: Vec<Endpoint>,
+        mut mutate: impl FnMut(&mut Registration),
     ) -> Result<(), DhtError> {
-        if new_endpoints.is_empty() {
-            return Err(DhtError::NoEndpoints);
-        }
-
         let uri_str = agent_uri.canonical();
 
-        // Simulate delay if configured
-        if let Some(delay) = self.config.simulated_delay {
-            std::thread::sleep(delay);
-        }
-
-        // Get the key
         let keys = {
             let by_uri = self.by_uri.read().expect("lock poisoned");
             by_uri
@@ -425,8 +439,7 @@ impl Dht for SimulatedDht {
                 .ok_or_else(|| DhtError::not_found(&uri_str))?
         };
 
-        // Update every ancestor-key copy in the primary index.
-        let mut updated_any = false;
+        let mut mutated_any = false;
         {
             let mut by_key = self.by_key.write().expect("lock poisoned");
             for key in &keys {
@@ -440,108 +453,183 @@ impl Dht for SimulatedDht {
                 if registration.is_expired() && self.config.auto_expire {
                     return Err(DhtError::expired(&uri_str));
                 }
-                registration.update_endpoints(new_endpoints.clone());
-                updated_any = true;
+                mutate(registration);
+                mutated_any = true;
             }
         }
-        if !updated_any {
-            return Err(DhtError::not_found(&uri_str));
-        }
 
-        Ok(())
+        if mutated_any {
+            Ok(())
+        } else {
+            Err(DhtError::not_found(&uri_str))
+        }
     }
 
-    fn deregister(&self, agent_uri: &AgentUri) -> Result<(), DhtError> {
+    fn do_update_endpoint(
+        &self,
+        agent_uri: &AgentUri,
+        new_endpoints: &[Endpoint],
+    ) -> Result<(), DhtError> {
+        if new_endpoints.is_empty() {
+            return Err(DhtError::NoEndpoints);
+        }
+        self.mutate_registration(agent_uri, |registration| {
+            registration.update_endpoints(new_endpoints.to_vec());
+        })
+    }
+
+    fn do_refresh(&self, agent_uri: &AgentUri, ttl: Duration) -> Result<(), DhtError> {
+        self.mutate_registration(agent_uri, |registration| registration.refresh(ttl))
+    }
+
+    fn do_deregister(&self, agent_uri: &AgentUri) -> Result<(), DhtError> {
         let uri_str = agent_uri.canonical();
 
-        // Simulate delay if configured
-        if let Some(delay) = self.config.simulated_delay {
-            std::thread::sleep(delay);
-        }
-
         // Mutate all indices under the same lock order as registration.
-        {
-            let mut by_key = self.by_key.write().expect("lock poisoned");
-            let mut by_uri = self.by_uri.write().expect("lock poisoned");
-            let mut by_identity = self.by_identity.write().expect("lock poisoned");
-            let keys = by_uri
-                .remove(&uri_str)
-                .ok_or_else(|| DhtError::not_found(&uri_str))?;
+        let mut by_key = self.by_key.write().expect("lock poisoned");
+        let mut by_uri = self.by_uri.write().expect("lock poisoned");
+        let mut by_identity = self.by_identity.write().expect("lock poisoned");
+        let keys = by_uri
+            .remove(&uri_str)
+            .ok_or_else(|| DhtError::not_found(&uri_str))?;
 
-            for key in keys {
-                if let Some(registrations) = by_key.get_mut(&key) {
-                    registrations.retain(|r| r.agent_uri().canonical() != uri_str);
-                    if registrations.is_empty() {
-                        by_key.remove(&key);
-                    }
+        for key in keys {
+            if let Some(registrations) = by_key.get_mut(&key) {
+                registrations.retain(|r| r.agent_uri().canonical() != uri_str);
+                if registrations.is_empty() {
+                    by_key.remove(&key);
                 }
             }
-            by_identity.remove(&Self::identity_key(agent_uri));
         }
+        by_identity.remove(&Self::identity_key(agent_uri));
 
         Ok(())
     }
 
-    fn lookup_exact(
+    fn do_lookup(
         &self,
-        trust_root: &TrustRoot,
-        capability_path: &CapabilityPath,
-    ) -> Result<Vec<Registration>, DhtError> {
-        // Simulate delay if configured
-        if let Some(delay) = self.config.simulated_delay {
-            std::thread::sleep(delay);
+        query: &Query,
+        options: &ReadOptions,
+    ) -> Result<Page<Registration>, DhtError> {
+        let key = DhtKey::derive(query.trust_root(), query.capability_path());
+
+        let mut matches: Vec<Registration> = {
+            let by_key = self.by_key.read().expect("lock poisoned");
+            by_key
+                .get(&key)
+                .map(|registrations| {
+                    registrations
+                        .iter()
+                        .filter(|r| match query.match_mode() {
+                            // Ancestor-key materialization means the key already
+                            // holds the whole subtree, so a prefix query keeps
+                            // everything and an exact query filters back down.
+                            MatchMode::Prefix => true,
+                            MatchMode::Exact => {
+                                r.agent_uri().capability_path() == query.capability_path()
+                            }
+                        })
+                        .filter(|r| !r.is_expired() || !self.config.auto_expire)
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+
+        // Paging is only coherent over a stable order, and insertion order is
+        // not stable across deregistrations. Canonical URI is total and cheap.
+        matches.sort_by_key(|r| r.agent_uri().canonical());
+
+        let offset = options.cursor.map_or(0, |c| c.position() as usize);
+        if offset >= matches.len() {
+            return Ok(Page::complete(Vec::new()));
         }
 
-        let key = DhtKey::derive(trust_root, capability_path);
+        let page_size = self.config.page_size.get();
+        let end = offset.saturating_add(page_size).min(matches.len());
+        let items = matches[offset..end].to_vec();
 
-        let by_key = self.by_key.read().expect("lock poisoned");
+        if end < matches.len() {
+            let next = u32::try_from(end).map_err(|_| DhtError::QuorumFailed {
+                achieved: 0,
+                required: 1,
+            })?;
+            Ok(Page::partial(items, Cursor::at(next)))
+        } else {
+            Ok(Page::complete(items))
+        }
+    }
+}
 
-        let results = by_key
-            .get(&key)
-            .map(|registrations| {
-                registrations
-                    .iter()
-                    .filter(|r| r.agent_uri().capability_path() == capability_path)
-                    .filter(|r| !r.is_expired() || !self.config.auto_expire)
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        Ok(results)
+#[async_trait]
+impl Dht for SimulatedDht {
+    async fn register(
+        &self,
+        registration: Registration,
+        options: WriteOptions,
+    ) -> Result<WriteReceipt, DhtError> {
+        self.do_register(&registration)?;
+        Ok(self.receipt(options.quorum))
     }
 
-    fn lookup_prefix(
+    async fn update_endpoint(
         &self,
-        trust_root: &TrustRoot,
-        capability_path: &CapabilityPath,
-    ) -> Result<Vec<Registration>, DhtError> {
-        // Simulate delay if configured
-        if let Some(delay) = self.config.simulated_delay {
-            std::thread::sleep(delay);
+        agent_uri: &AgentUri,
+        new_endpoints: Vec<Endpoint>,
+        options: WriteOptions,
+    ) -> Result<WriteReceipt, DhtError> {
+        self.do_update_endpoint(agent_uri, &new_endpoints)?;
+        Ok(self.receipt(options.quorum))
+    }
+
+    async fn refresh(
+        &self,
+        agent_uri: &AgentUri,
+        ttl: Duration,
+        options: WriteOptions,
+    ) -> Result<WriteReceipt, DhtError> {
+        self.do_refresh(agent_uri, ttl)?;
+        Ok(self.receipt(options.quorum))
+    }
+
+    async fn deregister(
+        &self,
+        agent_uri: &AgentUri,
+        _options: WriteOptions,
+    ) -> Result<(), DhtError> {
+        self.do_deregister(agent_uri)
+    }
+
+    async fn lookup(
+        &self,
+        query: &Query,
+        options: &ReadOptions,
+    ) -> Result<Page<Registration>, DhtError> {
+        self.do_lookup(query, options)
+    }
+
+    fn local_id(&self) -> NodeId {
+        self.node_id.clone()
+    }
+
+    async fn bootstrap(&self, peers: &[PeerAddr]) -> Result<(), DhtError> {
+        // There is no overlay to join. Rejecting an empty peer list anyway
+        // keeps the failure shape identical to a real backend, so a caller that
+        // forgets to configure peers finds out here rather than in production.
+        if peers.is_empty() {
+            return Err(DhtError::NoPeers);
         }
-
-        let key = DhtKey::derive(trust_root, capability_path);
-        let by_key = self.by_key.read().expect("lock poisoned");
-        let results = by_key
-            .get(&key)
-            .map(|registrations| {
-                registrations
-                    .iter()
-                    .filter(|r| !r.is_expired() || !self.config.auto_expire)
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        Ok(results)
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_uri::{CapabilityPath, TrustRoot};
     use agent_uri_attestation::{Issuer, SigningKey};
+    use futures::executor::block_on;
+    use std::num::NonZeroUsize;
     use std::time::Duration;
 
     fn unverified_dht() -> SimulatedDht {
@@ -559,20 +647,62 @@ mod tests {
         Endpoint::https("agent.anthropic.com:443")
     }
 
+    // The trait is async so that a distributed backend can implement it. The
+    // simulator never actually yields, so these drive it to completion without
+    // a runtime and keep the tests reading like the operations they describe.
+    fn register(dht: &SimulatedDht, registration: Registration) -> Result<WriteReceipt, DhtError> {
+        block_on(dht.register(registration, WriteOptions::default()))
+    }
+
+    fn deregister(dht: &SimulatedDht, uri: &AgentUri) -> Result<(), DhtError> {
+        block_on(dht.deregister(uri, WriteOptions::default()))
+    }
+
+    fn update_endpoint(
+        dht: &SimulatedDht,
+        uri: &AgentUri,
+        endpoints: Vec<Endpoint>,
+    ) -> Result<WriteReceipt, DhtError> {
+        block_on(dht.update_endpoint(uri, endpoints, WriteOptions::default()))
+    }
+
+    fn refresh(
+        dht: &SimulatedDht,
+        uri: &AgentUri,
+        ttl: Duration,
+    ) -> Result<WriteReceipt, DhtError> {
+        block_on(dht.refresh(uri, ttl, WriteOptions::default()))
+    }
+
+    fn lookup(dht: &SimulatedDht, query: &Query) -> Vec<Registration> {
+        block_on(dht.lookup(query, &ReadOptions::default()))
+            .unwrap()
+            .into_items()
+    }
+
+    fn exact(trust_root: &str, path: &str) -> Query {
+        Query::exact(
+            TrustRoot::parse(trust_root).unwrap(),
+            CapabilityPath::parse(path).unwrap(),
+        )
+    }
+
+    fn prefix(trust_root: &str, path: &str) -> Query {
+        Query::prefix(
+            TrustRoot::parse(trust_root).unwrap(),
+            CapabilityPath::parse(path).unwrap(),
+        )
+    }
+
     #[test]
     fn register_and_lookup_exact() {
         let dht = unverified_dht();
         let uri = test_uri("2q");
         let registration = Registration::new(uri.clone(), vec![test_endpoint()]);
 
-        dht.register(registration).unwrap();
+        register(&dht, registration).unwrap();
 
-        let results = dht
-            .lookup_exact(
-                &TrustRoot::parse("anthropic.com").unwrap(),
-                &CapabilityPath::parse("assistant/chat").unwrap(),
-            )
-            .unwrap();
+        let results = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].agent_uri(), &uri);
@@ -584,7 +714,7 @@ mod tests {
         let uri = test_uri("2q");
         let registration = Registration::new(uri, vec![]);
 
-        let result = dht.register(registration);
+        let result = register(&dht, registration);
 
         assert!(matches!(result, Err(DhtError::NoEndpoints)));
     }
@@ -594,10 +724,9 @@ mod tests {
         let dht = unverified_dht();
         let uri = test_uri("2q");
 
-        dht.register(Registration::new(uri.clone(), vec![test_endpoint()]))
-            .unwrap();
+        register(&dht, Registration::new(uri.clone(), vec![test_endpoint()])).unwrap();
 
-        let result = dht.register(Registration::new(uri, vec![test_endpoint()]));
+        let result = register(&dht, Registration::new(uri, vec![test_endpoint()]));
 
         assert!(matches!(result, Err(DhtError::AlreadyRegistered { .. })));
     }
@@ -607,16 +736,10 @@ mod tests {
         let dht = unverified_dht();
         let uri = test_uri("2q");
 
-        dht.register(Registration::new(uri.clone(), vec![test_endpoint()]))
-            .unwrap();
-        dht.deregister(&uri).unwrap();
+        register(&dht, Registration::new(uri.clone(), vec![test_endpoint()])).unwrap();
+        deregister(&dht, &uri).unwrap();
 
-        let results = dht
-            .lookup_exact(
-                &TrustRoot::parse("anthropic.com").unwrap(),
-                &CapabilityPath::parse("assistant/chat").unwrap(),
-            )
-            .unwrap();
+        let results = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
 
         assert!(results.is_empty());
     }
@@ -632,17 +755,18 @@ mod tests {
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
 
-        dht.register(Registration::new(uri1, vec![Endpoint::https("a.com")]))
-            .unwrap();
-        dht.register(Registration::new(uri2, vec![Endpoint::https("b.com")]))
-            .unwrap();
+        register(
+            &dht,
+            Registration::new(uri1, vec![Endpoint::https("a.com")]),
+        )
+        .unwrap();
+        register(
+            &dht,
+            Registration::new(uri2, vec![Endpoint::https("b.com")]),
+        )
+        .unwrap();
 
-        let results = dht
-            .lookup_prefix(
-                &TrustRoot::parse("anthropic.com").unwrap(),
-                &CapabilityPath::parse("assistant").unwrap(),
-            )
-            .unwrap();
+        let results = lookup(&dht, &prefix("anthropic.com", "assistant"));
 
         assert_eq!(results.len(), 2);
     }
@@ -658,21 +782,22 @@ mod tests {
             AgentUri::parse("agent://openai.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
 
-        dht.register(Registration::new(uri1, vec![Endpoint::https("a.com")]))
-            .unwrap();
-        dht.register(Registration::new(uri2, vec![Endpoint::https("b.com")]))
-            .unwrap();
+        register(
+            &dht,
+            Registration::new(uri1, vec![Endpoint::https("a.com")]),
+        )
+        .unwrap();
+        register(
+            &dht,
+            Registration::new(uri2, vec![Endpoint::https("b.com")]),
+        )
+        .unwrap();
 
         // Identical capability paths under two authorities derive two distinct
         // keys, so neither lookup can observe the other's registration. This is
         // the cross-trust-root isolation that removing the global scan defends.
-        let path = CapabilityPath::parse("assistant/chat").unwrap();
-        let anthropic = dht
-            .lookup_exact(&TrustRoot::parse("anthropic.com").unwrap(), &path)
-            .unwrap();
-        let openai = dht
-            .lookup_exact(&TrustRoot::parse("openai.com").unwrap(), &path)
-            .unwrap();
+        let anthropic = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
+        let openai = lookup(&dht, &exact("openai.com", "assistant/chat"));
 
         assert_eq!(anthropic.len(), 1);
         assert_eq!(
@@ -688,19 +813,12 @@ mod tests {
         let dht = unverified_dht();
         let uri = test_uri("2q");
 
-        dht.register(Registration::new(uri.clone(), vec![test_endpoint()]))
-            .unwrap();
+        register(&dht, Registration::new(uri.clone(), vec![test_endpoint()])).unwrap();
 
         let new_endpoint = Endpoint::grpc("agent.anthropic.com:50051");
-        dht.update_endpoint(&uri, vec![new_endpoint.clone()])
-            .unwrap();
+        update_endpoint(&dht, &uri, vec![new_endpoint.clone()]).unwrap();
 
-        let results = dht
-            .lookup_exact(
-                &TrustRoot::parse("anthropic.com").unwrap(),
-                &CapabilityPath::parse("assistant/chat").unwrap(),
-            )
-            .unwrap();
+        let results = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].endpoints(), &[new_endpoint]);
@@ -715,10 +833,8 @@ mod tests {
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
 
-        dht.register(Registration::new(uri1, vec![test_endpoint()]))
-            .unwrap();
-        dht.register(Registration::new(uri2, vec![test_endpoint()]))
-            .unwrap();
+        register(&dht, Registration::new(uri1, vec![test_endpoint()])).unwrap();
+        register(&dht, Registration::new(uri2, vec![test_endpoint()])).unwrap();
 
         let stats = dht.stats();
         assert_eq!(stats.total_registrations(), 2);
@@ -735,10 +851,9 @@ mod tests {
         let uri1 = test_uri("2q");
         let uri2 = test_uri("2r");
 
-        dht.register(Registration::new(uri1, vec![test_endpoint()]))
-            .unwrap();
+        register(&dht, Registration::new(uri1, vec![test_endpoint()])).unwrap();
 
-        let result = dht.register(Registration::new(uri2, vec![test_endpoint()]));
+        let result = register(&dht, Registration::new(uri2, vec![test_endpoint()]));
 
         assert!(matches!(result, Err(DhtError::KeyCapacityExceeded { .. })));
     }
@@ -748,8 +863,7 @@ mod tests {
         let dht = unverified_dht();
         let uri = test_uri("2q");
 
-        dht.register(Registration::new(uri, vec![test_endpoint()]))
-            .unwrap();
+        register(&dht, Registration::new(uri, vec![test_endpoint()])).unwrap();
 
         dht.clear();
 
@@ -777,7 +891,7 @@ mod tests {
         let dht = SimulatedDht::with_defaults();
         let uri = test_uri("2q");
 
-        let result = dht.register(Registration::new(uri, vec![test_endpoint()]));
+        let result = register(&dht, Registration::new(uri, vec![test_endpoint()]));
 
         assert!(matches!(result, Err(DhtError::InvalidAttestation { .. })));
     }
@@ -798,13 +912,210 @@ mod tests {
             .issue(&uri, vec!["assistant/chat".to_string()])
             .unwrap();
 
-        dht.register(Registration::new(uri.clone(), vec![test_endpoint()]).with_attestation(token))
-            .unwrap();
+        register(
+            &dht,
+            Registration::new(uri.clone(), vec![test_endpoint()]).with_attestation(token),
+        )
+        .unwrap();
 
-        let results = dht
-            .lookup_exact(uri.trust_root(), uri.capability_path())
-            .unwrap();
+        let results = lookup(
+            &dht,
+            &Query::exact(uri.trust_root().clone(), uri.capability_path().clone()),
+        );
         assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn refresh_extends_an_expiring_registration() {
+        let dht = unverified_dht();
+        let uri = test_uri("2q");
+        register(
+            &dht,
+            Registration::new(uri.clone(), vec![test_endpoint()])
+                .with_ttl(Duration::from_millis(50)),
+        )
+        .unwrap();
+
+        let before = lookup(&dht, &exact("anthropic.com", "assistant/chat"))[0].expires_at();
+        refresh(&dht, &uri, Duration::from_hours(1)).unwrap();
+        let after = lookup(&dht, &exact("anthropic.com", "assistant/chat"))[0].expires_at();
+
+        assert!(
+            after > before,
+            "refresh must push expiry out, got {before:?} -> {after:?}"
+        );
+    }
+
+    #[test]
+    fn refresh_updates_every_ancestor_copy() {
+        // The record is materialized at each ancestor key. A refresh that
+        // touched only one would leave the others to expire, silently pruning
+        // the agent from prefix queries while exact lookup still found it.
+        let dht = unverified_dht();
+        let uri = test_uri("2q");
+        register(
+            &dht,
+            Registration::new(uri.clone(), vec![test_endpoint()])
+                .with_ttl(Duration::from_millis(50)),
+        )
+        .unwrap();
+
+        refresh(&dht, &uri, Duration::from_hours(1)).unwrap();
+
+        let from_ancestor = lookup(&dht, &prefix("anthropic.com", "assistant"));
+        assert_eq!(from_ancestor.len(), 1);
+        assert!(!from_ancestor[0].is_expired());
+    }
+
+    #[test]
+    fn refresh_of_unknown_agent_is_not_found() {
+        let dht = unverified_dht();
+        let result = refresh(&dht, &test_uri("2q"), Duration::from_hours(1));
+        assert!(matches!(result, Err(DhtError::NotFound { .. })));
+    }
+
+    #[test]
+    fn lookup_pages_and_the_pages_partition_the_results() {
+        let config = SimulationConfig::new()
+            .with_verify_attestations(false)
+            .with_page_size(NonZeroUsize::new(2).unwrap());
+        let dht = SimulatedDht::new(config);
+
+        for suffix in ["2q", "2r", "2s", "2t", "2v"] {
+            register(
+                &dht,
+                Registration::new(test_uri(suffix), vec![test_endpoint()]),
+            )
+            .unwrap();
+        }
+
+        let query = exact("anthropic.com", "assistant/chat");
+        let mut options = ReadOptions::default();
+        let mut seen: Vec<String> = Vec::new();
+        let mut pages = 0;
+        loop {
+            let page = block_on(dht.lookup(&query, &options)).unwrap();
+            pages += 1;
+            assert!(page.len() <= 2, "page exceeded the configured page size");
+            let next = page.next_cursor();
+            seen.extend(page.into_items().iter().map(|r| r.agent_uri().canonical()));
+            match next {
+                Some(cursor) => options = options.with_cursor(cursor),
+                None => break,
+            }
+        }
+
+        assert_eq!(pages, 3, "5 results at page size 2 should take 3 pages");
+        assert_eq!(seen.len(), 5);
+        let mut deduped = seen.clone();
+        deduped.sort();
+        deduped.dedup();
+        assert_eq!(deduped.len(), 5, "pages must not repeat a registration");
+    }
+
+    #[test]
+    fn paging_order_is_stable_across_calls() {
+        // Cursors index into the result order, so an unstable order would let a
+        // second page skip or repeat records that the first already moved past.
+        let config = SimulationConfig::new()
+            .with_verify_attestations(false)
+            .with_page_size(NonZeroUsize::new(2).unwrap());
+        let dht = SimulatedDht::new(config);
+        for suffix in ["2v", "2q", "2s", "2r"] {
+            register(
+                &dht,
+                Registration::new(test_uri(suffix), vec![test_endpoint()]),
+            )
+            .unwrap();
+        }
+
+        let query = exact("anthropic.com", "assistant/chat");
+        let first = block_on(dht.lookup(&query, &ReadOptions::default())).unwrap();
+        let again = block_on(dht.lookup(&query, &ReadOptions::default())).unwrap();
+
+        assert_eq!(
+            first
+                .items()
+                .iter()
+                .map(|r| r.agent_uri().canonical())
+                .collect::<Vec<_>>(),
+            again
+                .items()
+                .iter()
+                .map(|r| r.agent_uri().canonical())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn cursor_past_the_end_yields_an_exhausted_page() {
+        let dht = unverified_dht();
+        register(
+            &dht,
+            Registration::new(test_uri("2q"), vec![test_endpoint()]),
+        )
+        .unwrap();
+
+        let page = block_on(dht.lookup(
+            &exact("anthropic.com", "assistant/chat"),
+            &ReadOptions::default().with_cursor(Cursor::at(99)),
+        ))
+        .unwrap();
+
+        assert!(page.is_empty());
+        assert!(!page.has_more());
+    }
+
+    #[test]
+    fn write_receipt_reports_the_resolved_quorum() {
+        let dht = unverified_dht();
+        let receipt = register(
+            &dht,
+            Registration::new(test_uri("2q"), vec![test_endpoint()]),
+        )
+        .unwrap();
+
+        // One authoritative copy, so every quorum resolves to one against it.
+        assert_eq!(receipt.acknowledged(), 1);
+        assert_eq!(receipt.required(), 1);
+        assert!(!receipt.exceeded_quorum());
+    }
+
+    #[test]
+    fn instances_have_distinct_identities() {
+        let a = unverified_dht();
+        let b = unverified_dht();
+        assert_ne!(a.local_id(), b.local_id());
+        assert!(!a.local_id().is_empty());
+    }
+
+    #[test]
+    fn bootstrap_without_peers_fails_the_way_a_real_backend_would() {
+        let dht = unverified_dht();
+        assert!(matches!(
+            block_on(dht.bootstrap(&[])),
+            Err(DhtError::NoPeers)
+        ));
+        assert!(block_on(dht.bootstrap(&[PeerAddr::new("/ip4/127.0.0.1/tcp/4001")])).is_ok());
+    }
+
+    #[test]
+    fn the_simulator_is_usable_as_a_trait_object() {
+        // Dyn-compatibility is the reason this trait uses async_trait at all,
+        // so it needs a test that actually fails if that regresses.
+        let dht: Box<dyn Dht> = Box::new(unverified_dht());
+        block_on(dht.register(
+            Registration::new(test_uri("2q"), vec![test_endpoint()]),
+            WriteOptions::default(),
+        ))
+        .unwrap();
+
+        let page = block_on(dht.lookup(
+            &exact("anthropic.com", "assistant/chat"),
+            &ReadOptions::default(),
+        ))
+        .unwrap();
+        assert_eq!(page.len(), 1);
     }
 
     #[test]
@@ -816,10 +1127,9 @@ mod tests {
         let reclassified =
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02q")
                 .unwrap();
-        dht.register(Registration::new(first, vec![test_endpoint()]))
-            .unwrap();
+        register(&dht, Registration::new(first, vec![test_endpoint()])).unwrap();
 
-        let result = dht.register(Registration::new(reclassified, vec![test_endpoint()]));
+        let result = register(&dht, Registration::new(reclassified, vec![test_endpoint()]));
 
         assert!(matches!(
             result,
@@ -835,10 +1145,12 @@ mod tests {
         let ancestor_reuse =
             AgentUri::parse("agent://anthropic.com/assistant/llm_01h455vb4pex5vsknk084sn02q")
                 .unwrap();
-        dht.register(Registration::new(first, vec![test_endpoint()]))
-            .unwrap();
+        register(&dht, Registration::new(first, vec![test_endpoint()])).unwrap();
 
-        let result = dht.register(Registration::new(ancestor_reuse, vec![test_endpoint()]));
+        let result = register(
+            &dht,
+            Registration::new(ancestor_reuse, vec![test_endpoint()]),
+        );
 
         assert!(matches!(
             result,

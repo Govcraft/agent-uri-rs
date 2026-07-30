@@ -148,13 +148,16 @@ Tokens use PASETO v4.public (Ed25519 signatures). The URI path is identity-defin
 
 ```toml
 [dependencies]
-agent-uri-dht = "0.2"
+agent-uri-dht = "0.3"
 ```
 
 ```rust
 use agent_uri::{AgentUri, TrustRoot, CapabilityPath};
 use agent_uri_attestation::{Issuer, SigningKey, Verifier};
-use agent_uri_dht::{Dht, SimulatedDht, Registration, Endpoint, SimulationConfig};
+use agent_uri_dht::{
+    Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig, WriteOptions,
+};
+use futures::executor::block_on;
 use std::time::Duration;
 
 // Agent registers its current location
@@ -176,17 +179,24 @@ let registration = Registration::new(
     uri.clone(),
     vec![Endpoint::https("us-east-1.agent.anthropic.com")]
 ).with_attestation(token);
-dht.register(registration).unwrap();
+// Every operation is async and takes a deadline and a quorum.
+block_on(dht.register(registration, WriteOptions::default())).unwrap();
 
-// Client discovers by capability prefix
-let results = dht.lookup_prefix(
-    &TrustRoot::parse("anthropic.com").unwrap(),
-    &CapabilityPath::parse("assistant").unwrap(),
-).unwrap();
-assert!(!results.is_empty());
+// Client discovers by capability prefix. Results are paged: follow
+// `next_cursor()` until it is None, or you are sampling rather than enumerating.
+let query = Query::prefix(
+    TrustRoot::parse("anthropic.com").unwrap(),
+    CapabilityPath::parse("assistant").unwrap(),
+);
+let page = block_on(dht.lookup(&query, &ReadOptions::default())).unwrap();
+assert!(!page.is_empty());
 ```
 
-DHT keys are derived as `SHA-256(trust_root || "/" || capability_path)`. A registration is replicated to its exact path key and every ancestor key, so `lookup_prefix` performs one exact-key lookup and returns that subtree. This costs O(path depth) writes and can make broad ancestor keys hot.
+DHT keys are derived as `SHA-256(trust_root || "/" || capability_path)`. A registration is replicated to its exact path key and every ancestor key, so a prefix query reads one exact key and gets that subtree. This costs O(path depth) writes and can make broad ancestor keys hot.
+
+Every query is scoped to one trust root, because every key is derived from one. There is deliberately no cross-trust-root lookup: cross-trust-root isolation bounds the blast radius of a trust-root key compromise.
+
+`SimulatedDht` is currently the only implementation and runs in one process. It implements the full async, quorum, and paging surface so that code written against it behaves the same way on a networked backend, which is tracked in [#74](https://github.com/Govcraft/agent-uri-rs/issues/74).
 
 **Feature flags:**
 - `serde` - Serialize and deserialize types (enables `agent-uri/serde`)
