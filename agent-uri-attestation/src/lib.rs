@@ -85,12 +85,17 @@
 //!
 //! | Component | Max Length |
 //! |-----------|------------|
-//! | Total token | 8192 chars |
-//! | agent_uri | 512 chars |
+//! | Total token | 8192 chars ([`MAX_TOKEN_LENGTH`]) |
+//! | `agent_uri` | 512 chars |
 //! | capabilities | 64 items |
 //! | Each capability | 256 chars |
 //! | issuer | 128 chars |
 //! | audience | 128 chars |
+//!
+//! The total-token cap is enforced: [`Verifier`] rejects an oversized token
+//! with [`AttestationError::TokenTooLong`] before decoding or signature
+//! checking it, and [`Issuer`] refuses to mint one, so the crate never produces
+//! a token it would decline to verify.
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]
@@ -98,6 +103,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 mod claims;
+mod constants;
 mod error;
 mod issuer;
 mod keys;
@@ -107,12 +113,13 @@ mod verification;
 mod verifier;
 
 pub use claims::{AttestationClaims, AttestationClaimsBuilder};
+pub use constants::MAX_TOKEN_LENGTH;
 pub use error::AttestationError;
 pub use issuer::Issuer;
 pub use keys::{SigningKey, VerifyingKey};
 pub use verification::{
-    capability_covers, check_capability_coverage, check_expiration, validate_audience,
-    validate_capability_scope, validate_issuer, validate_subject,
+    capability_covers, check_capability_coverage, check_expiration, check_token_length,
+    validate_audience, validate_capability_scope, validate_issuer, validate_subject,
 };
 pub use verifier::Verifier;
 
@@ -125,8 +132,8 @@ pub use verifier::Verifier;
 /// ```
 pub mod prelude {
     pub use crate::{
-        AttestationClaims, AttestationClaimsBuilder, AttestationError, Issuer, SigningKey,
-        Verifier, VerifyingKey, capability_covers, check_capability_coverage, check_expiration,
-        validate_issuer, validate_subject,
+        AttestationClaims, AttestationClaimsBuilder, AttestationError, Issuer, MAX_TOKEN_LENGTH,
+        SigningKey, Verifier, VerifyingKey, capability_covers, check_capability_coverage,
+        check_expiration, check_token_length, validate_issuer, validate_subject,
     };
 }

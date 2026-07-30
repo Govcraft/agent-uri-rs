@@ -29,6 +29,17 @@ pub enum AttestationError {
         /// Description of the format error
         reason: String,
     },
+    /// Token exceeds the maximum permitted length.
+    ///
+    /// The cap is enforced before the token is decoded or signature-checked, so
+    /// an oversized token costs no Ed25519 verifications. Nothing in the token
+    /// has been authenticated when this is returned.
+    TokenTooLong {
+        /// Maximum permitted token length in bytes
+        max: usize,
+        /// Actual token length in bytes
+        actual: usize,
+    },
     /// Claims could not be parsed.
     InvalidClaims {
         /// Description of the parsing error
@@ -106,100 +117,77 @@ impl fmt::Display for AttestationError {
             Self::MissingField { field } => {
                 write!(f, "missing required field '{field}' in attestation claims")
             }
-            Self::InvalidTtl => {
-                write!(f, "TTL duration is invalid or out of range")
-            }
-            Self::TokenExpired { expired_at } => {
-                write!(
-                    f,
-                    "token expired at {expired_at}; request a new attestation"
-                )
-            }
+            Self::InvalidTtl => write!(f, "TTL duration is invalid or out of range"),
+            Self::TokenExpired { expired_at } => write!(
+                f,
+                "token expired at {expired_at}; request a new attestation"
+            ),
             Self::TokenNotYetValid { valid_from } => {
                 write!(f, "token not yet valid; valid from {valid_from}")
             }
-            Self::InvalidSignature => {
-                write!(
-                    f,
-                    "token signature verification failed; token may have been tampered with"
-                )
-            }
-            Self::InvalidTokenFormat { reason } => {
-                write!(f, "invalid token format: {reason}")
-            }
-            Self::InvalidClaims { reason } => {
-                write!(f, "failed to parse claims: {reason}")
-            }
+            Self::InvalidSignature => write!(
+                f,
+                "token signature verification failed; token may have been tampered with"
+            ),
+            Self::InvalidTokenFormat { reason } => write!(f, "invalid token format: {reason}"),
+            Self::TokenTooLong { max, actual } => write!(
+                f,
+                "token is {actual} bytes, exceeding the {max}-byte maximum; \
+                 reduce the claims (capabilities are usually the largest)"
+            ),
+            Self::InvalidClaims { reason } => write!(f, "failed to parse claims: {reason}"),
             Self::TrustRootMismatch {
                 token_root,
                 expected_root,
-            } => {
-                write!(
-                    f,
-                    "trust root mismatch: token issued by '{token_root}' but expected '{expected_root}'"
-                )
-            }
+            } => write!(
+                f,
+                "trust root mismatch: token issued by '{token_root}' but expected '{expected_root}'"
+            ),
             Self::IssuerNamespaceMismatch {
                 issuer,
                 uri_trust_root,
-            } => {
-                write!(
-                    f,
-                    "issuer '{issuer}' is not authorized for the attested URI's namespace \
-                     '{uri_trust_root}'; a key may only attest agent URIs rooted at its own authority"
-                )
-            }
-            Self::UntrustedIssuer { issuer } => {
-                write!(
-                    f,
-                    "issuer '{issuer}' is not in trusted roots; add it with verifier.add_trusted_root()"
-                )
-            }
+            } => write!(
+                f,
+                "issuer '{issuer}' is not authorized for the attested URI's namespace \
+                 '{uri_trust_root}'; a key may only attest agent URIs rooted at its own authority"
+            ),
+            Self::UntrustedIssuer { issuer } => write!(
+                f,
+                "issuer '{issuer}' is not in trusted roots; add it with verifier.add_trusted_root()"
+            ),
             Self::UriMismatch {
                 token_uri,
                 expected_uri,
-            } => {
-                write!(
-                    f,
-                    "URI mismatch: token attests '{token_uri}' but expected '{expected_uri}'"
-                )
-            }
-            Self::MissingPublicKey { issuer } => {
-                write!(
-                    f,
-                    "no public key registered for issuer '{issuer}'; register with verifier.add_trusted_root()"
-                )
-            }
-            Self::InvalidKeyFormat { reason } => {
-                write!(f, "invalid key format: {reason}")
-            }
-            Self::InsufficientCapabilities { required, attested } => {
-                write!(
-                    f,
-                    "token capabilities {attested:?} do not cover required capability '{required}'; \
-                     add a capability that is a prefix of or equals the required path"
-                )
-            }
+            } => write!(
+                f,
+                "URI mismatch: token attests '{token_uri}' but expected '{expected_uri}'"
+            ),
+            Self::MissingPublicKey { issuer } => write!(
+                f,
+                "no public key registered for issuer '{issuer}'; register with verifier.add_trusted_root()"
+            ),
+            Self::InvalidKeyFormat { reason } => write!(f, "invalid key format: {reason}"),
+            Self::InsufficientCapabilities { required, attested } => write!(
+                f,
+                "token capabilities {attested:?} do not cover required capability '{required}'; \
+                 add a capability that is a prefix of or equals the required path"
+            ),
             Self::CapabilityOutsideIdentity {
                 identity_path,
                 capability,
-            } => {
-                write!(
-                    f,
-                    "attested capability '{capability}' is outside agent identity scope \
-                     '{identity_path}'; capabilities must equal the URI path or be descendants"
-                )
-            }
+            } => write!(
+                f,
+                "attested capability '{capability}' is outside agent identity scope \
+                 '{identity_path}'; capabilities must equal the URI path or be descendants"
+            ),
             Self::AudienceMismatch {
                 token_audience,
                 verifier_audience,
-            } => {
-                write!(
-                    f,
-                    "token is restricted to audience '{token_audience}', but verifier audience was {}",
-                    verifier_audience.as_deref().unwrap_or("not supplied")
-                )
-            }
+            } => write!(
+                f,
+                "token is restricted to audience '{token_audience}', but verifier audience was {}",
+                verifier_audience.as_deref().unwrap_or("not supplied")
+            ),
         }
     }
 }

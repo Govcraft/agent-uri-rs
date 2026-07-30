@@ -27,7 +27,46 @@ use chrono::{DateTime, Utc};
 
 use agent_uri::{AgentUri, CapabilityPath};
 
+use crate::constants::MAX_TOKEN_LENGTH;
 use crate::error::AttestationError;
+
+/// Pure function: enforces the maximum token length.
+///
+/// This is the first check on every verification path, and it runs *before* the
+/// token is base64-decoded or checked against any key. Signature verification
+/// costs one Ed25519 operation per trusted root, so an unbounded token lets a
+/// single garbage request buy O(trusted roots) public-key operations over an
+/// arbitrarily large payload. Rejecting on length first bounds that work to a
+/// string comparison.
+///
+/// Length is measured in bytes. A well-formed PASETO token is ASCII, so bytes
+/// and characters coincide; on malformed input, bytes are the quantity that
+/// actually bounds the work.
+///
+/// # Errors
+///
+/// Returns [`AttestationError::TokenTooLong`] when `token` exceeds
+/// [`MAX_TOKEN_LENGTH`] bytes.
+///
+/// # Examples
+///
+/// ```
+/// use agent_uri_attestation::{check_token_length, MAX_TOKEN_LENGTH};
+///
+/// assert!(check_token_length("v4.public.abc").is_ok());
+///
+/// let oversized = "v".repeat(MAX_TOKEN_LENGTH + 1);
+/// assert!(check_token_length(&oversized).is_err());
+/// ```
+pub fn check_token_length(token: &str) -> Result<(), AttestationError> {
+    if token.len() > MAX_TOKEN_LENGTH {
+        return Err(AttestationError::TokenTooLong {
+            max: MAX_TOKEN_LENGTH,
+            actual: token.len(),
+        });
+    }
+    Ok(())
+}
 
 /// Pure function: checks if any attested capability covers the required path.
 ///
@@ -293,6 +332,45 @@ pub fn check_capability_coverage(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod token_length_tests {
+        use super::*;
+
+        #[test]
+        fn short_token_is_accepted() {
+            assert!(check_token_length("v4.public.abc").is_ok());
+        }
+
+        #[test]
+        fn token_at_the_cap_is_accepted() {
+            let token = "v".repeat(MAX_TOKEN_LENGTH);
+            assert!(check_token_length(&token).is_ok());
+        }
+
+        #[test]
+        fn token_one_byte_over_the_cap_is_rejected() {
+            let token = "v".repeat(MAX_TOKEN_LENGTH + 1);
+            match check_token_length(&token) {
+                Err(AttestationError::TokenTooLong { max, actual }) => {
+                    assert_eq!(max, MAX_TOKEN_LENGTH);
+                    assert_eq!(actual, MAX_TOKEN_LENGTH + 1);
+                }
+                other => panic!("Expected TokenTooLong, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn length_is_measured_in_bytes_not_characters() {
+            // Half the cap in characters, but over it in bytes: a
+            // character-based cap would let this through.
+            let token = "é".repeat(MAX_TOKEN_LENGTH / 2 + 1);
+            assert!(token.chars().count() <= MAX_TOKEN_LENGTH);
+            assert!(matches!(
+                check_token_length(&token),
+                Err(AttestationError::TokenTooLong { .. })
+            ));
+        }
+    }
 
     mod capability_covers_tests {
         use super::*;

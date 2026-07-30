@@ -156,7 +156,9 @@ impl Issuer {
     ///
     /// # Errors
     ///
-    /// Returns `AttestationError` if token creation fails.
+    /// Returns `AttestationError` if token creation fails, including
+    /// [`AttestationError::TokenTooLong`] when the claims produce a token over
+    /// [`crate::MAX_TOKEN_LENGTH`] bytes, which the verifier would reject.
     pub fn issue_claims(&self, claims: &AttestationClaims) -> Result<String, AttestationError> {
         crate::verification::validate_capability_scope(&claims.agent_uri, &claims.capabilities)?;
         // Build the PASETO key from the signing key
@@ -212,11 +214,19 @@ impl Issuer {
         }
 
         // Build and sign the token
-        builder
-            .build(&paseto_key)
-            .map_err(|e| AttestationError::InvalidTokenFormat {
-                reason: e.to_string(),
-            })
+        let token =
+            builder
+                .build(&paseto_key)
+                .map_err(|e| AttestationError::InvalidTokenFormat {
+                    reason: e.to_string(),
+                })?;
+
+        // The verifier rejects oversized tokens outright, so minting one would
+        // hand the caller a token that this crate refuses to verify. Fail here
+        // instead, where the caller can still shrink the claims.
+        crate::verification::check_token_length(&token)?;
+
+        Ok(token)
     }
 }
 
@@ -305,5 +315,36 @@ mod tests {
         let token = issuer.issue_claims(&claims).unwrap();
 
         assert!(token.starts_with("v4.public."));
+    }
+
+    #[test]
+    fn issue_refuses_to_mint_an_oversized_token() {
+        let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
+        let uri = test_uri();
+
+        // Each capability stays inside the subject URI's identity scope and
+        // within the per-capability limit; together they blow past the token
+        // cap. Minting this would hand back a token the verifier rejects.
+        let capabilities: Vec<String> = (0..64)
+            .map(|index| format!("test/{}/{}/seg{index}", "a".repeat(60), "b".repeat(60)))
+            .collect();
+
+        match issuer.issue(&uri, capabilities) {
+            Err(AttestationError::TokenTooLong { max, actual }) => {
+                assert_eq!(max, crate::MAX_TOKEN_LENGTH);
+                assert!(actual > max);
+            }
+            other => panic!("Expected TokenTooLong, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn issued_tokens_are_verifiable_by_the_length_check() {
+        let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
+        let uri = test_uri();
+
+        let token = issuer.issue(&uri, vec!["test/read".into()]).unwrap();
+
+        assert!(crate::check_token_length(&token).is_ok());
     }
 }
