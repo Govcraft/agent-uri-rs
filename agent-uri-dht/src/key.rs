@@ -244,6 +244,46 @@ impl<'de> serde::Deserialize<'de> for DhtKey {
 mod tests {
     use super::*;
 
+    fn hex(key: &DhtKey) -> String {
+        use std::fmt::Write as _;
+        key.as_bytes().iter().fold(String::new(), |mut out, byte| {
+            let _ = write!(out, "{byte:02x}");
+            out
+        })
+    }
+
+    #[test]
+    fn derivation_matches_the_specs_test_vectors() {
+        // SPECIFICATION.md Appendix B.4. A key derivation is an interoperability
+        // surface: two implementations that disagree on one byte cannot see each
+        // other's registrations at all. Pinning the published digests here is
+        // what stops a refactor from moving them quietly.
+        let anthropic = TrustRoot::parse("anthropic.com").unwrap();
+        let chat = CapabilityPath::parse("assistant/chat").unwrap();
+        assert_eq!(
+            hex(&DhtKey::derive(&anthropic, &chat)),
+            "ee7f343128163eec1164fb5afc0a019df215fc73decb14bc58fef1a4966e8262"
+        );
+
+        let openai = TrustRoot::parse("openai.com").unwrap();
+        assert_eq!(
+            hex(&DhtKey::derive(&openai, &chat)),
+            "c5a97797f98cc507b8604ebd16a27071e87056b047c8f2625182287d14b31f53"
+        );
+
+        let acme = TrustRoot::parse("acme.com").unwrap();
+        let invoice = CapabilityPath::parse("workflow/approval/invoice").unwrap();
+        let expected = [
+            "16889f14c0da9c42cae8063d495e33b4fa1b12cabfdd019c1491b217a56c857a",
+            "b15b22d3c95b3091743a071ed616d9715038a7afd559a7dc28f3d7a1f9eec03e",
+            "d9786664a610a9aaa2799a65c6bd3f9baa44a067f7511cb179c63041021f25f2",
+        ];
+        for (depth, want) in (1..=3).zip(expected) {
+            let key = DhtKey::derive_at_depth(&acme, &invoice, depth).unwrap();
+            assert_eq!(hex(&key), want, "depth {depth}");
+        }
+    }
+
     #[test]
     fn derive_is_deterministic() {
         let trust_root = TrustRoot::parse("anthropic.com").unwrap();

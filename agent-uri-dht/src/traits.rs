@@ -58,9 +58,11 @@ use crate::{
 pub trait Dht: Send + Sync {
     /// Registers an agent at its capability path.
     ///
-    /// The agent is indexed by the DHT key derived from its trust root and
-    /// capability path, and at every ancestor path, enabling discovery by
-    /// capability prefix.
+    /// The agent becomes discoverable at its exact capability path and at every
+    /// ancestor path. How a backend arranges that is its own business:
+    /// SPECIFICATION.md §6.2 defines a direct model, which writes the record to
+    /// every one of those keys, and a sharded model, which writes it once and
+    /// leaves pointers at the rest. A caller sees the same behaviour from both.
     ///
     /// `proof` must be signed by the record's own agent key over the record as
     /// submitted, and the attestation must name that same key. Together those

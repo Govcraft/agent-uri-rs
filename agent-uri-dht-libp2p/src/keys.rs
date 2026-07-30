@@ -1,11 +1,15 @@
 //! Derivation of the Kademlia record keys this backend reads and writes.
 //!
-//! The specification derives one key per capability path,
-//! `SHA-256(trust_root || "/" || path)`, and materializes a registration at its
-//! exact path and every ancestor (SPECIFICATION.md §6.2). A real overlay cannot
-//! hold a subtree under one key: `libp2p-kad`'s wire limit is 16 KiB, which the
-//! spike in issue #72 measured at 1 to 27 registrations. So the spec's single
-//! key becomes a small family of keys here.
+//! These are SPECIFICATION.md §6.1.1's sharded keys, and the derivations there
+//! are normative: an implementation that computes one of them differently does
+//! not see this one's registrations, and nothing about that failure looks like
+//! a disagreement. Appendix B.4.1 publishes the test vectors, and this module's
+//! tests assert them.
+//!
+//! A real overlay cannot hold a subtree under one key: `libp2p-kad`'s wire
+//! limit is 16 KiB, which the spike in issue #72 measured at 1 to 27
+//! registrations. So the spec's single capability key becomes a small family of
+//! keys here.
 //!
 //! Three kinds, each domain-separated so that no value written for one purpose
 //! can be read as another:
@@ -152,6 +156,45 @@ mod tests {
 
     fn trust_root() -> TrustRoot {
         TrustRoot::parse("anthropic.com").unwrap()
+    }
+
+    fn hex(key: &RecordKey) -> String {
+        use std::fmt::Write as _;
+        key.as_ref().iter().fold(String::new(), |mut out, byte| {
+            let _ = write!(out, "{byte:02x}");
+            out
+        })
+    }
+
+    #[test]
+    fn derivation_matches_the_specs_test_vectors() {
+        // SPECIFICATION.md Appendix B.4.1. These keys are the interoperability
+        // surface of the sharded record model: an implementation that derives
+        // one of them differently does not see this one's registrations, and
+        // nothing about the failure looks like a disagreement.
+        let root = trust_root();
+        let agent = uri("llm_01h455vb4pex5vsknk084sn02q");
+
+        assert_eq!(
+            hex(&identity_key(&agent)),
+            "90a4a81f9c9170054bb24aa43c96d6f228a4af6eb494af2deb9b01fe342f84e0"
+        );
+        assert_eq!(
+            hex(&descriptor_key(&root, "assistant/chat")),
+            "d40a062c6be6ecfdec023bb8b2de9c33ce438b1e1f9a3a1f5810dd692daa6d48"
+        );
+        assert_eq!(
+            hex(&page_key(&root, "assistant/chat", 0)),
+            "5f5cb6dbffabc05bcb29216212b86c4b1372881218406df99aeaebd944a81494"
+        );
+        assert_eq!(
+            hex(&page_key(&root, "assistant/chat", 1)),
+            "53e0301a0584471036c44b3a6fcc5c67d7c0308498a062f83dc1f7e51a29e5ea"
+        );
+
+        for (level, page) in [(0u8, 0u32), (1, 1), (2, 1), (3, 1), (4, 9)] {
+            assert_eq!(page_for(&agent, level), page, "level {level}");
+        }
     }
 
     #[test]

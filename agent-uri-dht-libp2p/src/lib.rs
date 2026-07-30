@@ -77,15 +77,14 @@
 //!
 //! # How a registration is stored
 //!
-//! SPECIFICATION.md §6.2 derives one key per capability path and materializes a
-//! registration at its exact path and every ancestor, so that a prefix query is
-//! one exact-key read. That does not survive contact with a real overlay:
-//! `libp2p-kad`'s wire limit is 16 KiB, which the spike in issue #72 measured at
-//! 1 to 27 registrations, against a broad ancestor key that is meant to hold an
-//! entire subtree.
+//! This crate implements the **sharded** record model of SPECIFICATION.md §6.2,
+//! which a Kademlia overlay is required to use. The alternative, materializing
+//! the whole registration at the exact path and every ancestor, does not
+//! survive contact with a real overlay: `libp2p-kad`'s wire limit is 16 KiB,
+//! which the spike in issue #72 measured at 1 to 27 registrations, against a
+//! broad ancestor key meant to hold an entire subtree.
 //!
-//! The design that does fit splits the two jobs the spec's single record was
-//! doing:
+//! The sharded model splits the two jobs one record was doing:
 //!
 //! | key | holds | written by |
 //! |---|---|---|
@@ -93,11 +92,11 @@
 //! | page | pointers to agents beneath a path | every agent, at every ancestor |
 //! | descriptor | how many pages a path is spread over | whoever widens it |
 //!
-//! A pointer is about 80 bytes against a registration's 600, so a page holds
-//! roughly 200 agents rather than 27, and pages shard when that is not enough.
+//! A pointer is about 74 bytes against a registration's 600, so a page holds
+//! roughly 220 agents rather than 27, and pages shard when that is not enough.
 //! Lookup costs a descriptor read, a page read per shard, and one read per agent
-//! found. Each is still `O(log N)` hops, so §6.4's per-operation cost claim
-//! survives; its one-operation claim does not.
+//! found, which is what §6.4 costs the model at; each is still `O(log N)` hops.
+//! See [`keys`] for the derivations, which §6.1.1 makes normative.
 //!
 //! # What makes this safe under replication
 //!

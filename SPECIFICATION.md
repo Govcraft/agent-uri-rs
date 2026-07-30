@@ -1,8 +1,8 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.5.2
+**Version:** 0.6.0
 **Status:** Draft
-**Last Updated:** 2026-07-27
+**Last Updated:** 2026-07-30
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
 
 ## Abstract
@@ -85,6 +85,16 @@ requires a newly minted Agent ID and attestation.
 **Attestation**: A cryptographically signed token binding an agent URI to capability claims.
 
 **DHT**: Distributed Hash Table used for decentralized agent discovery.
+
+**Pointer**: A small record naming an agent URI registered beneath a capability
+path. A pointer is a discovery hint. The agent's own registration record is the
+authority for everything about that agent.
+
+**Pointer page**: One stored value holding a set of pointers for one capability
+path.
+
+**Shard level**: The exponent `L` for which a capability path's pointers occupy
+`2^L` pointer pages.
 
 ---
 
@@ -344,10 +354,17 @@ Implementations MUST use the canonical form for:
 
 ### 6.1 DHT Key Derivation
 
-DHT keys are derived by hashing the trust root and capability path:
+Every DHT key in this specification is a SHA-256 digest, and all of them are
+computed over one canonical input string:
 
 ```
-key = SHA-256(canonical(trust_root) || "/" || canonical(capability_path))
+path_input = canonical(trust_root) || "/" || canonical(capability_path)
+```
+
+The key naming a capability path is the digest of that string on its own:
+
+```
+capability_key = SHA-256(path_input)
 ```
 
 **Properties:**
@@ -363,14 +380,93 @@ Trust root: anthropic.com
 Capability path: assistant/chat
 Input string: "anthropic.com/assistant/chat"
 Key: SHA-256("anthropic.com/assistant/chat")
-   = 0x8a7f3c... (256-bit hash)
+   = ee7f343128163eec1164fb5afc0a019df215fc73decb14bc58fef1a4966e8262
 ```
+
+#### 6.1.1 Sharded Keys
+
+A store that bounds the size of one stored value cannot hold a capability path's
+subtree at `capability_key`; [Section 6.2](#62-registration-protocol)
+requirement 6 gives the measured limit. A backend on such a store spreads a
+capability path over a family of keys instead, derived from the same
+`path_input` under distinct domain separators. Each separator below is the
+literal ASCII string shown followed by one `0x00` octet.
+
+| Key | Holds | Derivation |
+|-----|-------|------------|
+| Identity | one agent's registration | `SHA-256("agent-uri/dht/identity/v1" 0x00 \|\| canonical(agent_uri))` |
+| Shard descriptor | a path's shard level | `SHA-256("agent-uri/dht/shard-descriptor/v1" 0x00 \|\| path_input)` |
+| Pointer page `n` | pointers beneath a path | `SHA-256("agent-uri/dht/shard-page/v1" 0x00 \|\| path_input \|\| "#" \|\| uint32be(n))` |
+
+A publisher's page index at shard level `L` is derived from its Agent ID:
+
+```
+placement            = uint32be(SHA-256("agent-uri/dht/shard-placement/v1" 0x00 || agent_id)[0..4])
+page_for(agent_id, L) = placement AND (2^L - 1)
+```
+
+**Requirements:**
+
+1. A sharded backend MUST use these derivations byte for byte. Two
+   implementations that disagree on a key do not merely perform differently;
+   they cannot see each other's registrations.
+
+2. Domain separation is REQUIRED, not an optimization. Without it a pointer page
+   and a registration can be made to land on the same key, and a node handed a
+   value has nothing to tell it which of the two the value was written as.
+
+3. The identity key MUST be derived from the canonical agent URI per
+   [Section 5.1](#51-canonical-form). A reference carrying a query string or a
+   fragment names a view of an agent rather than another agent, and MUST resolve
+   to the same record.
+
+4. Placement MUST be computed from the Agent ID alone and not from the full URI.
+   An agent then occupies the same page index at its exact path and at every
+   ancestor path, so a reader fanning out over one level sees each agent exactly
+   once per path.
+
+5. The page count MUST be a power of two and placement MUST be by bitwise mask.
+   This is normative rather than an implementation preference. Under
+   `page = placement mod P` for arbitrary `P`, raising `P` moves nearly every
+   publisher to a different page, and every pointer already written becomes
+   unreadable until its publisher happens to rewrite it. Under a mask, raising
+   `L` by one splits each page in two: an agent either stays on the page it was
+   on or moves to a page index that did not exist at the lower level, and a
+   reader at the higher level visits both. Growth is therefore backward
+   compatible. A specification that said only "spread over `P` pages" would
+   admit an implementation that silently loses registrations every time a path
+   grows.
+
+6. Implementations MUST impose a maximum shard level; 16 is RECOMMENDED, which
+   is 65 536 pages under one path. A shard descriptor is unauthenticated
+   (requirement 14 of [Section 6.2](#62-registration-protocol)), so without a
+   cap a forged level directs every reader of that path to derive an unbounded
+   number of keys.
+
+7. A reader SHOULD bound the number of keys one lookup reads, independently of
+   the level it read. The cap in requirement 6 bounds a forged descriptor; a
+   per-lookup budget bounds the cost of an honest but very wide path.
 
 ### 6.2 Registration Protocol
 
-An agent registers by storing its record at the DHT key for its exact capability
-path and at the key for every ancestor path. This ancestor-key materialization
-makes a prefix query one ordinary exact-key DHT lookup.
+An agent registers by publishing its record so that both an exact lookup by URI
+and a prefix lookup by capability path can find it. Two record models satisfy
+that, and which one applies is a property of the store rather than a free
+choice.
+
+**Direct model.** Where one store holds the namespace and a stored value has no
+practical size bound, as in an in-process index or a database-backed registry,
+the registration is written at the `capability_key` for its exact capability path
+and at the key for every ancestor path. This ancestor-key materialization makes
+a prefix query one ordinary exact-key lookup.
+
+**Sharded model.** Where the store bounds the size of one value, which is every
+Kademlia overlay, the registration is written once at its identity key, and each
+ancestor key holds pointers to it spread over pages
+([Section 6.1.1](#611-sharded-keys)). A prefix query reads the path's
+descriptor, then its pages, then the registrations the pointers name.
+
+The registration record is the same in both:
 
 ```rust
 Registration {
@@ -384,15 +480,40 @@ Registration {
 }
 ```
 
+The sharded model adds two auxiliary records. Neither carries authority, and
+neither is signed:
+
+```rust
+Pointer {
+    agent_uri: AgentUri,          // The agent this page points at
+    expires_at: Timestamp,        // Not later than that agent's own expiry
+}
+
+ShardDescriptor {
+    level: u8,                    // The path's pointers occupy 2^level pages
+}
+```
+
 **Requirements:**
 
 1. Agents MUST register at the capability path encoded in their URI.
 2. Registration MUST include at least one endpoint.
 3. Registration MUST include a valid attestation token covering the URI path.
 4. DHT nodes MUST verify attestations before storing records.
-5. The reference in-memory index MUST write the record atomically to the exact key and all ancestor keys. A distributed backend MUST either tolerate transient divergence between these keys or define an additional coordination protocol; this specification does not require cross-node multi-key atomicity.
-6. Registration write amplification is O(d), where d is path depth. Deployments
-   MUST provision broad ancestor keys for higher load or impose capacity limits.
+5. In the direct model, an implementation MUST write the record atomically to
+   the exact key and all ancestor keys. In the sharded model there is one
+   authoritative copy, at the identity key, and the ancestor keys hold pointers
+   that are written and expire independently of it; an implementation MUST
+   tolerate transient divergence between them. This specification does not
+   require cross-node multi-key atomicity in either model.
+6. Registration write amplification is O(d), where d is path depth. A capability
+   key cannot hold its subtree wherever the store bounds the size of one value,
+   and that bound belongs to the protocol rather than to the deployment: on
+   `libp2p-kad` the limit is 16 KiB per record, which this specification's
+   reference workspace measured at 1 to 27 registrations. No amount of
+   provisioning moves it, because the limit is enforced by the nodes that store
+   the record and not by the one that writes it. A deployment on such a store
+   MUST use the sharded model.
 7. Registration MUST name an Ed25519 `agent_key`. That key, and only that key,
    is authorized to write the record.
 8. Registration MUST carry a mutation proof over the record as submitted, and
@@ -404,22 +525,78 @@ Registration {
 10. An agent that has previously held this URI SHOULD open the new record at a
     `sequence` above every sequence it has ever signed for that URI. See
     [Section 6.6](#66-write-authorization).
+11. In the sharded model, a registration MUST be published at its identity key,
+    and MUST place a pointer to itself on page `page_for(agent_id, L)` at its
+    exact capability path and at every ancestor path, where `L` is the shard
+    level read from that path's descriptor.
+12. A pointer's `expires_at` MUST NOT be later than that of the registration it
+    names. A stale pointer costs a reader one wasted dereference; one that
+    outlives its registration costs that dereference on every lookup until it
+    expires.
+13. A publisher that finds a page at or above its capacity MAY raise that path's
+    shard level. A raise MUST be by exactly one level, and an implementation
+    MUST NOT lower a level it reads. Growth is opportunistic: a path over
+    capacity keeps accepting pointers until some publisher widens it.
+14. Pointers and shard descriptors are unauthenticated, and implementations MUST
+    NOT treat either as evidence of anything about an agent. See requirement 3
+    of [Section 6.3](#63-lookup-protocol) and
+    [Section 8.10](#810-pointer-injection).
 
 ### 6.3 Lookup Protocol
 
-Discovery proceeds in three steps:
+**Exact lookup by agent URI** is one read in either model: at the
+`capability_key` for the agent's exact capability path in the direct model, at
+the agent's identity key in the sharded model.
 
-1. **Key derivation**: Compute DHT key from trust root and capability path.
+**Prefix lookup, and exact lookup by capability path,** proceed by model.
+
+In the direct model:
+
+1. **Key derivation**: Compute `capability_key` from trust root and capability
+   path.
 
 2. **DHT lookup**: Perform one ordinary lookup at that key. Ancestor-key
    materialization makes the returned bucket the prefix subtree.
 
-3. **Result filtering**: Verify attestations on returned records; filter by query parameters.
+3. **Result filtering**: Verify attestations on returned records; filter by
+   query parameters.
 
-**Prefix Matching:**
+In the sharded model:
 
-For registration, derive and write keys at each level. A query for
-`/workflow/approval` reads only the depth-2 key:
+1. **Descriptor read**: Read the path's shard descriptor to learn its level `L`.
+   An absent descriptor means level 0, which is a single page.
+
+2. **Page reads**: Read pages `0` through `2^L - 1` for that path and collect
+   their pointers, discarding expired ones.
+
+3. **Dereference**: Read the identity record named by each remaining pointer.
+
+4. **Result filtering**: Verify attestations and mutation proofs on returned
+   records; discard any record whose own capability path does not satisfy the
+   query; filter by query parameters.
+
+**Requirements:**
+
+1. A reader MUST verify each returned record independently. Being handed a
+   record by the overlay makes it neither authentic nor current.
+
+2. Where several copies of one record are returned, a reader MUST resolve them
+   by the ordering in [Section 6.6](#66-write-authorization), the greatest
+   `(registered_at, sequence)`, and MUST NOT prefer whichever copy arrived
+   last. Replication and caching decide arrival order; they say nothing about
+   which copy is newer.
+
+3. A reader MUST decide whether a record satisfies the query from the record's
+   own `agent_uri`, and MUST NOT infer it from the page the pointer was found
+   on. Nothing signs a pointer, so any page can name any URI.
+
+4. A reader that truncates a lookup against a key budget (requirement 7 of
+   [Section 6.1.1](#611-sharded-keys)) MUST report the result as incomplete. An
+   empty page of results and an exhausted budget are different answers.
+
+**Prefix Matching (direct model):**
+
+A query for `/workflow/approval` reads only the depth-2 key:
 
 ```
 Register: /workflow/approval/invoice
@@ -431,13 +608,59 @@ Query:    /workflow/approval
 Reads:    SHA-256("acme.com/workflow/approval")
 ```
 
+**Prefix Matching (sharded model):**
+
+The same registration writes one record and three pointers, and the same query
+reads a descriptor, that path's pages, and one identity key per pointer:
+
+```
+Register: agent://acme.com/workflow/approval/invoice/llm_01h4...
+Writes:   identity key for the canonical URI                       (the record)
+          page_for(llm_01h4..., L) at "acme.com/workflow"          (a pointer)
+          page_for(llm_01h4..., L) at "acme.com/workflow/approval" (a pointer)
+          page_for(llm_01h4..., L) at "acme.com/workflow/approval/invoice"
+
+Query:    /workflow/approval
+Reads:    descriptor key for "acme.com/workflow/approval"    -> L
+          page keys 0..2^L for "acme.com/workflow/approval"  -> pointers
+          identity key per surviving pointer                 -> records
+```
+
 ### 6.4 Resolution Guarantees
 
 Under the standard Kademlia routing-table and connectivity assumptions, one
 exact-key lookup is expected to require O(log N) overlay hops, where N is the
-number of DHT nodes. Prefix lookup has the same routing shape because it reads
-one materialized ancestor key; result transfer remains proportional to the
-number and size of returned records.
+number of DHT nodes. Every read named below is one exact-key lookup and carries
+that cost. What differs between operations is how many reads each one takes:
+
+| Operation | Direct model | Sharded model |
+|-----------|--------------|---------------|
+| Exact lookup by agent URI | 1 read | 1 read |
+| Exact lookup by capability path | 1 read | 1 + 2^L + m reads |
+| Prefix lookup | 1 read | 1 + 2^L + m reads |
+
+`L` is the queried path's shard level and `m` is the number of unexpired
+pointers found. Result transfer remains proportional to the number and size of
+returned records.
+
+Two consequences are worth stating plainly. In the sharded model, exact lookup
+*by capability path* costs exactly what a prefix lookup costs: both read the
+same pointer pages, and they differ only in a local filter on the dereferenced
+record's URI. What remains a single read is exact lookup *by agent URI*, which
+is what a cached `agent://` reference resolves through.
+
+The `2^L` page reads do not depend on each other and MAY be issued
+concurrently, as MAY the `m` dereferences, so the expected latency of a sharded
+lookup is nearer three sequential round trips than `1 + 2^L + m` of them.
+
+An implementation MAY cache a path's shard descriptor, which removes the first
+of those three from repeated lookups under one path. The cost of a stale cached
+level falls on readers and not on publishers, and it is coverage rather than
+correctness: a reader working from a level below the current one reads a subset
+of the path's pages, and misses any agent whose pointer landed on a page the
+higher level added. The cache lifetime bounds that window. A publisher working
+from a stale level is unaffected, because the page it writes to is one a
+higher-level reader still visits.
 
 **Corollary:** Resolution cost is independent of migration history. An agent that has migrated 100 times has the same resolution cost as one that never migrated.
 
@@ -460,6 +683,11 @@ Agent migration updates only the DHT record; the URI remains stable:
 The agent's identity (URI) does not change for endpoint migration. A trust-root
 or capability-path change creates a new identity and requires a new Agent ID and
 attestation.
+
+The record model does not change this sequence. In the sharded model a migration
+rewrites the identity record and nothing else: a pointer names the agent's URI
+and not its endpoints, so no ancestor key is touched and the write stays one
+record regardless of path depth.
 
 ### 6.6 Write Authorization
 
@@ -724,6 +952,11 @@ Deployments requiring query privacy SHOULD consider private information retrieva
 
 **Mitigation:** Trust roots MAY restrict prefix queries to authorized requesters.
 
+**Note on the sharded model:** pointer pages list a path's agent URIs directly
+and can be read without dereferencing anything, so enumeration there costs a
+descriptor read and `2^L` page reads. A deployment that treated the cost of
+enumeration as a protection has less of one than it appears to.
+
 ### 8.7 Registration Hijack
 
 **Threat:** An agent URI is public, so any party that can reach a storing node
@@ -776,6 +1009,37 @@ is only as good as the enrolment that precedes it.
 **Threat:** In a multi-root deployment, a verifier trusts several trust roots. A valid signing key for one authority (e.g. `marketing.acme.com`) mints an attestation whose `agent_uri` is rooted at a *different* authority (e.g. `finance.acme.com`). Authenticating `iss` alone proves only which trusted key signed the token, not that the signer owns the attested namespace.
 
 **Mitigation:** Verifiers MUST reject an attestation whose `iss` claim differs from the trust root (authority) of the attested agent URI. If the attested URI's authority cannot be determined, verifiers MUST reject the attestation (fail closed). This binding makes `iss` authoritative for the URI's namespace and preserves the cross-trust-root isolation described in [Section 8.2](#82-trust-root-key-compromise): a key compromise or misuse cannot forge attestations for agents under a different trust root.
+
+### 8.10 Pointer Injection
+
+**Threat:** In the sharded model ([Section 6.1.1](#611-sharded-keys)), pointer
+pages and shard descriptors carry no signature. There is nothing for one to be
+signed *by*: a page is a set contributed to by every agent beneath a path, and
+no single party owns it. Any party that can write to the overlay can therefore
+put any agent URI on any page, or raise any path's shard level.
+
+**Mitigations:**
+
+1. **A pointer confers nothing.** A reader dereferences every pointer to the
+   named agent's own registration and decides from that record's `agent_uri`
+   whether it satisfies the query, per requirement 3 of
+   [Section 6.3](#63-lookup-protocol). An injected pointer buys the attacker one
+   wasted read on someone else's machine.
+
+2. **Level capping.** A maximum shard level bounds how many keys a forged
+   descriptor can make a reader derive, and a per-lookup key budget bounds it
+   again independently.
+
+3. **Union merge.** Pages merge by union rather than by replacement, so a write
+   cannot remove a pointer another publisher placed.
+
+**Residual Risk:** Pointer pages are a denial-of-service surface rather than an
+authenticity one. Filling a page with pointers to agents that do not exist makes
+every lookup under that path slower and can push a reader against its key
+budget, hiding legitimate agents in the way
+[Section 8.1](#81-dht-eclipse-attacks) describes. Raising a shard level is not
+reversible by the same means, because descriptors take the greater level: a path
+can be pushed wide and stays wide.
 
 ---
 
@@ -1087,22 +1351,63 @@ Equivalent: NO
 Trust root: anthropic.com
 Capability path: assistant/chat
 Input: "anthropic.com/assistant/chat"
-Key: SHA-256("anthropic.com/assistant/chat")
-   = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-   (Note: actual hash of this specific input)
+capability_key = ee7f343128163eec1164fb5afc0a019df215fc73decb14bc58fef1a4966e8262
 
 # Trust-root scoping (different keys)
 Input A: "anthropic.com/assistant/chat"
+       = ee7f343128163eec1164fb5afc0a019df215fc73decb14bc58fef1a4966e8262
 Input B: "openai.com/assistant/chat"
-Keys: DIFFERENT (trust root is part of hash input)
+       = c5a97797f98cc507b8604ebd16a27071e87056b047c8f2625182287d14b31f53
 
 # Prefix key derivation
 Trust root: acme.com
 Path: workflow/approval/invoice
 Keys at depths:
   Depth 1: SHA-256("acme.com/workflow")
+         = 16889f14c0da9c42cae8063d495e33b4fa1b12cabfdd019c1491b217a56c857a
   Depth 2: SHA-256("acme.com/workflow/approval")
+         = b15b22d3c95b3091743a071ed616d9715038a7afd559a7dc28f3d7a1f9eec03e
   Depth 3: SHA-256("acme.com/workflow/approval/invoice")
+         = d9786664a610a9aaa2799a65c6bd3f9baa44a067f7511cb179c63041021f25f2
+```
+
+### B.4.1 Sharded Key Derivation
+
+Every separator below is the ASCII string shown followed by one `0x00` octet.
+See [Section 6.1.1](#611-sharded-keys).
+
+```
+# Identity key (from the canonical URI, so a query or fragment does not move it)
+URI:   agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q
+Input: "agent-uri/dht/identity/v1" 0x00 || that URI
+Key:   90a4a81f9c9170054bb24aa43c96d6f228a4af6eb494af2deb9b01fe342f84e0
+
+# Shard descriptor key
+Input: "agent-uri/dht/shard-descriptor/v1" 0x00 || "anthropic.com/assistant/chat"
+Key:   d40a062c6be6ecfdec023bb8b2de9c33ce438b1e1f9a3a1f5810dd692daa6d48
+
+# Pointer page keys
+Input: "agent-uri/dht/shard-page/v1" 0x00 || "anthropic.com/assistant/chat"
+                                   || "#" || uint32be(0)
+Key:   5f5cb6dbffabc05bcb29216212b86c4b1372881218406df99aeaebd944a81494
+
+Input: ... || uint32be(1)
+Key:   53e0301a0584471036c44b3a6fcc5c67d7c0308498a062f83dc1f7e51a29e5ea
+
+# All four kinds of key for one path are distinct
+capability_key != identity != descriptor != page (domain separators differ)
+
+# Placement, from the Agent ID alone
+Agent ID: llm_01h455vb4pex5vsknk084sn02q
+Level 0: page 0    (one page; the mask is zero)
+Level 1: page 1
+Level 2: page 1
+Level 3: page 1
+Level 4: page 9
+
+# Growth is backward compatible: raising the level either leaves an agent where
+# it was or moves it to page (old + 2^L_old), which a wider reader also visits.
+# Here, level 3 -> 4 moves this agent from page 1 to page 1 + 2^3 = 9.
 ```
 
 ### B.5 Capability Coverage
@@ -1171,9 +1476,20 @@ Covered: YES (second capability covers)
 
 | Component | Size | Notes |
 |-----------|------|-------|
-| DHT key | 256 bits | SHA-256 output |
-| Registration record | Variable | Depends on endpoint count |
+| DHT key | 256 bits | SHA-256 output, every kind |
+| Stored value | Backend-dependent | 16 KiB on `libp2p-kad`; see §6.2 requirement 6 |
+| Registration record | Variable | Depends on endpoint count and attestation size |
 | Endpoint | Variable | URL length |
+| Pointer | ~74 bytes | At typical URI length; ~494 at the URI ceiling |
+| Pointers per 16 KiB page | ~220 | At typical URI length; ~33 at the URI ceiling |
+| Shard descriptor | 1 byte | The level; the record is its own key's whole value |
+| Shard level | 0 to 16 | 16 RECOMMENDED as the maximum, per §6.1.1 requirement 6 |
+
+The pointer figures are measured against this specification's reference
+workspace and are informative, not normative. They are what makes the sharded
+model necessary rather than merely tidy: pointers cut the per-agent cost by
+roughly a factor of seven, which moves the ceiling but does not remove it. Only
+sharding removes it, because only sharding adds keys.
 
 ---
 
@@ -1181,6 +1497,7 @@ Covered: YES (second capability covers)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.6.0 | 2026-07-30 | Direct and sharded record models distinguished; sharded key derivation, pointer pages, and shard descriptors defined normatively; prefix lookup no longer claimed to be one exact-key read; §6.2 requirement 6 restated as a protocol ceiling rather than a provisioning matter; pointer injection added as §8.10; placeholder key vectors in B.4 replaced with computed digests |
 | 0.5.2 | 2026-07-27 | Four dot-separated all-numeric host labels defined as an ipv4-address rather than a domain; hosts of that shape whose octets are outside 0-255 or carry a leading zero are rejected |
 | 0.5.1 | 2026-07-27 | Query parameter percent-decoding defined as UTF-8 octet decoding; values whose decoded octets are not valid UTF-8 are rejected; serializing a query parameter value re-encodes non-unreserved octets as uppercase %XX |
 | 0.5.0 | 2026-07-13 | Capability path made constitutive identity material; lowercase path and Agent ID inputs are rejected rather than normalized; URI-scoped capability claims and ancestor-key registration defined |
