@@ -101,16 +101,12 @@ fn rejects_invalid_signature() {
     let token = issuer.issue(&uri, vec![]).unwrap();
     let result = verifier.verify(&token);
 
-    // Wrong key should result in either InvalidSignature or InvalidTokenFormat
-    // (depending on how PASETO reports the error)
+    // The token is structurally sound and only its signature fails to check
+    // out. Errors are classified by cause, so that is exactly InvalidSignature;
+    // tolerating InvalidTokenFormat here would hide a structural regression.
     assert!(
-        matches!(
-            result,
-            Err(AttestationError::InvalidSignature)
-                | Err(AttestationError::InvalidTokenFormat { .. })
-        ),
-        "Expected InvalidSignature or InvalidTokenFormat, got {:?}",
-        result
+        matches!(result, Err(AttestationError::InvalidSignature)),
+        "Expected InvalidSignature, got {result:?}"
     );
 }
 
