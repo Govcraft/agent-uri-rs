@@ -1,4 +1,11 @@
 //! Evaluation 2: Discovery precision simulation.
+//!
+//! Every figure here is measured against [`SimulatedDht`], one in-process index
+//! that never partitions and never loses a write, and is scored against a ground
+//! truth computed by the same path-containment rule the store implements. That
+//! makes precision and recall a check that prefix semantics hold at scale rather
+//! than a retrieval-quality result, and makes them silent about distributed
+//! deployment. See the crate docs before reporting them.
 
 use std::collections::{HashMap, HashSet};
 
@@ -94,6 +101,11 @@ pub struct DiscoveryResults {
 }
 
 /// Discovery evaluation harness.
+///
+/// Holds the store the measurement is taken against, and the ground truth it is
+/// scored against. The store is a [`SimulatedDht`], so a query returns exactly
+/// what was registered to it, and any gap between the two sets is a defect in
+/// how registrations are indexed or paged rather than an effect of a network.
 pub struct DiscoveryEvaluator {
     dht: SimulatedDht,
     trust_root: TrustRoot,
@@ -248,6 +260,13 @@ impl DiscoveryEvaluator {
     ///
     /// For exact mode: agents registered at exactly this path.
     /// For prefix mode: agents registered at this path or any child path.
+    ///
+    /// This is the same rule the store answers a query by, which is deliberate
+    /// and is what the resulting metrics have to be read in light of: the
+    /// evaluation asks whether the implementation realizes path containment
+    /// across ancestor keys and paging, not whether path containment is the
+    /// right notion of relevance. A correct implementation therefore scores
+    /// 1.00. See the crate docs.
     #[must_use]
     pub fn ground_truth(&self, path: &CapabilityPath, mode: MatchMode) -> HashSet<String> {
         let mut relevant = HashSet::new();
@@ -528,6 +547,51 @@ mod tests {
         // Should have perfect precision/recall for exact match
         assert!((result.metrics.precision - 1.0).abs() < f64::EPSILON);
         assert!((result.metrics.recall - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn a_corpus_larger_than_one_page_still_scores_perfectly() {
+        // The crate docs say the discovery figures are a conformance check that
+        // scores 1.00 whenever the implementation is correct, which is only
+        // worth saying if a defect would move them. This is the corpus that
+        // could: several hundred agents over a hierarchy deep enough that a
+        // prefix query reads an ancestor key holding far more than one page.
+        // Anything that loses a registration, forgets an ancestor key, or stops
+        // at the first page shows up here as recall below 1.00.
+        let config = DiscoveryConfig {
+            num_agents: 300,
+            trust_root: "test.example.com".to_string(),
+            ..Default::default()
+        };
+        let mut eval = DiscoveryEvaluator::new(&config).unwrap();
+        let mut path_gen = crate::PathGenerator::with_seed(42);
+        let mut id_gen = AgentIdGenerator::new("eval");
+        let paths = path_gen.generate_hierarchical(config.num_agents);
+
+        for path in &paths {
+            eval.register_agent(path, &id_gen.generate_next()).unwrap();
+        }
+
+        let results: Vec<_> = paths
+            .iter()
+            .map(|path| eval.evaluate_query(path, MatchMode::Prefix).unwrap())
+            .collect();
+        let summary = aggregate_results(&results, eval.agent_count(), false);
+
+        assert!(
+            results.iter().any(|r| r.returned_count > 64),
+            "no query outgrew the default page size, so paging was never exercised"
+        );
+        assert!(
+            (summary.mean_precision - 1.0).abs() < f64::EPSILON,
+            "precision {} : a query returned an agent outside its subtree",
+            summary.mean_precision
+        );
+        assert!(
+            (summary.mean_recall - 1.0).abs() < f64::EPSILON,
+            "recall {} : a query missed an agent registered beneath it",
+            summary.mean_recall
+        );
     }
 
     #[test]

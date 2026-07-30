@@ -8,8 +8,10 @@
 //! - **Trait interface**: [`Dht`], an async trait abstracting DHT backends
 //! - **In-memory simulation**: [`SimulatedDht`] for evaluation and testing
 //! - **Prefix matching**: [`PathTrie`], a standalone helper for callers that
-//!   want a local hierarchical index. Discovery itself does not use it: prefix
-//!   lookup reads one materialized ancestor key.
+//!   want a local hierarchical index. Discovery itself does not use it: in this
+//!   crate a prefix lookup reads one materialized ancestor key. A networked
+//!   backend reads pointers from that key instead, which is one of several
+//!   differences the Scope section below sets out.
 //!
 //! # Overview
 //!
@@ -29,6 +31,29 @@
 //!
 //! This enables capability-based discovery: "find me an agent at
 //! `anthropic.com` that can do `assistant/chat`".
+//!
+//! # Scope
+//!
+//! [`SimulatedDht`] is the reference implementation and the test double: one
+//! in-process index holding one authoritative copy, which is what you want to
+//! develop, test, and benchmark against. It is not a deployment, and two things
+//! follow from that.
+//!
+//! **Its limits are its own.** [`SimulationConfig`] bounds a key at 1000
+//! registrations by default and bounds a stored value not at all. A Kademlia
+//! overlay bounds a record at the wire size a peer will accept, which for
+//! `libp2p-kad` is 1 to 27 registrations, so it stores pointers at ancestor keys
+//! and sharded pages behind them. Code that asks whether a write succeeded and
+//! pages through what a lookup returned ports unchanged. Configuration tuned
+//! against these numbers does not.
+//!
+//! **A measurement taken against it is a measurement of indexing.** Nothing here
+//! partitions, replicates, retries, or loses a peer, so a lookup returns exactly
+//! what was written to it. That makes it a clean way to ask whether this crate
+//! indexes and pages what it was given correctly, and no way at all to ask what
+//! a distributed store returns under load or partition. The discovery precision
+//! and recall figures in `agent-uri-eval` were measured against this crate and
+//! are bounded by both facts; see its crate docs before quoting them.
 //!
 //! # Quick Start
 //!
@@ -101,9 +126,13 @@
 //! DHT keys are derived deterministically from trust root and capability path
 //! using SHA-256. This enables:
 //!
-//! - **Exact lookup**: Find agents at a specific capability path
-//! - **Prefix lookup**: Find agents at a path and all child paths
-//! - **Cross-trust-root lookup**: Find agents with a capability across all authorities
+//! - **Exact lookup**: find agents at a specific capability path
+//! - **Prefix lookup**: find agents at a path and every path beneath it, from
+//!   the single key that path derives
+//!
+//! There is deliberately no cross-trust-root lookup. Every key is derived from
+//! one trust root, so a query is answered by one authority, and a compromised
+//! trust-root key reaches no further than the namespace it already owned.
 //!
 //! ```rust
 //! use agent_uri::{TrustRoot, CapabilityPath};

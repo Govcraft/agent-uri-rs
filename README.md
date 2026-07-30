@@ -164,7 +164,7 @@ The `agent_key` claim is what keeps a token from being a bearer credential. Regi
 
 ```toml
 [dependencies]
-agent-uri-dht = "0.6"
+agent-uri-dht = "0.9"
 ```
 
 ```rust
@@ -224,6 +224,8 @@ Every query is scoped to one trust root, because every key is derived from one. 
 
 `SimulatedDht` runs in one process and is the reference implementation and test double. It honors the full async, quorum, and paging surface, so code written against it behaves the same way against the networked backend below.
 
+Its limits do not carry over, and neither do measurements taken against it. It bounds a key at 1000 registrations by default and a stored value not at all, which no overlay can honor: `libp2p-kad` caps a record at 1 to 27 registrations. And nothing in it partitions, replicates, or loses a peer, so a lookup returns exactly what was written to it. That makes it the right place to check that registrations are indexed and paged correctly, which is what `agent-uri-eval`'s discovery precision and recall figures check. Those figures are not a retrieval-quality result and not evidence about distributed deployment; see that crate's docs.
+
 **Feature flags:**
 - `serde` - Serialize and deserialize types (enables `agent-uri/serde`)
 
@@ -233,7 +235,7 @@ Every query is scoped to one trust root, because every key is derived from one. 
 
 ```toml
 [dependencies]
-agent-uri-dht-libp2p = "0.1"
+agent-uri-dht-libp2p = "0.2"
 ```
 
 ```rust,no_run

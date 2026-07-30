@@ -10,7 +10,7 @@ It is a separate crate because `libp2p` is a large dependency and the core crate
 
 ```toml
 [dependencies]
-agent-uri-dht-libp2p = "0.1"
+agent-uri-dht-libp2p = "0.2"
 ```
 
 ## Starting a node
