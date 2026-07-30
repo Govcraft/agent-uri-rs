@@ -5,6 +5,7 @@ members = [
     "agent-uri-attestation",
     "agent-uri-cli",
     "agent-uri-dht",
+    "agent-uri-dht-libp2p",
     "agent-uri-eval",
 ]
 

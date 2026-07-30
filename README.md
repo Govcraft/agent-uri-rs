@@ -70,12 +70,20 @@ The typestate builder catches missing components at compile time, not runtime.
 │  construct URIs   │ │ verify identity   │ │ by capability     │
 └───────────────────┘ └───────────────────┘ └───────────────────┘
          ▲                     │                     │
+         │                     │                     ▼
+         │                     │         ┌───────────────────┐
+         │                     │         │ agent-uri-dht-    │
+         │                     │         │ libp2p            │
+         │                     │         │                   │
+         │                     │         │ the same, over a  │
+         │                     │         │ Kademlia overlay  │
+         │                     │         └───────────────────┘
          │                     │                     │
          └─────────────────────┴─────────────────────┘
                          depends on
 ```
 
-Use `agent-uri` alone for parsing and validation. Add `agent-uri-attestation` when you need cryptographic proof of identity. Add `agent-uri-dht` when you need to discover agents by capability.
+Use `agent-uri` alone for parsing and validation. Add `agent-uri-attestation` when you need cryptographic proof of identity. Add `agent-uri-dht` when you need to discover agents by capability, and `agent-uri-dht-libp2p` when that discovery has to cross a network rather than a process.
 
 ## Crates
 
@@ -156,7 +164,7 @@ The `agent_key` claim is what keeps a token from being a bearer credential. Regi
 
 ```toml
 [dependencies]
-agent-uri-dht = "0.5"
+agent-uri-dht = "0.6"
 ```
 
 ```rust
@@ -214,10 +222,49 @@ DHT keys are derived as `SHA-256(trust_root || "/" || capability_path)`. A regis
 
 Every query is scoped to one trust root, because every key is derived from one. There is deliberately no cross-trust-root lookup: cross-trust-root isolation bounds the blast radius of a trust-root key compromise.
 
-`SimulatedDht` is currently the only implementation and runs in one process. It implements the full async, quorum, and paging surface so that code written against it behaves the same way on a networked backend, which is tracked in [#74](https://github.com/Govcraft/agent-uri-rs/issues/74).
+`SimulatedDht` runs in one process and is the reference implementation and test double. It honors the full async, quorum, and paging surface, so code written against it behaves the same way against the networked backend below.
 
 **Feature flags:**
 - `serde` - Serialize and deserialize types (enables `agent-uri/serde`)
+
+### agent-uri-dht-libp2p
+
+**The same discovery, over a real Kademlia overlay.**
+
+```toml
+[dependencies]
+agent-uri-dht-libp2p = "0.1"
+```
+
+```rust,no_run
+use agent_uri_attestation::Verifier;
+use agent_uri_dht::{Dht, PeerAddr};
+use agent_uri_dht_libp2p::Libp2pConfig;
+use libp2p::identity;
+
+# async fn example(trust_root_key: agent_uri_attestation::VerifyingKey)
+# -> Result<(), Box<dyn std::error::Error>> {
+let mut verifier = Verifier::new();
+verifier.add_trusted_root("anthropic.com", trust_root_key);
+
+let node = agent_uri_dht_libp2p::start(
+    Libp2pConfig::default().listening_on("/ip4/0.0.0.0/tcp/4001".parse()?),
+    verifier,
+    identity::Keypair::generate_ed25519(),
+)
+.await?;
+
+node.bootstrap(&[PeerAddr::new("/ip4/198.51.100.7/tcp/4001/p2p/12D3KooWExample")])
+    .await?;
+# Ok(())
+# }
+```
+
+A separate crate because `libp2p` is a large dependency and the core crate is useful without it.
+
+The storage layout differs from the one `agent-uri-dht` describes, because a broad ancestor key cannot hold its subtree on a real overlay: `libp2p-kad`'s wire limit caps a record at 1 to 27 registrations. Ancestor keys therefore hold pointers rather than records, sharded across pages that double as they fill, and a prefix lookup dereferences them. Every node validates what it is asked to store, and every reader validates what it is given.
+
+See [its README](agent-uri-dht-libp2p/README.md) for the record model, the reconciliation rules that make replication safe, and the limits that remain.
 
 ## URI Format
 

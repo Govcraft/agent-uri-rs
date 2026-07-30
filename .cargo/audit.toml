@@ -6,4 +6,18 @@
 ignore = [
     # time 0.3.45 via rusty_paseto 0.9 — fix tracked in issue #17.
     "RUSTSEC-2026-0009",
+    # paste 1.0.15 unmaintained — build-time proc-macro via if-watch in
+    # libp2p-tcp, reached through agent-uri-dht-libp2p.
+    "RUSTSEC-2024-0436",
+    # RUSTSEC-2026-0118 and -0119 are in hickory-proto, which reaches this
+    # lockfile only as an optional dependency of libp2p's `dns` and `mdns`
+    # features. agent-uri-dht-libp2p enables neither, so nothing here compiles
+    # or links it. cargo-audit reads Cargo.lock and cannot see that;
+    # `cargo deny check advisories` resolves the real feature graph and passes.
+    # Verify with:
+    #   cargo tree --workspace --all-features -e normal | grep hickory
+    # Remove these when libp2p ships a hickory-dns 0.26 bump, or immediately if
+    # either feature is ever enabled.
+    "RUSTSEC-2026-0118",
+    "RUSTSEC-2026-0119",
 ]
