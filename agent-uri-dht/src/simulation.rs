@@ -20,6 +20,60 @@ use crate::{
 /// themselves carry no meaning.
 static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 
+/// The three indices that together hold the simulator's state.
+///
+/// They live behind one lock rather than three. Every path that mutates state
+/// touches all three, so a lock apiece never let two writers run concurrently;
+/// it only created an order to acquire them in, and therefore an order to get
+/// wrong. One lock has no order to get wrong.
+///
+/// The indices are consistent with each other only between operations, which
+/// is why they are grouped: a registration exists in all three or in none, and
+/// nothing may observe the state in between.
+struct Indices {
+    /// Primary index: `DhtKey` -> Registrations
+    records: HashMap<DhtKey, Vec<Registration>>,
+
+    /// Secondary index: canonical `AgentUri` -> exact and ancestor keys.
+    keys_by_uri: HashMap<String, Vec<DhtKey>>,
+
+    /// Enforces that a stable trust-root/agent-ID pair has one immutable path.
+    path_by_identity: HashMap<String, String>,
+}
+
+impl Indices {
+    fn new() -> Self {
+        Self {
+            records: HashMap::new(),
+            keys_by_uri: HashMap::new(),
+            path_by_identity: HashMap::new(),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.records.clear();
+        self.keys_by_uri.clear();
+        self.path_by_identity.clear();
+    }
+
+    fn estimate_memory_usage(&self) -> usize {
+        // Rough estimate:
+        // - Each DhtKey: 32 bytes
+        // - Each Registration: ~500 bytes (URI + endpoints + attestation)
+        // - HashMap overhead: ~64 bytes per entry
+
+        let key_bytes = self.records.len() * (32 + 64);
+        let registration_bytes = self.keys_by_uri.len() * 500;
+        let uri_index_bytes = self
+            .keys_by_uri
+            .values()
+            .map(|keys| 100 + keys.len() * 32 + 64)
+            .sum::<usize>();
+
+        key_bytes + registration_bytes + uri_index_bytes
+    }
+}
+
 /// Simulated DHT for evaluation.
 ///
 /// Single-process, in-memory implementation that faithfully models
@@ -28,8 +82,10 @@ static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 ///
 /// # Thread Safety
 ///
-/// Uses `RwLock` for interior mutability, allowing concurrent reads
-/// and exclusive writes.
+/// One `RwLock` covers all of the state, so lookups run concurrently with each
+/// other and writes are exclusive. There is deliberately not a lock per index:
+/// every write already touches all of them, so splitting them bought no
+/// concurrency and cost an acquisition order to get wrong.
 ///
 /// # Examples
 ///
@@ -68,14 +124,8 @@ static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 /// assert_eq!(page.len(), 1);
 /// ```
 pub struct SimulatedDht {
-    /// Primary index: `DhtKey` -> Registrations
-    by_key: RwLock<HashMap<DhtKey, Vec<Registration>>>,
-
-    /// Secondary index: canonical `AgentUri` -> exact and ancestor keys.
-    by_uri: RwLock<HashMap<String, Vec<DhtKey>>>,
-
-    /// Enforces that a stable trust-root/agent-ID pair has one immutable path.
-    by_identity: RwLock<HashMap<String, String>>,
+    /// Every index, under one lock. See [`Indices`] for why it is one.
+    indices: RwLock<Indices>,
 
     /// Trusted roots used for registration-time attestation verification.
     verifier: Verifier,
@@ -115,9 +165,7 @@ impl SimulatedDht {
     #[must_use]
     pub fn new(config: SimulationConfig) -> Self {
         Self {
-            by_key: RwLock::new(HashMap::new()),
-            by_uri: RwLock::new(HashMap::new()),
-            by_identity: RwLock::new(HashMap::new()),
+            indices: RwLock::new(Indices::new()),
             verifier: Verifier::new(),
             node_id: Self::next_node_id(),
             config,
@@ -128,9 +176,7 @@ impl SimulatedDht {
     #[must_use]
     pub fn with_verifier(config: SimulationConfig, verifier: Verifier) -> Self {
         Self {
-            by_key: RwLock::new(HashMap::new()),
-            by_uri: RwLock::new(HashMap::new()),
-            by_identity: RwLock::new(HashMap::new()),
+            indices: RwLock::new(Indices::new()),
             verifier,
             node_id: Self::next_node_id(),
             config,
@@ -178,28 +224,28 @@ impl SimulatedDht {
     ///
     /// # Panics
     ///
-    /// Panics if any of the internal locks are poisoned.
+    /// Panics if the internal lock is poisoned.
     #[must_use]
     pub fn stats(&self) -> DhtStats {
-        let by_key = self.by_key.read().expect("lock poisoned");
-        let by_uri = self.by_uri.read().expect("lock poisoned");
+        let indices = self.indices.read().expect("lock poisoned");
 
-        let total_registrations = by_uri.len();
-        let unique_keys = by_key.len();
+        let total_registrations = indices.keys_by_uri.len();
+        let unique_keys = indices.records.len();
         // Derived on demand rather than kept as a standing index. `stats` is a
         // diagnostic that already walks both indices, so the parse cost lands
         // here instead of on every write.
-        let unique_trust_roots = by_uri
+        let unique_trust_roots = indices
+            .keys_by_uri
             .keys()
             .filter_map(|uri| AgentUri::parse(uri).ok())
             .map(|uri| uri.trust_root().as_str().to_string())
             .collect::<HashSet<_>>()
             .len();
 
-        let max_registrations_per_key = by_key.values().map(Vec::len).max().unwrap_or(0);
+        let max_registrations_per_key = indices.records.values().map(Vec::len).max().unwrap_or(0);
 
         // Use f64::from for u32 to avoid precision loss; saturate for stats safety
-        let indexed_copies = by_key.values().map(Vec::len).sum::<usize>();
+        let indexed_copies = indices.records.values().map(Vec::len).sum::<usize>();
         let total_u32 = u32::try_from(indexed_copies).unwrap_or(u32::MAX);
         let keys_u32 = u32::try_from(unique_keys).unwrap_or(u32::MAX);
         let avg_registrations_per_key = if keys_u32 > 0 {
@@ -209,7 +255,7 @@ impl SimulatedDht {
         };
 
         // Estimate memory usage
-        let memory_bytes = Self::estimate_memory_usage_inner(&by_key, &by_uri);
+        let memory_bytes = indices.estimate_memory_usage();
 
         DhtStats {
             total_registrations,
@@ -235,7 +281,7 @@ impl SimulatedDht {
     ///
     /// # Panics
     ///
-    /// Panics if any of the internal locks are poisoned.
+    /// Panics if the internal lock is poisoned.
     pub fn simulate_migration(
         &self,
         agent_uri: &AgentUri,
@@ -245,16 +291,19 @@ impl SimulatedDht {
         let uri_str = agent_uri.canonical();
 
         // Read the record the agent is about to move: its endpoints for the
-        // before/after report, its version to sign against.
+        // before/after report, its version to sign against. The guard is
+        // dropped before `apply_mutation` runs, because that takes the write
+        // lock and `RwLock` is not reentrant.
         let current = {
-            let by_uri = self.by_uri.read().expect("lock poisoned");
-            let keys = by_uri
+            let indices = self.indices.read().expect("lock poisoned");
+            let keys = indices
+                .keys_by_uri
                 .get(&uri_str)
                 .ok_or_else(|| DhtError::not_found(&uri_str))?;
             let key = keys.last().ok_or_else(|| DhtError::not_found(&uri_str))?;
 
-            let by_key = self.by_key.read().expect("lock poisoned");
-            let registrations = by_key
+            let registrations = indices
+                .records
                 .get(key)
                 .ok_or_else(|| DhtError::not_found(&uri_str))?;
 
@@ -287,15 +336,9 @@ impl SimulatedDht {
     ///
     /// # Panics
     ///
-    /// Panics if any of the internal locks are poisoned.
+    /// Panics if the internal lock is poisoned.
     pub fn clear(&self) {
-        let mut by_key = self.by_key.write().expect("lock poisoned");
-        let mut by_uri = self.by_uri.write().expect("lock poisoned");
-        let mut by_identity = self.by_identity.write().expect("lock poisoned");
-
-        by_key.clear();
-        by_uri.clear();
-        by_identity.clear();
+        self.indices.write().expect("lock poisoned").clear();
     }
 
     /// Removes expired registrations.
@@ -304,16 +347,14 @@ impl SimulatedDht {
     ///
     /// # Panics
     ///
-    /// Panics if any of the internal locks are poisoned.
+    /// Panics if the internal lock is poisoned.
     pub fn expire_stale(&self) -> usize {
-        let mut by_key = self.by_key.write().expect("lock poisoned");
-        let mut by_uri = self.by_uri.write().expect("lock poisoned");
-        let mut by_identity = self.by_identity.write().expect("lock poisoned");
+        let mut indices = self.indices.write().expect("lock poisoned");
 
         let mut expired_uris: Vec<String> = Vec::new();
 
         // Find expired registrations
-        for registrations in by_key.values() {
+        for registrations in indices.records.values() {
             for reg in registrations {
                 if reg.is_expired() {
                     expired_uris.push(reg.agent_uri().canonical());
@@ -326,14 +367,14 @@ impl SimulatedDht {
         // Remove from all indices
         for uri_str in &expired_uris {
             if let Ok(uri) = AgentUri::parse(uri_str) {
-                by_identity.remove(&Self::identity_key(&uri));
+                indices.path_by_identity.remove(&Self::identity_key(&uri));
             }
-            if let Some(keys) = by_uri.remove(uri_str) {
+            if let Some(keys) = indices.keys_by_uri.remove(uri_str) {
                 for key in keys {
-                    if let Some(registrations) = by_key.get_mut(&key) {
+                    if let Some(registrations) = indices.records.get_mut(&key) {
                         registrations.retain(|r| r.agent_uri().canonical() != *uri_str);
                         if registrations.is_empty() {
-                            by_key.remove(&key);
+                            indices.records.remove(&key);
                         }
                     }
                 }
@@ -341,25 +382,6 @@ impl SimulatedDht {
         }
 
         expired_uris.len()
-    }
-
-    fn estimate_memory_usage_inner(
-        by_key: &HashMap<DhtKey, Vec<Registration>>,
-        by_uri: &HashMap<String, Vec<DhtKey>>,
-    ) -> usize {
-        // Rough estimate:
-        // - Each DhtKey: 32 bytes
-        // - Each Registration: ~500 bytes (URI + endpoints + attestation)
-        // - HashMap overhead: ~64 bytes per entry
-
-        let key_bytes = by_key.len() * (32 + 64);
-        let registration_bytes = by_uri.len() * 500;
-        let uri_index_bytes = by_uri
-            .values()
-            .map(|keys| 100 + keys.len() * 32 + 64)
-            .sum::<usize>();
-
-        key_bytes + registration_bytes + uri_index_bytes
     }
 }
 
@@ -408,17 +430,16 @@ impl SimulatedDht {
             }
         }
 
-        // Check and insert while holding every write lock. The identity
-        // binding, capacity checks, and ancestor writes are one atomic update.
+        // Check and insert under one acquisition of the write lock. The
+        // identity binding, capacity checks, and ancestor writes are one
+        // atomic update.
         {
-            let mut by_key = self.by_key.write().expect("lock poisoned");
-            let mut by_uri = self.by_uri.write().expect("lock poisoned");
-            let mut by_identity = self.by_identity.write().expect("lock poisoned");
+            let mut indices = self.indices.write().expect("lock poisoned");
 
-            if by_uri.contains_key(&uri_str) {
+            if indices.keys_by_uri.contains_key(&uri_str) {
                 return Err(DhtError::already_registered(&uri_str));
             }
-            if let Some(existing_path) = by_identity.get(&identity)
+            if let Some(existing_path) = indices.path_by_identity.get(&identity)
                 && existing_path != registration.agent_uri().capability_path().as_str()
             {
                 return Err(DhtError::IdentityCapabilityConflict {
@@ -432,7 +453,7 @@ impl SimulatedDht {
                 });
             }
             for key in &keys {
-                if let Some(registrations) = by_key.get(key)
+                if let Some(registrations) = indices.records.get(key)
                     && registrations.len() >= self.config.max_registrations_per_key
                 {
                     return Err(DhtError::key_capacity_exceeded(
@@ -446,11 +467,15 @@ impl SimulatedDht {
             // ancestor therefore returns that path and all descendants without
             // attempting to enumerate SHA-256 children.
             for key in &keys {
-                by_key.entry(*key).or_default().push(registration.clone());
+                indices
+                    .records
+                    .entry(*key)
+                    .or_default()
+                    .push(registration.clone());
             }
 
-            by_uri.insert(uri_str, keys);
-            by_identity.insert(
+            indices.keys_by_uri.insert(uri_str, keys);
+            indices.path_by_identity.insert(
                 identity,
                 registration
                     .agent_uri()
@@ -468,14 +493,14 @@ impl SimulatedDht {
     /// `mutate` runs once per copy and must be idempotent across copies: the
     /// copies are the same logical record, so they must end up identical.
     fn rewrite_copies(
-        by_key: &mut HashMap<DhtKey, Vec<Registration>>,
+        records: &mut HashMap<DhtKey, Vec<Registration>>,
         keys: &[DhtKey],
         uri_str: &str,
         sequence: u64,
         mut mutate: impl FnMut(&mut Registration),
     ) -> Result<(), DhtError> {
         for key in keys {
-            let registrations = by_key
+            let registrations = records
                 .get_mut(key)
                 .ok_or_else(|| DhtError::not_found(uri_str))?;
             let registration = registrations
@@ -490,15 +515,15 @@ impl SimulatedDht {
 
     /// Removes every ancestor-key copy of a registration.
     fn remove_copies(
-        by_key: &mut HashMap<DhtKey, Vec<Registration>>,
+        records: &mut HashMap<DhtKey, Vec<Registration>>,
         keys: &[DhtKey],
         uri_str: &str,
     ) {
         for key in keys {
-            if let Some(registrations) = by_key.get_mut(key) {
+            if let Some(registrations) = records.get_mut(key) {
                 registrations.retain(|r| r.agent_uri().canonical() != uri_str);
                 if registrations.is_empty() {
-                    by_key.remove(key);
+                    records.remove(key);
                 }
             }
         }
@@ -508,7 +533,7 @@ impl SimulatedDht {
     ///
     /// This is the only path by which a stored record changes, so it is the
     /// only place authorization has to be enforced. Checking and applying
-    /// happen under one acquisition of the write locks: split apart, two
+    /// happen under one acquisition of the write lock: split apart, two
     /// writers could clear the same sequence check and both proceed, and the
     /// second would overwrite the first while its proof said otherwise.
     fn apply_mutation(
@@ -519,12 +544,11 @@ impl SimulatedDht {
     ) -> Result<(), DhtError> {
         let uri_str = agent_uri.canonical();
 
-        // Same lock order as registration, so the two cannot deadlock.
-        let mut by_key = self.by_key.write().expect("lock poisoned");
-        let mut by_uri = self.by_uri.write().expect("lock poisoned");
-        let mut by_identity = self.by_identity.write().expect("lock poisoned");
+        let mut guard = self.indices.write().expect("lock poisoned");
+        let indices = &mut *guard;
 
-        let keys = by_uri
+        let keys = indices
+            .keys_by_uri
             .get(&uri_str)
             .cloned()
             .ok_or_else(|| DhtError::not_found(&uri_str))?;
@@ -533,7 +557,7 @@ impl SimulatedDht {
         // found answers for all of them.
         let current = keys
             .iter()
-            .filter_map(|key| by_key.get(key))
+            .filter_map(|key| indices.records.get(key))
             .flatten()
             .find(|r| r.agent_uri().canonical() == uri_str)
             .cloned()
@@ -547,23 +571,25 @@ impl SimulatedDht {
 
         match mutation {
             Mutation::UpdateEndpoint { endpoints } => Self::rewrite_copies(
-                &mut by_key,
+                &mut indices.records,
                 &keys,
                 &uri_str,
                 proof.sequence(),
                 |registration| registration.update_endpoints((*endpoints).to_vec()),
             ),
             Mutation::Refresh { ttl } => Self::rewrite_copies(
-                &mut by_key,
+                &mut indices.records,
                 &keys,
                 &uri_str,
                 proof.sequence(),
                 |registration| registration.refresh(*ttl),
             ),
             Mutation::Deregister => {
-                Self::remove_copies(&mut by_key, &keys, &uri_str);
-                by_uri.remove(&uri_str);
-                by_identity.remove(&Self::identity_key(agent_uri));
+                Self::remove_copies(&mut indices.records, &keys, &uri_str);
+                indices.keys_by_uri.remove(&uri_str);
+                indices
+                    .path_by_identity
+                    .remove(&Self::identity_key(agent_uri));
                 Ok(())
             }
             // Registration creates a record rather than changing one, so it
@@ -583,8 +609,9 @@ impl SimulatedDht {
         let key = DhtKey::derive(query.trust_root(), query.capability_path());
 
         let mut matches: Vec<Registration> = {
-            let by_key = self.by_key.read().expect("lock poisoned");
-            by_key
+            let indices = self.indices.read().expect("lock poisoned");
+            indices
+                .records
                 .get(&key)
                 .map(|registrations| {
                     registrations
@@ -1703,5 +1730,104 @@ mod tests {
         let result = dht.simulate_migration(&uri, moved.clone(), &agent).unwrap();
 
         assert_eq!(result.new_endpoints(), &[moved]);
+    }
+
+    /// Registration and migration used to take the simulator's indices in
+    /// opposite orders, back when each had its own lock: a registration held
+    /// the record store and waited on the URI index while a migration held the
+    /// URI index and waited on the record store, and neither ever moved
+    /// (issue #47). Reading the lock sites is what found that; nothing
+    /// ever ran the two against each other, which is how it outlived three
+    /// refactors of this file.
+    ///
+    /// One lock has replaced the three, so the hang is now impossible by
+    /// construction rather than avoided by convention, and this test cannot
+    /// fail for the original reason. What it does is keep the pairing
+    /// exercised: it asserts the answers a caller is owed when the two paths
+    /// overlap, and it bounds the wait, because a lock-ordering regression
+    /// reports as a stuck run rather than a failing one unless something is
+    /// holding a stopwatch.
+    #[test]
+    fn concurrent_registration_and_migration_do_not_deadlock() {
+        use std::sync::Arc;
+        use std::sync::mpsc;
+        use std::thread;
+
+        const WORKERS: usize = 4;
+        const ROUNDS: usize = 60;
+        /// Crockford base32, which is what an agent ID's characters are drawn
+        /// from. `test_uri` appends two of them.
+        const ALPHABET: &[u8] = b"0123456789abcdefghjkmnpqrstvwxyz";
+
+        fn agent(index: usize) -> AgentUri {
+            test_uri(&format!(
+                "{}{}",
+                ALPHABET[index / ALPHABET.len()] as char,
+                ALPHABET[index % ALPHABET.len()] as char,
+            ))
+        }
+
+        let dht = Arc::new(unverified_dht());
+
+        // Two disjoint sets, so the threads contend on the indices rather than
+        // on each other's records. A migrator moves an agent that is already
+        // registered; a churner adds and removes its own. Sharing an agent
+        // would test sequence handling instead, and would make a lost race
+        // look like the deadlock this is watching for.
+        let migrators: Vec<(AgentUri, SigningKey)> = (0..WORKERS)
+            .map(|index| {
+                let (uri, key) = (agent(index), SigningKey::generate());
+                register(&dht, registration(&uri, &key), &key).expect("a fresh agent registers");
+                (uri, key)
+            })
+            .collect();
+        let churners: Vec<(AgentUri, SigningKey)> = (WORKERS..2 * WORKERS)
+            .map(|index| (agent(index), SigningKey::generate()))
+            .collect();
+
+        let mut handles = Vec::new();
+        for (uri, key) in migrators {
+            let dht = Arc::clone(&dht);
+            handles.push(thread::spawn(move || {
+                for round in 0..ROUNDS {
+                    let endpoint = Endpoint::https(format!("eu-west-{round}.anthropic.com"));
+                    dht.simulate_migration(&uri, endpoint, &key)
+                        .expect("a registered agent migrates");
+                }
+            }));
+        }
+        for (uri, key) in churners {
+            let dht = Arc::clone(&dht);
+            handles.push(thread::spawn(move || {
+                for _ in 0..ROUNDS {
+                    register(&dht, registration(&uri, &key), &key)
+                        .expect("a deregistered agent registers again");
+                    deregister(&dht, &uri, &key, 1).expect("its own key removes it");
+                }
+            }));
+        }
+
+        // Joining on this thread rather than the test's, so that a hang is a
+        // failure with a name on it instead of a run that never returns. A
+        // panicking worker still surfaces as a panic: its join result is
+        // carried back and unwrapped below.
+        let (done, finished) = mpsc::channel();
+        thread::spawn(move || {
+            let outcomes: Vec<_> = handles.into_iter().map(thread::JoinHandle::join).collect();
+            let _ = done.send(outcomes);
+        });
+
+        let outcomes = finished
+            .recv_timeout(Duration::from_mins(1))
+            .expect("registration and migration deadlocked against each other");
+        for outcome in outcomes {
+            outcome.expect("no worker panicked");
+        }
+
+        // Every migrator's agent is still registered and every churner's last
+        // act was to leave, so the indices agree on who is present.
+        let registered = lookup(&dht, &prefix("anthropic.com", "assistant"));
+        assert_eq!(registered.len(), WORKERS);
+        assert_eq!(dht.stats().total_registrations, WORKERS);
     }
 }
