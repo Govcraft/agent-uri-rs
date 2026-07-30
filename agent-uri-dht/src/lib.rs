@@ -26,6 +26,7 @@
 //!
 //! ```rust
 //! use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
+//! use agent_uri_attestation::SigningKey;
 //! use agent_uri_dht::{
 //!     Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig,
 //!     WriteOptions,
@@ -38,12 +39,14 @@
 //!     SimulationConfig::default().with_verify_attestations(false)
 //! );
 //!
-//! // Register an agent
+//! // Register an agent. The key it names is the only one that will be able to
+//! // change or remove the record later.
 //! let uri = AgentUri::parse(
 //!     "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q"
 //! ).unwrap();
 //! let endpoint = Endpoint::https("agent.anthropic.com:443");
-//! let registration = Registration::new(uri, vec![endpoint]);
+//! let agent_key = SigningKey::generate();
+//! let registration = Registration::new(uri, agent_key.verifying_key(), vec![endpoint]);
 //!
 //! // Every operation is async, because a real backend crosses the network.
 //! block_on(dht.register(registration, WriteOptions::default())).unwrap();
@@ -76,6 +79,10 @@
 //! - **Failures are distinguishable.** [`DhtError::is_transient`] separates a
 //!   slow or partitioned network from a rejected request. Collapsing the two
 //!   turns a partition into an apparently empty namespace.
+//! - **Writes are authorized, not merely addressed.** An agent URI is public,
+//!   so every write that changes or removes a record carries a
+//!   [`MutationProof`] signed by the key that record names. Without this,
+//!   reaching a replica would be enough to repoint an agent.
 //!
 //! `SimulatedDht` honors all of this against one in-process copy, so code
 //! written against it does not acquire habits a real backend will punish.
@@ -114,8 +121,10 @@
 //!
 //! ```rust
 //! use agent_uri::AgentUri;
+//! use agent_uri_attestation::SigningKey;
 //! use agent_uri_dht::{
-//!     Dht, Endpoint, Registration, SimulatedDht, SimulationConfig, WriteOptions,
+//!     Dht, Endpoint, Mutation, MutationProof, Registration, SimulatedDht, SimulationConfig,
+//!     WriteOptions,
 //! };
 //! use futures::executor::block_on;
 //!
@@ -126,18 +135,27 @@
 //! let uri = AgentUri::parse(
 //!     "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q"
 //! ).unwrap();
+//! let agent_key = SigningKey::generate();
 //!
 //! // Register at initial location
 //! let registration = Registration::new(
 //!     uri.clone(),
+//!     agent_key.verifying_key(),
 //!     vec![Endpoint::https("us-east-1.agent.anthropic.com")]
 //! );
-//! block_on(dht.register(registration, WriteOptions::default())).unwrap();
+//! block_on(dht.register(registration.clone(), WriteOptions::default())).unwrap();
 //!
-//! // Migrate to new location (same identity)
+//! // Migrate to new location (same identity). The proof is signed against the
+//! // record as it stands, so an intercepted migration cannot be re-aimed at
+//! // other endpoints, applied twice, or replayed after the agent re-registers.
+//! let endpoints = vec![Endpoint::https("eu-west-1.agent.anthropic.com")];
+//! let mutation = Mutation::UpdateEndpoint { endpoints: &endpoints };
+//! let proof = MutationProof::sign_next(&agent_key, &registration, &mutation);
+//!
 //! block_on(dht.update_endpoint(
 //!     &uri,
-//!     vec![Endpoint::https("eu-west-1.agent.anthropic.com")],
+//!     endpoints.clone(),
+//!     &proof,
 //!     WriteOptions::default(),
 //! )).unwrap();
 //! ```
@@ -154,6 +172,7 @@ mod key;
 mod node;
 mod options;
 mod page;
+mod proof;
 mod query;
 mod registration;
 mod simulation;
@@ -168,6 +187,7 @@ pub use key::DhtKey;
 pub use node::{NodeId, PeerAddr, WriteReceipt};
 pub use options::{Quorum, ReadOptions, WriteOptions};
 pub use page::{Cursor, Page};
+pub use proof::{Mutation, MutationKind, MutationProof, RecordVersion, signing_payload};
 pub use query::{MatchMode, Query};
 pub use registration::Registration;
 pub use simulation::SimulatedDht;

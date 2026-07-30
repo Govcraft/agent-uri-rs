@@ -3,6 +3,7 @@
 use std::time::{Duration, SystemTime};
 
 use agent_uri::AgentUri;
+use agent_uri_attestation::VerifyingKey;
 
 use crate::Endpoint;
 
@@ -11,23 +12,34 @@ use crate::Endpoint;
 /// Contains all information needed to contact an agent and verify its identity.
 /// Registrations have a TTL and must be refreshed to remain active.
 ///
+/// # Mutability
+///
+/// A record names the Ed25519 key that is allowed to change it. Every later
+/// write must carry a [`MutationProof`](crate::MutationProof) signed by that
+/// key, and must advance [`Registration::sequence`]. Without both, knowing an
+/// agent's URI would be enough to repoint it at attacker infrastructure.
+///
 /// # Examples
 ///
 /// ```
 /// use std::time::Duration;
 /// use agent_uri::AgentUri;
+/// use agent_uri_attestation::SigningKey;
 /// use agent_uri_dht::{Endpoint, Registration};
 ///
 /// let uri = AgentUri::parse("agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
 /// let endpoint = Endpoint::https("agent.anthropic.com:443");
+/// let agent_key = SigningKey::generate();
 ///
-/// let registration = Registration::new(uri, vec![endpoint])
+/// let registration = Registration::new(uri, agent_key.verifying_key(), vec![endpoint])
 ///     .with_ttl(Duration::from_secs(3600));
 /// ```
 #[derive(Debug, Clone)]
 pub struct Registration {
     /// The agent's URI (identity).
     agent_uri: AgentUri,
+    /// The only key permitted to change or remove this record.
+    agent_key: VerifyingKey,
     /// Network endpoints where agent can be reached.
     endpoints: Vec<Endpoint>,
     /// Attestation token proving capability claims (PASETO).
@@ -36,6 +48,8 @@ pub struct Registration {
     expires_at: SystemTime,
     /// When this registration was created.
     registered_at: SystemTime,
+    /// Monotonic counter ordering writes to this record.
+    sequence: u64,
 }
 
 impl Registration {
@@ -47,16 +61,19 @@ impl Registration {
     /// # Arguments
     ///
     /// * `agent_uri` - The agent's identity URI
+    /// * `agent_key` - The public key that may later change or remove this record
     /// * `endpoints` - Network endpoints for contacting the agent
     #[must_use]
-    pub fn new(agent_uri: AgentUri, endpoints: Vec<Endpoint>) -> Self {
+    pub fn new(agent_uri: AgentUri, agent_key: VerifyingKey, endpoints: Vec<Endpoint>) -> Self {
         let now = SystemTime::now();
         Self {
             agent_uri,
+            agent_key,
             endpoints,
             attestation: None,
             expires_at: now + Self::DEFAULT_TTL,
             registered_at: now,
+            sequence: 0,
         }
     }
 
@@ -88,10 +105,38 @@ impl Registration {
         self
     }
 
+    /// Sets the sequence number this record starts its history at.
+    ///
+    /// Records open at zero, which is right for an agent registering a URI for
+    /// the first time. An agent that has held this URI before should instead
+    /// continue past the highest sequence it ever signed: a record that starts
+    /// over at zero sits below every proof its previous incarnation handed out,
+    /// and a kept deregistration could evict it again each time it returns.
+    #[must_use]
+    pub const fn with_sequence(mut self, sequence: u64) -> Self {
+        self.sequence = sequence;
+        self
+    }
+
     /// Returns the agent URI.
     #[must_use]
     pub fn agent_uri(&self) -> &AgentUri {
         &self.agent_uri
+    }
+
+    /// Returns the key permitted to change or remove this record.
+    #[must_use]
+    pub fn agent_key(&self) -> &VerifyingKey {
+        &self.agent_key
+    }
+
+    /// Returns the sequence number of the last write applied to this record.
+    ///
+    /// A write must present a strictly greater number, so a caller preparing a
+    /// mutation signs `sequence() + 1`.
+    #[must_use]
+    pub const fn sequence(&self) -> u64 {
+        self.sequence
     }
 
     /// Returns the endpoints.
@@ -136,10 +181,24 @@ impl Registration {
     }
 
     /// Refreshes the registration with a new TTL from now.
+    ///
+    /// `registered_at` is deliberately left alone. It identifies this record
+    /// instance, which is what a [`MutationProof`](crate::MutationProof) binds
+    /// itself to; moving it on every refresh would invalidate proofs an agent
+    /// had already prepared, and would make the field misreport when the agent
+    /// actually registered.
     pub fn refresh(&mut self, ttl: Duration) {
-        let now = SystemTime::now();
-        self.registered_at = now;
-        self.expires_at = now + ttl;
+        self.expires_at = SystemTime::now() + ttl;
+    }
+
+    /// Records the sequence number of a write that has been authorized.
+    ///
+    /// Callers are the store, applying a write it has already checked. The
+    /// number is not validated here: whether it advances is a question about
+    /// the record's history, which only the store holding that record can
+    /// answer.
+    pub const fn set_sequence(&mut self, sequence: u64) {
+        self.sequence = sequence;
     }
 }
 
@@ -158,8 +217,13 @@ impl std::hash::Hash for Registration {
     }
 }
 
-#[cfg(feature = "serde")]
-fn system_time_to_millis(time: SystemTime) -> u64 {
+/// Milliseconds since the Unix epoch, saturating at both ends.
+///
+/// Shared by the serde representation and by the signing payload, so a record
+/// that has been through the wire and one that has not produce the same bytes
+/// to sign. A finer clock in one and not the other would make proofs fail to
+/// verify after a round trip.
+pub(crate) fn system_time_to_millis(time: SystemTime) -> u64 {
     time.duration_since(SystemTime::UNIX_EPOCH)
         .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
 }
@@ -176,12 +240,14 @@ impl serde::Serialize for Registration {
         S: serde::Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Registration", 5)?;
+        let mut state = serializer.serialize_struct("Registration", 7)?;
         state.serialize_field("agent_uri", self.agent_uri.as_str())?;
+        state.serialize_field("agent_key", &self.agent_key.to_bytes())?;
         state.serialize_field("endpoints", &self.endpoints)?;
         state.serialize_field("attestation", &self.attestation)?;
         state.serialize_field("expires_at", &system_time_to_millis(self.expires_at))?;
         state.serialize_field("registered_at", &system_time_to_millis(self.registered_at))?;
+        state.serialize_field("sequence", &self.sequence)?;
         state.end()
     }
 }
@@ -195,21 +261,29 @@ impl<'de> serde::Deserialize<'de> for Registration {
         #[derive(serde::Deserialize)]
         struct RegistrationData {
             agent_uri: String,
+            agent_key: [u8; 32],
             endpoints: Vec<Endpoint>,
             attestation: Option<String>,
             expires_at: u64,
             registered_at: u64,
+            sequence: u64,
         }
 
         let data = RegistrationData::deserialize(deserializer)?;
         let agent_uri = AgentUri::parse(&data.agent_uri).map_err(serde::de::Error::custom)?;
+        // A record whose key does not decode is a record nobody could ever
+        // prove authority over, so it is rejected rather than carried forward.
+        let agent_key =
+            VerifyingKey::from_bytes(&data.agent_key).map_err(serde::de::Error::custom)?;
 
         Ok(Self {
             agent_uri,
+            agent_key,
             endpoints: data.endpoints,
             attestation: data.attestation,
             expires_at: millis_to_system_time(data.expires_at),
             registered_at: millis_to_system_time(data.registered_at),
+            sequence: data.sequence,
         })
     }
 }
@@ -227,17 +301,29 @@ mod tests {
         Endpoint::https("agent.anthropic.com:443")
     }
 
+    fn test_key() -> agent_uri_attestation::SigningKey {
+        agent_uri_attestation::SigningKey::generate()
+    }
+
     #[test]
     fn new_registration_has_default_ttl() {
-        let registration = Registration::new(test_uri(), vec![test_endpoint()]);
+        let registration = Registration::new(
+            test_uri(),
+            test_key().verifying_key(),
+            vec![test_endpoint()],
+        );
         assert!(!registration.is_expired());
         assert!(registration.remaining_ttl().is_some());
     }
 
     #[test]
     fn with_ttl_sets_expiration() {
-        let registration =
-            Registration::new(test_uri(), vec![test_endpoint()]).with_ttl(Duration::from_mins(1));
+        let registration = Registration::new(
+            test_uri(),
+            test_key().verifying_key(),
+            vec![test_endpoint()],
+        )
+        .with_ttl(Duration::from_mins(1));
         let remaining = registration.remaining_ttl().unwrap();
         // Should be close to 60 seconds, allow for some test execution time
         assert!(remaining.as_secs() <= 60);
@@ -246,23 +332,35 @@ mod tests {
 
     #[test]
     fn with_attestation_sets_attestation() {
-        let registration =
-            Registration::new(test_uri(), vec![test_endpoint()]).with_attestation("token123");
+        let registration = Registration::new(
+            test_uri(),
+            test_key().verifying_key(),
+            vec![test_endpoint()],
+        )
+        .with_attestation("token123");
         assert_eq!(registration.attestation(), Some("token123"));
     }
 
     #[test]
     fn expired_registration() {
         let past = SystemTime::now() - Duration::from_secs(10);
-        let registration =
-            Registration::new(test_uri(), vec![test_endpoint()]).with_expires_at(past);
+        let registration = Registration::new(
+            test_uri(),
+            test_key().verifying_key(),
+            vec![test_endpoint()],
+        )
+        .with_expires_at(past);
         assert!(registration.is_expired());
         assert!(registration.remaining_ttl().is_none());
     }
 
     #[test]
     fn update_endpoints() {
-        let mut registration = Registration::new(test_uri(), vec![test_endpoint()]);
+        let mut registration = Registration::new(
+            test_uri(),
+            test_key().verifying_key(),
+            vec![test_endpoint()],
+        );
         let new_endpoint = Endpoint::grpc("agent.anthropic.com:50051");
         registration.update_endpoints(vec![new_endpoint.clone()]);
         assert_eq!(registration.endpoints(), &[new_endpoint]);
@@ -271,9 +369,13 @@ mod tests {
     #[test]
     fn refresh_updates_times() {
         let past = SystemTime::now() - Duration::from_hours(1);
-        let mut registration = Registration::new(test_uri(), vec![test_endpoint()])
-            .with_registered_at(past)
-            .with_expires_at(past);
+        let mut registration = Registration::new(
+            test_uri(),
+            test_key().verifying_key(),
+            vec![test_endpoint()],
+        )
+        .with_registered_at(past)
+        .with_expires_at(past);
 
         assert!(registration.is_expired());
 
@@ -285,8 +387,16 @@ mod tests {
 
     #[test]
     fn equality_based_on_uri() {
-        let registration1 = Registration::new(test_uri(), vec![test_endpoint()]);
-        let registration2 = Registration::new(test_uri(), vec![Endpoint::grpc("other.com:50051")]);
+        let registration1 = Registration::new(
+            test_uri(),
+            test_key().verifying_key(),
+            vec![test_endpoint()],
+        );
+        let registration2 = Registration::new(
+            test_uri(),
+            test_key().verifying_key(),
+            vec![Endpoint::grpc("other.com:50051")],
+        );
         assert_eq!(registration1, registration2);
     }
 
@@ -298,8 +408,10 @@ mod tests {
         let uri2 =
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
-        let registration1 = Registration::new(uri1, vec![test_endpoint()]);
-        let registration2 = Registration::new(uri2, vec![test_endpoint()]);
+        let registration1 =
+            Registration::new(uri1, test_key().verifying_key(), vec![test_endpoint()]);
+        let registration2 =
+            Registration::new(uri2, test_key().verifying_key(), vec![test_endpoint()]);
         assert_ne!(registration1, registration2);
     }
 

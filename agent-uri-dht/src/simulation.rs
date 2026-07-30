@@ -6,13 +6,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use agent_uri::AgentUri;
-use agent_uri_attestation::Verifier;
+use agent_uri_attestation::{SigningKey, Verifier};
 use async_trait::async_trait;
 
 use crate::{
-    Cursor, Dht, DhtError, DhtKey, DhtStats, Endpoint, MatchMode, MigrationResult, NodeId, Page,
-    PeerAddr, Query, Quorum, ReadOptions, Registration, SimulationConfig, WriteOptions,
-    WriteReceipt,
+    Cursor, Dht, DhtError, DhtKey, DhtStats, Endpoint, MatchMode, MigrationResult, Mutation,
+    MutationProof, NodeId, Page, PeerAddr, Query, Quorum, ReadOptions, Registration,
+    SimulationConfig, WriteOptions, WriteReceipt,
 };
 
 /// Hands each simulator instance a distinct identity without pulling in a
@@ -35,6 +35,7 @@ static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 ///
 /// ```
 /// use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
+/// use agent_uri_attestation::SigningKey;
 /// use agent_uri_dht::{
 ///     Dht, Endpoint, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig,
 ///     WriteOptions,
@@ -47,7 +48,12 @@ static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
 /// );
 ///
 /// let uri = AgentUri::parse("agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
-/// let registration = Registration::new(uri.clone(), vec![Endpoint::https("agent.anthropic.com")]);
+/// let agent_key = SigningKey::generate();
+/// let registration = Registration::new(
+///     uri.clone(),
+///     agent_key.verifying_key(),
+///     vec![Endpoint::https("agent.anthropic.com")],
+/// );
 ///
 /// block_on(dht.register(registration, WriteOptions::default())).unwrap();
 ///
@@ -213,9 +219,14 @@ impl SimulatedDht {
 
     /// Simulates agent migration with timing.
     ///
+    /// Takes the agent's signing key because it plays the part of the agent:
+    /// it reads the record's current sequence number and mints the proof the
+    /// migration needs, exactly as a migrating agent would.
+    ///
     /// # Errors
     ///
-    /// Returns `DhtError::NotFound` if the agent is not registered.
+    /// Returns `DhtError::NotFound` if the agent is not registered, or
+    /// `DhtError::Unauthorized` if `agent_key` is not the key the record names.
     ///
     /// # Panics
     ///
@@ -224,11 +235,13 @@ impl SimulatedDht {
         &self,
         agent_uri: &AgentUri,
         new_endpoint: Endpoint,
+        agent_key: &SigningKey,
     ) -> Result<MigrationResult, DhtError> {
         let uri_str = agent_uri.canonical();
 
-        // Get old endpoints
-        let old_endpoints = {
+        // Read the record the agent is about to move: its endpoints for the
+        // before/after report, its version to sign against.
+        let current = {
             let by_uri = self.by_uri.read().expect("lock poisoned");
             let keys = by_uri
                 .get(&uri_str)
@@ -243,13 +256,18 @@ impl SimulatedDht {
             registrations
                 .iter()
                 .find(|r| r.agent_uri().canonical() == uri_str)
-                .map(|r| r.endpoints().to_vec())
+                .cloned()
                 .ok_or_else(|| DhtError::not_found(&uri_str))?
         };
+        let old_endpoints = current.endpoints().to_vec();
+
+        let endpoints = std::slice::from_ref(&new_endpoint);
+        let mutation = Mutation::UpdateEndpoint { endpoints };
+        let proof = MutationProof::sign_next(agent_key, &current, &mutation);
 
         // Time the update
         let start = Instant::now();
-        self.do_update_endpoint(agent_uri, std::slice::from_ref(&new_endpoint))?;
+        self.apply_mutation(agent_uri, &mutation, &proof)?;
         let update_latency = start.elapsed();
 
         Ok(MigrationResult::success(
@@ -424,86 +442,106 @@ impl SimulatedDht {
     ///
     /// `mutate` runs once per copy and must be idempotent across copies: the
     /// copies are the same logical record, so they must end up identical.
-    fn mutate_registration(
-        &self,
-        agent_uri: &AgentUri,
+    fn rewrite_copies(
+        by_key: &mut HashMap<DhtKey, Vec<Registration>>,
+        keys: &[DhtKey],
+        uri_str: &str,
+        sequence: u64,
         mut mutate: impl FnMut(&mut Registration),
     ) -> Result<(), DhtError> {
-        let uri_str = agent_uri.canonical();
+        for key in keys {
+            let registrations = by_key
+                .get_mut(key)
+                .ok_or_else(|| DhtError::not_found(uri_str))?;
+            let registration = registrations
+                .iter_mut()
+                .find(|r| r.agent_uri().canonical() == uri_str)
+                .ok_or_else(|| DhtError::not_found(uri_str))?;
+            mutate(registration);
+            registration.set_sequence(sequence);
+        }
+        Ok(())
+    }
 
-        let keys = {
-            let by_uri = self.by_uri.read().expect("lock poisoned");
-            by_uri
-                .get(&uri_str)
-                .cloned()
-                .ok_or_else(|| DhtError::not_found(&uri_str))?
-        };
-
-        let mut mutated_any = false;
-        {
-            let mut by_key = self.by_key.write().expect("lock poisoned");
-            for key in &keys {
-                let registrations = by_key
-                    .get_mut(key)
-                    .ok_or_else(|| DhtError::not_found(&uri_str))?;
-                let registration = registrations
-                    .iter_mut()
-                    .find(|r| r.agent_uri().canonical() == uri_str)
-                    .ok_or_else(|| DhtError::not_found(&uri_str))?;
-                if registration.is_expired() && self.config.auto_expire {
-                    return Err(DhtError::expired(&uri_str));
+    /// Removes every ancestor-key copy of a registration.
+    fn remove_copies(
+        by_key: &mut HashMap<DhtKey, Vec<Registration>>,
+        keys: &[DhtKey],
+        uri_str: &str,
+    ) {
+        for key in keys {
+            if let Some(registrations) = by_key.get_mut(key) {
+                registrations.retain(|r| r.agent_uri().canonical() != uri_str);
+                if registrations.is_empty() {
+                    by_key.remove(key);
                 }
-                mutate(registration);
-                mutated_any = true;
             }
         }
-
-        if mutated_any {
-            Ok(())
-        } else {
-            Err(DhtError::not_found(&uri_str))
-        }
     }
 
-    fn do_update_endpoint(
+    /// Authorizes a write against the record it targets, then applies it.
+    ///
+    /// This is the only path by which a stored record changes, so it is the
+    /// only place authorization has to be enforced. Checking and applying
+    /// happen under one acquisition of the write locks: split apart, two
+    /// writers could clear the same sequence check and both proceed, and the
+    /// second would overwrite the first while its proof said otherwise.
+    fn apply_mutation(
         &self,
         agent_uri: &AgentUri,
-        new_endpoints: &[Endpoint],
+        mutation: &Mutation<'_>,
+        proof: &MutationProof,
     ) -> Result<(), DhtError> {
-        if new_endpoints.is_empty() {
-            return Err(DhtError::NoEndpoints);
-        }
-        self.mutate_registration(agent_uri, |registration| {
-            registration.update_endpoints(new_endpoints.to_vec());
-        })
-    }
-
-    fn do_refresh(&self, agent_uri: &AgentUri, ttl: Duration) -> Result<(), DhtError> {
-        self.mutate_registration(agent_uri, |registration| registration.refresh(ttl))
-    }
-
-    fn do_deregister(&self, agent_uri: &AgentUri) -> Result<(), DhtError> {
         let uri_str = agent_uri.canonical();
 
-        // Mutate all indices under the same lock order as registration.
+        // Same lock order as registration, so the two cannot deadlock.
         let mut by_key = self.by_key.write().expect("lock poisoned");
         let mut by_uri = self.by_uri.write().expect("lock poisoned");
         let mut by_identity = self.by_identity.write().expect("lock poisoned");
+
         let keys = by_uri
-            .remove(&uri_str)
+            .get(&uri_str)
+            .cloned()
             .ok_or_else(|| DhtError::not_found(&uri_str))?;
 
-        for key in keys {
-            if let Some(registrations) = by_key.get_mut(&key) {
-                registrations.retain(|r| r.agent_uri().canonical() != uri_str);
-                if registrations.is_empty() {
-                    by_key.remove(&key);
-                }
+        // Every ancestor key holds the same logical record, so the first copy
+        // found answers for all of them.
+        let current = keys
+            .iter()
+            .filter_map(|key| by_key.get(key))
+            .flatten()
+            .find(|r| r.agent_uri().canonical() == uri_str)
+            .cloned()
+            .ok_or_else(|| DhtError::not_found(&uri_str))?;
+
+        if current.is_expired() && self.config.auto_expire {
+            return Err(DhtError::expired(&uri_str));
+        }
+
+        proof.authorizes(&current, mutation)?;
+
+        match mutation {
+            Mutation::UpdateEndpoint { endpoints } => Self::rewrite_copies(
+                &mut by_key,
+                &keys,
+                &uri_str,
+                proof.sequence(),
+                |registration| registration.update_endpoints((*endpoints).to_vec()),
+            ),
+            Mutation::Refresh { ttl } => Self::rewrite_copies(
+                &mut by_key,
+                &keys,
+                &uri_str,
+                proof.sequence(),
+                |registration| registration.refresh(*ttl),
+            ),
+            Mutation::Deregister => {
+                Self::remove_copies(&mut by_key, &keys, &uri_str);
+                by_uri.remove(&uri_str);
+                by_identity.remove(&Self::identity_key(agent_uri));
+                Ok(())
             }
         }
-        by_identity.remove(&Self::identity_key(agent_uri));
-
-        Ok(())
     }
 
     fn do_lookup(
@@ -576,9 +614,21 @@ impl Dht for SimulatedDht {
         &self,
         agent_uri: &AgentUri,
         new_endpoints: Vec<Endpoint>,
+        proof: &MutationProof,
         options: WriteOptions,
     ) -> Result<WriteReceipt, DhtError> {
-        self.do_update_endpoint(agent_uri, &new_endpoints)?;
+        // Checked before authorization: an empty list is a malformed request,
+        // not a rejected one, and saying so costs no signature verification.
+        if new_endpoints.is_empty() {
+            return Err(DhtError::NoEndpoints);
+        }
+        self.apply_mutation(
+            agent_uri,
+            &Mutation::UpdateEndpoint {
+                endpoints: &new_endpoints,
+            },
+            proof,
+        )?;
         Ok(self.receipt(options.quorum))
     }
 
@@ -586,18 +636,20 @@ impl Dht for SimulatedDht {
         &self,
         agent_uri: &AgentUri,
         ttl: Duration,
+        proof: &MutationProof,
         options: WriteOptions,
     ) -> Result<WriteReceipt, DhtError> {
-        self.do_refresh(agent_uri, ttl)?;
+        self.apply_mutation(agent_uri, &Mutation::Refresh { ttl }, proof)?;
         Ok(self.receipt(options.quorum))
     }
 
     async fn deregister(
         &self,
         agent_uri: &AgentUri,
+        proof: &MutationProof,
         _options: WriteOptions,
     ) -> Result<(), DhtError> {
-        self.do_deregister(agent_uri)
+        self.apply_mutation(agent_uri, &Mutation::Deregister, proof)
     }
 
     async fn lookup(
@@ -626,11 +678,12 @@ impl Dht for SimulatedDht {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::RecordVersion;
     use agent_uri::{CapabilityPath, TrustRoot};
-    use agent_uri_attestation::{Issuer, SigningKey};
+    use agent_uri_attestation::Issuer;
     use futures::executor::block_on;
     use std::num::NonZeroUsize;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     fn unverified_dht() -> SimulatedDht {
         SimulatedDht::new(SimulationConfig::default().with_verify_attestations(false))
@@ -647,6 +700,10 @@ mod tests {
         Endpoint::https("agent.anthropic.com:443")
     }
 
+    fn registration(uri: &AgentUri, key: &SigningKey) -> Registration {
+        Registration::new(uri.clone(), key.verifying_key(), vec![test_endpoint()])
+    }
+
     // The trait is async so that a distributed backend can implement it. The
     // simulator never actually yields, so these drive it to completion without
     // a runtime and keep the tests reading like the operations they describe.
@@ -654,24 +711,79 @@ mod tests {
         block_on(dht.register(registration, WriteOptions::default()))
     }
 
-    fn deregister(dht: &SimulatedDht, uri: &AgentUri) -> Result<(), DhtError> {
-        block_on(dht.deregister(uri, WriteOptions::default()))
+    /// Returns the record the DHT currently holds, which is what a caller
+    /// preparing a write would have looked up.
+    fn record(dht: &SimulatedDht, uri: &AgentUri) -> Registration {
+        stored(dht, uri).expect("record is registered")
+    }
+
+    fn stored(dht: &SimulatedDht, uri: &AgentUri) -> Option<Registration> {
+        lookup(
+            dht,
+            &Query::exact(uri.trust_root().clone(), uri.capability_path().clone()),
+        )
+        .into_iter()
+        .find(|r| r.agent_uri() == uri)
+    }
+
+    /// The version a caller would sign against, or an invented one when there
+    /// is nothing to look up. Tests that write to an unregistered URI need a
+    /// proof to hand over, and a real caller working from a stale cache would
+    /// be in exactly that position.
+    fn version_at(dht: &SimulatedDht, uri: &AgentUri, sequence: u64) -> RecordVersion {
+        RecordVersion::new(
+            stored(dht, uri).map_or_else(SystemTime::now, |r| r.registered_at()),
+            sequence,
+        )
+    }
+
+    fn deregister(
+        dht: &SimulatedDht,
+        uri: &AgentUri,
+        key: &SigningKey,
+        sequence: u64,
+    ) -> Result<(), DhtError> {
+        let proof = MutationProof::sign(
+            key,
+            uri,
+            version_at(dht, uri, sequence),
+            &Mutation::Deregister,
+        );
+        block_on(dht.deregister(uri, &proof, WriteOptions::default()))
     }
 
     fn update_endpoint(
         dht: &SimulatedDht,
         uri: &AgentUri,
+        key: &SigningKey,
+        sequence: u64,
         endpoints: Vec<Endpoint>,
     ) -> Result<WriteReceipt, DhtError> {
-        block_on(dht.update_endpoint(uri, endpoints, WriteOptions::default()))
+        let proof = MutationProof::sign(
+            key,
+            uri,
+            version_at(dht, uri, sequence),
+            &Mutation::UpdateEndpoint {
+                endpoints: &endpoints,
+            },
+        );
+        block_on(dht.update_endpoint(uri, endpoints, &proof, WriteOptions::default()))
     }
 
     fn refresh(
         dht: &SimulatedDht,
         uri: &AgentUri,
+        key: &SigningKey,
+        sequence: u64,
         ttl: Duration,
     ) -> Result<WriteReceipt, DhtError> {
-        block_on(dht.refresh(uri, ttl, WriteOptions::default()))
+        let proof = MutationProof::sign(
+            key,
+            uri,
+            version_at(dht, uri, sequence),
+            &Mutation::Refresh { ttl },
+        );
+        block_on(dht.refresh(uri, ttl, &proof, WriteOptions::default()))
     }
 
     fn lookup(dht: &SimulatedDht, query: &Query) -> Vec<Registration> {
@@ -697,10 +809,10 @@ mod tests {
     #[test]
     fn register_and_lookup_exact() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
         let uri = test_uri("2q");
-        let registration = Registration::new(uri.clone(), vec![test_endpoint()]);
 
-        register(&dht, registration).unwrap();
+        register(&dht, registration(&uri, &key)).unwrap();
 
         let results = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
 
@@ -711,8 +823,8 @@ mod tests {
     #[test]
     fn register_empty_endpoints_fails() {
         let dht = unverified_dht();
-        let uri = test_uri("2q");
-        let registration = Registration::new(uri, vec![]);
+        let key = SigningKey::generate();
+        let registration = Registration::new(test_uri("2q"), key.verifying_key(), vec![]);
 
         let result = register(&dht, registration);
 
@@ -722,11 +834,12 @@ mod tests {
     #[test]
     fn double_registration_fails() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
         let uri = test_uri("2q");
 
-        register(&dht, Registration::new(uri.clone(), vec![test_endpoint()])).unwrap();
+        register(&dht, registration(&uri, &key)).unwrap();
 
-        let result = register(&dht, Registration::new(uri, vec![test_endpoint()]));
+        let result = register(&dht, registration(&uri, &key));
 
         assert!(matches!(result, Err(DhtError::AlreadyRegistered { .. })));
     }
@@ -734,10 +847,11 @@ mod tests {
     #[test]
     fn deregister_removes_agent() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
         let uri = test_uri("2q");
 
-        register(&dht, Registration::new(uri.clone(), vec![test_endpoint()])).unwrap();
-        deregister(&dht, &uri).unwrap();
+        register(&dht, registration(&uri, &key)).unwrap();
+        deregister(&dht, &uri, &key, 1).unwrap();
 
         let results = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
 
@@ -747,6 +861,7 @@ mod tests {
     #[test]
     fn lookup_prefix_finds_descendants() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
 
         let uri1 =
             AgentUri::parse("agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q")
@@ -755,16 +870,8 @@ mod tests {
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
 
-        register(
-            &dht,
-            Registration::new(uri1, vec![Endpoint::https("a.com")]),
-        )
-        .unwrap();
-        register(
-            &dht,
-            Registration::new(uri2, vec![Endpoint::https("b.com")]),
-        )
-        .unwrap();
+        register(&dht, registration(&uri1, &key)).unwrap();
+        register(&dht, registration(&uri2, &key)).unwrap();
 
         let results = lookup(&dht, &prefix("anthropic.com", "assistant"));
 
@@ -774,6 +881,7 @@ mod tests {
     #[test]
     fn lookup_is_scoped_to_one_trust_root() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
 
         let uri1 =
             AgentUri::parse("agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q")
@@ -782,16 +890,8 @@ mod tests {
             AgentUri::parse("agent://openai.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
 
-        register(
-            &dht,
-            Registration::new(uri1, vec![Endpoint::https("a.com")]),
-        )
-        .unwrap();
-        register(
-            &dht,
-            Registration::new(uri2, vec![Endpoint::https("b.com")]),
-        )
-        .unwrap();
+        register(&dht, registration(&uri1, &key)).unwrap();
+        register(&dht, registration(&uri2, &key)).unwrap();
 
         // Identical capability paths under two authorities derive two distinct
         // keys, so neither lookup can observe the other's registration. This is
@@ -811,12 +911,13 @@ mod tests {
     #[test]
     fn update_endpoint_changes_endpoints() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
         let uri = test_uri("2q");
 
-        register(&dht, Registration::new(uri.clone(), vec![test_endpoint()])).unwrap();
+        register(&dht, registration(&uri, &key)).unwrap();
 
         let new_endpoint = Endpoint::grpc("agent.anthropic.com:50051");
-        update_endpoint(&dht, &uri, vec![new_endpoint.clone()]).unwrap();
+        update_endpoint(&dht, &uri, &key, 1, vec![new_endpoint.clone()]).unwrap();
 
         let results = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
 
@@ -827,14 +928,15 @@ mod tests {
     #[test]
     fn stats_reports_correct_counts() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
 
         let uri1 = test_uri("2q");
         let uri2 =
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02r")
                 .unwrap();
 
-        register(&dht, Registration::new(uri1, vec![test_endpoint()])).unwrap();
-        register(&dht, Registration::new(uri2, vec![test_endpoint()])).unwrap();
+        register(&dht, registration(&uri1, &key)).unwrap();
+        register(&dht, registration(&uri2, &key)).unwrap();
 
         let stats = dht.stats();
         assert_eq!(stats.total_registrations(), 2);
@@ -847,13 +949,11 @@ mod tests {
             .with_max_registrations_per_key(1)
             .with_verify_attestations(false);
         let dht = SimulatedDht::new(config);
+        let key = SigningKey::generate();
 
-        let uri1 = test_uri("2q");
-        let uri2 = test_uri("2r");
+        register(&dht, registration(&test_uri("2q"), &key)).unwrap();
 
-        register(&dht, Registration::new(uri1, vec![test_endpoint()])).unwrap();
-
-        let result = register(&dht, Registration::new(uri2, vec![test_endpoint()]));
+        let result = register(&dht, registration(&test_uri("2r"), &key));
 
         assert!(matches!(result, Err(DhtError::KeyCapacityExceeded { .. })));
     }
@@ -861,9 +961,9 @@ mod tests {
     #[test]
     fn clear_removes_all() {
         let dht = unverified_dht();
-        let uri = test_uri("2q");
+        let key = SigningKey::generate();
 
-        register(&dht, Registration::new(uri, vec![test_endpoint()])).unwrap();
+        register(&dht, registration(&test_uri("2q"), &key)).unwrap();
 
         dht.clear();
 
@@ -874,11 +974,13 @@ mod tests {
     #[test]
     fn register_batch_counts_successes() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
 
         let registrations = vec![
-            Registration::new(test_uri("2q"), vec![test_endpoint()]),
-            Registration::new(test_uri("2r"), vec![test_endpoint()]),
-            Registration::new(test_uri("2s"), vec![]), // Will fail - no endpoints
+            registration(&test_uri("2q"), &key),
+            registration(&test_uri("2r"), &key),
+            // Will fail - no endpoints
+            Registration::new(test_uri("2s"), key.verifying_key(), vec![]),
         ];
 
         let count = dht.register_batch(registrations).unwrap();
@@ -889,9 +991,9 @@ mod tests {
     #[test]
     fn secure_default_rejects_missing_attestation() {
         let dht = SimulatedDht::with_defaults();
-        let uri = test_uri("2q");
+        let key = SigningKey::generate();
 
-        let result = register(&dht, Registration::new(uri, vec![test_endpoint()]));
+        let result = register(&dht, registration(&test_uri("2q"), &key));
 
         assert!(matches!(result, Err(DhtError::InvalidAttestation { .. })));
     }
@@ -907,16 +1009,13 @@ mod tests {
         let mut verifier = Verifier::new();
         verifier.add_trusted_root("anthropic.com", signing_key.verifying_key());
         let dht = SimulatedDht::with_verifier(SimulationConfig::default(), verifier);
+        let agent_key = SigningKey::generate();
         let uri = test_uri("2q");
         let token = issuer
             .issue(&uri, vec!["assistant/chat".to_string()])
             .unwrap();
 
-        register(
-            &dht,
-            Registration::new(uri.clone(), vec![test_endpoint()]).with_attestation(token),
-        )
-        .unwrap();
+        register(&dht, registration(&uri, &agent_key).with_attestation(token)).unwrap();
 
         let results = lookup(
             &dht,
@@ -928,16 +1027,16 @@ mod tests {
     #[test]
     fn refresh_extends_an_expiring_registration() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
         let uri = test_uri("2q");
         register(
             &dht,
-            Registration::new(uri.clone(), vec![test_endpoint()])
-                .with_ttl(Duration::from_millis(50)),
+            registration(&uri, &key).with_ttl(Duration::from_millis(50)),
         )
         .unwrap();
 
         let before = lookup(&dht, &exact("anthropic.com", "assistant/chat"))[0].expires_at();
-        refresh(&dht, &uri, Duration::from_hours(1)).unwrap();
+        refresh(&dht, &uri, &key, 1, Duration::from_hours(1)).unwrap();
         let after = lookup(&dht, &exact("anthropic.com", "assistant/chat"))[0].expires_at();
 
         assert!(
@@ -952,15 +1051,15 @@ mod tests {
         // touched only one would leave the others to expire, silently pruning
         // the agent from prefix queries while exact lookup still found it.
         let dht = unverified_dht();
+        let key = SigningKey::generate();
         let uri = test_uri("2q");
         register(
             &dht,
-            Registration::new(uri.clone(), vec![test_endpoint()])
-                .with_ttl(Duration::from_millis(50)),
+            registration(&uri, &key).with_ttl(Duration::from_millis(50)),
         )
         .unwrap();
 
-        refresh(&dht, &uri, Duration::from_hours(1)).unwrap();
+        refresh(&dht, &uri, &key, 1, Duration::from_hours(1)).unwrap();
 
         let from_ancestor = lookup(&dht, &prefix("anthropic.com", "assistant"));
         assert_eq!(from_ancestor.len(), 1);
@@ -970,7 +1069,8 @@ mod tests {
     #[test]
     fn refresh_of_unknown_agent_is_not_found() {
         let dht = unverified_dht();
-        let result = refresh(&dht, &test_uri("2q"), Duration::from_hours(1));
+        let key = SigningKey::generate();
+        let result = refresh(&dht, &test_uri("2q"), &key, 1, Duration::from_hours(1));
         assert!(matches!(result, Err(DhtError::NotFound { .. })));
     }
 
@@ -980,13 +1080,10 @@ mod tests {
             .with_verify_attestations(false)
             .with_page_size(NonZeroUsize::new(2).unwrap());
         let dht = SimulatedDht::new(config);
+        let key = SigningKey::generate();
 
         for suffix in ["2q", "2r", "2s", "2t", "2v"] {
-            register(
-                &dht,
-                Registration::new(test_uri(suffix), vec![test_endpoint()]),
-            )
-            .unwrap();
+            register(&dht, registration(&test_uri(suffix), &key)).unwrap();
         }
 
         let query = exact("anthropic.com", "assistant/chat");
@@ -1021,12 +1118,9 @@ mod tests {
             .with_verify_attestations(false)
             .with_page_size(NonZeroUsize::new(2).unwrap());
         let dht = SimulatedDht::new(config);
+        let key = SigningKey::generate();
         for suffix in ["2v", "2q", "2s", "2r"] {
-            register(
-                &dht,
-                Registration::new(test_uri(suffix), vec![test_endpoint()]),
-            )
-            .unwrap();
+            register(&dht, registration(&test_uri(suffix), &key)).unwrap();
         }
 
         let query = exact("anthropic.com", "assistant/chat");
@@ -1050,11 +1144,8 @@ mod tests {
     #[test]
     fn cursor_past_the_end_yields_an_exhausted_page() {
         let dht = unverified_dht();
-        register(
-            &dht,
-            Registration::new(test_uri("2q"), vec![test_endpoint()]),
-        )
-        .unwrap();
+        let key = SigningKey::generate();
+        register(&dht, registration(&test_uri("2q"), &key)).unwrap();
 
         let page = block_on(dht.lookup(
             &exact("anthropic.com", "assistant/chat"),
@@ -1069,11 +1160,8 @@ mod tests {
     #[test]
     fn write_receipt_reports_the_resolved_quorum() {
         let dht = unverified_dht();
-        let receipt = register(
-            &dht,
-            Registration::new(test_uri("2q"), vec![test_endpoint()]),
-        )
-        .unwrap();
+        let key = SigningKey::generate();
+        let receipt = register(&dht, registration(&test_uri("2q"), &key)).unwrap();
 
         // One authoritative copy, so every quorum resolves to one against it.
         assert_eq!(receipt.acknowledged(), 1);
@@ -1103,12 +1191,10 @@ mod tests {
     fn the_simulator_is_usable_as_a_trait_object() {
         // Dyn-compatibility is the reason this trait uses async_trait at all,
         // so it needs a test that actually fails if that regresses.
+        let key = SigningKey::generate();
         let dht: Box<dyn Dht> = Box::new(unverified_dht());
-        block_on(dht.register(
-            Registration::new(test_uri("2q"), vec![test_endpoint()]),
-            WriteOptions::default(),
-        ))
-        .unwrap();
+        block_on(dht.register(registration(&test_uri("2q"), &key), WriteOptions::default()))
+            .unwrap();
 
         let page = block_on(dht.lookup(
             &exact("anthropic.com", "assistant/chat"),
@@ -1121,15 +1207,16 @@ mod tests {
     #[test]
     fn agent_id_cannot_be_reused_under_a_different_capability_path() {
         let dht = unverified_dht();
+        let key = SigningKey::generate();
         let first =
             AgentUri::parse("agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q")
                 .unwrap();
         let reclassified =
             AgentUri::parse("agent://anthropic.com/assistant/code/llm_01h455vb4pex5vsknk084sn02q")
                 .unwrap();
-        register(&dht, Registration::new(first, vec![test_endpoint()])).unwrap();
+        register(&dht, registration(&first, &key)).unwrap();
 
-        let result = register(&dht, Registration::new(reclassified, vec![test_endpoint()]));
+        let result = register(&dht, registration(&reclassified, &key));
 
         assert!(matches!(
             result,
@@ -1145,16 +1232,267 @@ mod tests {
         let ancestor_reuse =
             AgentUri::parse("agent://anthropic.com/assistant/llm_01h455vb4pex5vsknk084sn02q")
                 .unwrap();
-        register(&dht, Registration::new(first, vec![test_endpoint()])).unwrap();
+        register(&dht, registration(&first, &key)).unwrap();
 
-        let result = register(
-            &dht,
-            Registration::new(ancestor_reuse, vec![test_endpoint()]),
-        );
+        let result = register(&dht, registration(&ancestor_reuse, &key));
 
         assert!(matches!(
             result,
             Err(DhtError::IdentityCapabilityConflict { .. })
         ));
+    }
+
+    #[test]
+    fn an_attacker_cannot_repoint_an_agents_endpoints() {
+        // The hijack this authorization exists to stop. The attacker knows the
+        // URI, which is public, and holds every key except the agent's.
+        let dht = unverified_dht();
+        let agent = SigningKey::generate();
+        let attacker = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &agent)).unwrap();
+
+        let result = update_endpoint(
+            &dht,
+            &uri,
+            &attacker,
+            1,
+            vec![Endpoint::https("attacker.example")],
+        );
+
+        assert!(matches!(result, Err(DhtError::Unauthorized { .. })));
+        assert_eq!(
+            lookup(&dht, &exact("anthropic.com", "assistant/chat"))[0].endpoints(),
+            &[test_endpoint()]
+        );
+    }
+
+    #[test]
+    fn an_attacker_cannot_evict_an_agent() {
+        let dht = unverified_dht();
+        let agent = SigningKey::generate();
+        let attacker = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &agent)).unwrap();
+
+        let result = deregister(&dht, &uri, &attacker, 1);
+
+        assert!(matches!(result, Err(DhtError::Unauthorized { .. })));
+        assert_eq!(
+            lookup(&dht, &exact("anthropic.com", "assistant/chat")).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn an_attacker_cannot_refresh_an_agent() {
+        // Refresh looks harmless, but keeping a record alive that its owner
+        // meant to let expire is still a write nobody authorized.
+        let dht = unverified_dht();
+        let agent = SigningKey::generate();
+        let attacker = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &agent)).unwrap();
+
+        let result = refresh(&dht, &uri, &attacker, 1, Duration::from_hours(9));
+
+        assert!(matches!(result, Err(DhtError::Unauthorized { .. })));
+    }
+
+    #[test]
+    fn a_proof_does_not_authorize_endpoints_it_did_not_sign() {
+        // Signing the operation is not enough on its own: the proof has to
+        // cover the arguments, or an intercepted migration could be re-aimed
+        // while keeping the agent's own signature.
+        let dht = unverified_dht();
+        let agent = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &agent)).unwrap();
+
+        let honest = vec![Endpoint::https("honest.example")];
+        let proof = MutationProof::sign_next(
+            &agent,
+            &record(&dht, &uri),
+            &Mutation::UpdateEndpoint { endpoints: &honest },
+        );
+
+        let result = block_on(dht.update_endpoint(
+            &uri,
+            vec![Endpoint::https("attacker.example")],
+            &proof,
+            WriteOptions::default(),
+        ));
+
+        assert!(matches!(result, Err(DhtError::Unauthorized { .. })));
+    }
+
+    #[test]
+    fn a_successful_mutation_advances_the_record_sequence() {
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &key)).unwrap();
+
+        assert_eq!(
+            lookup(&dht, &exact("anthropic.com", "assistant/chat"))[0].sequence(),
+            0
+        );
+
+        refresh(&dht, &uri, &key, 4, Duration::from_hours(1)).unwrap();
+
+        // Sequences only have to increase, not increase by one: an agent that
+        // lost a response has no way to learn which of its writes landed.
+        assert_eq!(
+            lookup(&dht, &exact("anthropic.com", "assistant/chat"))[0].sequence(),
+            4
+        );
+    }
+
+    #[test]
+    fn every_ancestor_copy_carries_the_new_sequence() {
+        // A copy left behind at a lower sequence would accept a replay that the
+        // exact key already rejected.
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &key)).unwrap();
+
+        refresh(&dht, &uri, &key, 3, Duration::from_hours(1)).unwrap();
+
+        assert_eq!(
+            lookup(&dht, &prefix("anthropic.com", "assistant"))[0].sequence(),
+            3
+        );
+    }
+
+    #[test]
+    fn a_replayed_proof_is_refused_the_second_time() {
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &key)).unwrap();
+
+        let endpoints = vec![Endpoint::https("first.example")];
+        let proof = MutationProof::sign_next(
+            &key,
+            &record(&dht, &uri),
+            &Mutation::UpdateEndpoint {
+                endpoints: &endpoints,
+            },
+        );
+
+        block_on(dht.update_endpoint(&uri, endpoints.clone(), &proof, WriteOptions::default()))
+            .unwrap();
+        let replay =
+            block_on(dht.update_endpoint(&uri, endpoints, &proof, WriteOptions::default()));
+
+        assert!(matches!(
+            replay,
+            Err(DhtError::StaleSequence {
+                presented: 1,
+                current: 1,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn a_captured_proof_does_not_reach_a_later_record_instance() {
+        // Proofs travel in the clear, so assume the attacker kept one. A
+        // re-registered record starts counting from zero again, so the sequence
+        // number alone would leave the captured copy sitting above it.
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &key)).unwrap();
+
+        let captured = MutationProof::sign_next(&key, &record(&dht, &uri), &Mutation::Deregister);
+        block_on(dht.deregister(&uri, &captured, WriteOptions::default())).unwrap();
+
+        // The agent comes back a second later, which is what makes this a
+        // different record instance rather than a continuation of the old one.
+        register(
+            &dht,
+            registration(&uri, &key).with_registered_at(SystemTime::now() + Duration::from_secs(1)),
+        )
+        .unwrap();
+        let replay = block_on(dht.deregister(&uri, &captured, WriteOptions::default()));
+
+        assert!(matches!(replay, Err(DhtError::Unauthorized { .. })));
+        assert_eq!(
+            lookup(&dht, &exact("anthropic.com", "assistant/chat")).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn continuing_the_sequence_defeats_a_captured_proof_without_relying_on_the_clock() {
+        // Instance identity is the registration time, which a coarse clock can
+        // fail to distinguish. An agent that remembers how far it counted does
+        // not depend on the clock: it re-registers above every proof it ever
+        // signed.
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        let opened_at = SystemTime::now();
+        register(&dht, registration(&uri, &key).with_registered_at(opened_at)).unwrap();
+
+        let captured = MutationProof::sign_next(&key, &record(&dht, &uri), &Mutation::Deregister);
+        block_on(dht.deregister(&uri, &captured, WriteOptions::default())).unwrap();
+
+        // Same instant, so the instance binding cannot help here.
+        register(
+            &dht,
+            registration(&uri, &key)
+                .with_registered_at(opened_at)
+                .with_sequence(captured.sequence()),
+        )
+        .unwrap();
+        let replay = block_on(dht.deregister(&uri, &captured, WriteOptions::default()));
+
+        assert!(matches!(replay, Err(DhtError::StaleSequence { .. })));
+        assert_eq!(
+            lookup(&dht, &exact("anthropic.com", "assistant/chat")).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_write_at_the_records_own_sequence_does_not_advance_it() {
+        let dht = unverified_dht();
+        let key = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &key)).unwrap();
+
+        // The record opens at 0, so 0 is already spent.
+        let result = refresh(&dht, &uri, &key, 0, Duration::from_hours(1));
+
+        assert!(matches!(
+            result,
+            Err(DhtError::StaleSequence {
+                presented: 0,
+                current: 0,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn migration_is_authorized_by_the_agents_own_key() {
+        let dht = unverified_dht();
+        let agent = SigningKey::generate();
+        let attacker = SigningKey::generate();
+        let uri = test_uri("2q");
+        register(&dht, registration(&uri, &agent)).unwrap();
+
+        let moved = Endpoint::https("eu-west-1.agent.anthropic.com");
+        assert!(
+            dht.simulate_migration(&uri, moved.clone(), &attacker)
+                .is_err()
+        );
+
+        let result = dht.simulate_migration(&uri, moved.clone(), &agent).unwrap();
+
+        assert_eq!(result.new_endpoints(), &[moved]);
     }
 }

@@ -6,8 +6,8 @@ use agent_uri::AgentUri;
 use async_trait::async_trait;
 
 use crate::{
-    DhtError, Endpoint, NodeId, Page, PeerAddr, Query, ReadOptions, Registration, WriteOptions,
-    WriteReceipt,
+    DhtError, Endpoint, MutationProof, NodeId, Page, PeerAddr, Query, ReadOptions, Registration,
+    WriteOptions, WriteReceipt,
 };
 
 /// Abstract DHT operations.
@@ -23,6 +23,15 @@ use crate::{
 /// specification's discovery protocol is trust-root scoped throughout, and
 /// cross-trust-root isolation is a security property that bounds the blast
 /// radius of a trust-root key compromise.
+///
+/// # Authorization
+///
+/// Registration records are world-readable, so an agent URI is public
+/// knowledge and proves nothing. Every write that changes or removes a record
+/// therefore carries a [`MutationProof`] signed by the key bound to that
+/// record at registration. A backend that accepted an unproven write would let
+/// any node that can reach a replica repoint an agent at its own
+/// infrastructure.
 ///
 /// # Failure is normal
 ///
@@ -72,15 +81,21 @@ pub trait Dht: Send + Sync {
     /// Used for agent migration: changing network location without changing
     /// identity.
     ///
+    /// `proof` must be signed by the record's agent key over exactly these
+    /// endpoints, so an intercepted migration cannot be re-aimed.
+    ///
     /// # Errors
     ///
     /// Returns `DhtError` if the agent is not registered (`NotFound`), the
     /// registration has expired (`Expired`), the endpoints list is empty
-    /// (`NoEndpoints`), or the operation fails to reach the network.
+    /// (`NoEndpoints`), the proof does not authorize this write
+    /// (`Unauthorized`, `StaleSequence`), or the operation fails to reach the
+    /// network.
     async fn update_endpoint(
         &self,
         agent_uri: &AgentUri,
         new_endpoints: Vec<Endpoint>,
+        proof: &MutationProof,
         options: WriteOptions,
     ) -> Result<WriteReceipt, DhtError>;
 
@@ -92,12 +107,14 @@ pub trait Dht: Send + Sync {
     ///
     /// # Errors
     ///
-    /// Returns `DhtError` if the agent is not registered (`NotFound`) or the
-    /// operation fails to reach the network.
+    /// Returns `DhtError` if the agent is not registered (`NotFound`), the
+    /// proof does not authorize this write (`Unauthorized`, `StaleSequence`),
+    /// or the operation fails to reach the network.
     async fn refresh(
         &self,
         agent_uri: &AgentUri,
         ttl: Duration,
+        proof: &MutationProof,
         options: WriteOptions,
     ) -> Result<WriteReceipt, DhtError>;
 
@@ -105,10 +122,16 @@ pub trait Dht: Send + Sync {
     ///
     /// # Errors
     ///
-    /// Returns `DhtError::NotFound` if the agent is not registered, or a
-    /// network error if the operation fails to reach the network.
-    async fn deregister(&self, agent_uri: &AgentUri, options: WriteOptions)
-    -> Result<(), DhtError>;
+    /// Returns `DhtError::NotFound` if the agent is not registered,
+    /// `Unauthorized` or `StaleSequence` if the proof does not authorize the
+    /// removal, or a network error if the operation fails to reach the
+    /// network.
+    async fn deregister(
+        &self,
+        agent_uri: &AgentUri,
+        proof: &MutationProof,
+        options: WriteOptions,
+    ) -> Result<(), DhtError>;
 
     /// Looks up agents matching a capability query.
     ///
