@@ -492,7 +492,8 @@ mod verify_for_capability_tests {
         // Wait for expiration
         std::thread::sleep(Duration::from_millis(50));
 
-        let mut verifier = Verifier::new();
+        // Zero leeway: the default tolerance would still accept this token.
+        let mut verifier = Verifier::with_leeway(Duration::ZERO);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let required = CapabilityPath::parse("workflow/approval").unwrap();

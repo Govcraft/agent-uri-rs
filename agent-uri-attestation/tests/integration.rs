@@ -121,7 +121,9 @@ fn expired_token_rejected() {
     let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_millis(1));
     let uri = test_uri();
 
-    let mut verifier = Verifier::new();
+    // Zero leeway: this test is about expiry itself, so the default clock-skew
+    // tolerance would keep a 1ms token alive well past the sleep below.
+    let mut verifier = Verifier::with_leeway(Duration::ZERO);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     let token = issuer.issue(&uri, vec![]).unwrap();

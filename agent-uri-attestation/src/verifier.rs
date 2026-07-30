@@ -1,6 +1,7 @@
 //! Token verifier for validating attestations.
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use agent_uri::AgentUri;
 use chrono::Utc;
@@ -44,16 +45,77 @@ use crate::verification;
 /// let claims = verifier.verify(&token).unwrap();
 /// assert_eq!(claims.iss, "acme.com");
 /// ```
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Verifier {
     trusted_roots: HashMap<String, VerifyingKey>,
+    leeway: Duration,
+}
+
+impl Default for Verifier {
+    fn default() -> Self {
+        Self {
+            trusted_roots: HashMap::new(),
+            leeway: Self::DEFAULT_LEEWAY,
+        }
+    }
 }
 
 impl Verifier {
-    /// Creates a new verifier with no trusted roots.
+    /// Clock-skew tolerance applied to a token's validity window by default.
+    ///
+    /// Attestations cross trust boundaries, which means the issuer's clock and
+    /// the verifier's clock are different clocks. With exact comparisons, a
+    /// verifier a few seconds ahead rejects tokens the issuer just minted, and
+    /// one a few seconds behind rejects tokens that have not expired. Sixty
+    /// seconds covers ordinary NTP-synchronized drift.
+    ///
+    /// The tolerance is symmetric: it also accepts a token for up to this long
+    /// past its real expiry. Deployments that need exactness can set it to
+    /// [`Duration::ZERO`] with [`Self::set_leeway`].
+    pub const DEFAULT_LEEWAY: Duration = Duration::from_mins(1);
+
+    /// Creates a new verifier with no trusted roots and [`Self::DEFAULT_LEEWAY`].
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates a new verifier with an explicit clock-skew tolerance.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_uri_attestation::Verifier;
+    /// use std::time::Duration;
+    ///
+    /// // Exact comparisons: no token outlives its `exp` by even a second.
+    /// let strict = Verifier::with_leeway(Duration::ZERO);
+    /// assert_eq!(strict.leeway(), Duration::ZERO);
+    /// ```
+    #[must_use]
+    pub fn with_leeway(leeway: Duration) -> Self {
+        Self {
+            trusted_roots: HashMap::new(),
+            leeway,
+        }
+    }
+
+    /// Sets the clock-skew tolerance applied to `iat` and `exp`.
+    ///
+    /// See [`Self::DEFAULT_LEEWAY`] for what the tolerance buys and costs.
+    pub fn set_leeway(&mut self, leeway: Duration) {
+        self.leeway = leeway;
+    }
+
+    /// Returns the clock-skew tolerance applied to `iat` and `exp`.
+    #[must_use]
+    pub fn leeway(&self) -> Duration {
+        self.leeway
+    }
+
+    /// The tolerance as a `chrono` duration, saturating on absurd values.
+    fn leeway_chrono(&self) -> chrono::Duration {
+        chrono::Duration::from_std(self.leeway).unwrap_or(chrono::Duration::MAX)
     }
 
     /// Adds a trusted root and its public key.
@@ -85,7 +147,8 @@ impl Verifier {
     ///    decoding or signature work
     /// 1. Parses the PASETO token
     /// 2. Verifies the signature using the issuer's public key
-    /// 3. Checks expiration
+    /// 3. Checks the validity window: not before `iat`, not after `exp`, each
+    ///    with [`Self::leeway`] of clock-skew tolerance
     /// 4. Validates the issuer is trusted
     /// 5. Binds the authenticated issuer to the attested URI's namespace
     ///
@@ -107,6 +170,8 @@ impl Verifier {
     ///   (checked before any decoding or signature work)
     /// - `InvalidSignature` - Signature doesn't match any trusted key
     /// - `TokenExpired` - Token has passed its expiration time
+    /// - `TokenNotYetValid` - Token is dated further into the future than the
+    ///   clock-skew tolerance allows
     /// - `UntrustedIssuer` - Issuer is not in the trusted roots set
     /// - `IssuerNamespaceMismatch` - Issuer does not own the URI's namespace
     /// - `InvalidTokenFormat` - Token is malformed
@@ -265,6 +330,8 @@ impl Verifier {
     /// Returns `AttestationError` if any verification step fails:
     /// - `InvalidSignature` - Signature doesn't match any trusted key
     /// - `TokenExpired` - Token has passed its expiration time
+    /// - `TokenNotYetValid` - Token is dated further into the future than the
+    ///   clock-skew tolerance allows
     /// - `UntrustedIssuer` - Issuer is not in the trusted roots set
     /// - `IssuerNamespaceMismatch` - Issuer does not own the attested URI's namespace
     /// - `UriMismatch` - Token's `agent_uri` doesn't match expected URI
@@ -350,7 +417,7 @@ impl Verifier {
         let mut last_error = None;
 
         for (trust_root, verifying_key) in &self.trusted_roots {
-            match try_verify_with_key(token, verifying_key) {
+            match try_verify_with_key(token, verifying_key, self.leeway_chrono()) {
                 Ok(claims) => {
                     // Verify the issuer matches the key we used
                     if claims.iss == *trust_root {
@@ -415,13 +482,18 @@ fn classify_paseto_error(error: &PasetoError) -> AttestationError {
 ///    it back. Until this succeeds the payload is attacker-controlled, so no
 ///    claim in it may be believed, let alone reported.
 /// 2. **Claims.** Only then are the (now authenticated) claims parsed and their
-///    validity window checked, via the pure [`verification::check_expiration`].
+///    validity window checked, via the pure
+///    [`verification::check_validity_window`].
 ///
 /// That second stage is why `TokenExpired` can name the instant a token lapsed:
 /// by then, `exp` has been authenticated, so reporting it is safe.
+///
+/// `leeway` is the verifier's clock-skew tolerance, applied to both ends of the
+/// window.
 fn try_verify_with_key(
     token: &str,
     verifying_key: &VerifyingKey,
+    leeway: chrono::Duration,
 ) -> Result<AttestationClaims, AttestationError> {
     let key_bytes = verifying_key.to_bytes();
     let key_wrapper = Key::<32>::from(&key_bytes);
@@ -439,7 +511,7 @@ fn try_verify_with_key(
     // Stage 2: the payload is authenticated, so its claims can now be believed,
     // and its validity window enforced with the real instants it carries.
     let claims = extract_claims(&json_value)?;
-    verification::check_expiration(claims.exp, Utc::now())?;
+    verification::check_validity_window(claims.iat, claims.exp, Utc::now(), leeway)?;
 
     Ok(claims)
 }
@@ -1372,6 +1444,132 @@ mod tests {
                 assert!(reason.contains("invalid exp format"), "got: {reason}");
             }
             other => panic!("Expected InvalidClaims, got {other:?}"),
+        }
+    }
+
+    /// Signs a token whose window is shifted by `offset` from now.
+    fn token_dated(signing_key: &SigningKey, offset: chrono::Duration) -> String {
+        let iat = Utc::now() + offset;
+        let mut claims = valid_claims_value();
+        claims["iat"] = serde_json::json!(iat.to_rfc3339());
+        claims["exp"] = serde_json::json!((iat + chrono::Duration::hours(1)).to_rfc3339());
+        sign_raw_payload(signing_key, &claims.to_string())
+    }
+
+    #[test]
+    fn a_future_dated_token_is_rejected() {
+        // Without a not-before check, a token dated into the future verifies
+        // today and keeps verifying until its `exp` — an arbitrarily post-dated
+        // credential.
+        let signing_key = SigningKey::generate();
+        let token = token_dated(&signing_key, chrono::Duration::hours(1));
+
+        match verifier_trusting(&signing_key).verify(&token) {
+            Err(AttestationError::TokenNotYetValid { valid_from }) => {
+                assert!(!valid_from.is_empty());
+            }
+            other => panic!("Expected TokenNotYetValid, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_slightly_future_dated_token_is_tolerated_by_default() {
+        // An issuer clock a few seconds ahead is the ordinary case, and must
+        // not look like an attack.
+        let signing_key = SigningKey::generate();
+        let token = token_dated(&signing_key, chrono::Duration::seconds(10));
+
+        assert!(verifier_trusting(&signing_key).verify(&token).is_ok());
+    }
+
+    #[test]
+    fn zero_leeway_rejects_even_a_slightly_future_dated_token() {
+        let signing_key = SigningKey::generate();
+        let token = token_dated(&signing_key, chrono::Duration::seconds(10));
+
+        let mut verifier = Verifier::with_leeway(Duration::ZERO);
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        assert!(matches!(
+            verifier.verify(&token),
+            Err(AttestationError::TokenNotYetValid { .. })
+        ));
+    }
+
+    #[test]
+    fn the_leeway_also_covers_a_just_expired_token() {
+        let signing_key = SigningKey::generate();
+        let mut claims = valid_claims_value();
+        let expired_at = Utc::now() - chrono::Duration::seconds(10);
+        claims["iat"] = serde_json::json!((expired_at - chrono::Duration::hours(1)).to_rfc3339());
+        claims["exp"] = serde_json::json!(expired_at.to_rfc3339());
+        let token = sign_raw_payload(&signing_key, &claims.to_string());
+
+        // Default tolerance accepts it; exact comparison does not.
+        assert!(verifier_trusting(&signing_key).verify(&token).is_ok());
+
+        let mut strict = Verifier::with_leeway(Duration::ZERO);
+        strict.add_trusted_root("acme.com", signing_key.verifying_key());
+        assert!(matches!(
+            strict.verify(&token),
+            Err(AttestationError::TokenExpired { .. })
+        ));
+    }
+
+    #[test]
+    fn leeway_defaults_and_round_trips() {
+        assert_eq!(Verifier::new().leeway(), Verifier::DEFAULT_LEEWAY);
+        assert!(Verifier::DEFAULT_LEEWAY > Duration::ZERO);
+        assert_eq!(
+            Verifier::with_leeway(Duration::from_secs(5)).leeway(),
+            Duration::from_secs(5)
+        );
+
+        let mut verifier = Verifier::new();
+        verifier.set_leeway(Duration::ZERO);
+        assert_eq!(verifier.leeway(), Duration::ZERO);
+    }
+
+    #[test]
+    fn an_absurd_leeway_does_not_panic() {
+        // `chrono::Duration` cannot represent every `std::time::Duration`, so
+        // the conversion has to saturate rather than unwrap.
+        let signing_key = SigningKey::generate();
+        let token = token_dated(&signing_key, chrono::Duration::hours(1));
+
+        let mut verifier = Verifier::with_leeway(Duration::MAX);
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        assert!(verifier.verify(&token).is_ok());
+    }
+
+    #[test]
+    fn every_verify_entry_point_enforces_the_validity_window() {
+        let signing_key = SigningKey::generate();
+        let verifier = verifier_trusting(&signing_key);
+        let token = token_dated(&signing_key, chrono::Duration::hours(1));
+        let uri = test_uri();
+        let capability = CapabilityPath::parse("test").unwrap();
+
+        let results = [
+            verifier.verify(&token),
+            verifier.verify_for_audience(&token, "verifier.example"),
+            verifier.verify_for_uri(&token, &uri),
+            verifier.verify_for_uri_and_audience(&token, &uri, "verifier.example"),
+            verifier.verify_for_capability(&token, &uri, &capability),
+            verifier.verify_for_capability_and_audience(
+                &token,
+                &uri,
+                &capability,
+                "verifier.example",
+            ),
+        ];
+
+        for result in results {
+            assert!(
+                matches!(result, Err(AttestationError::TokenNotYetValid { .. })),
+                "Expected TokenNotYetValid, got {result:?}",
+            );
         }
     }
 }
