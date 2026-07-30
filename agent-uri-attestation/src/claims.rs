@@ -410,6 +410,21 @@ mod tests {
     }
 
     #[test]
+    fn is_not_yet_valid_tracks_iat() {
+        let mut claims = AttestationClaimsBuilder::new()
+            .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+            .issuer("acme.com")
+            .ttl(Duration::from_hours(1))
+            .build()
+            .unwrap();
+
+        assert!(!claims.is_not_yet_valid());
+
+        claims.iat = Utc::now() + chrono::Duration::hours(1);
+        assert!(claims.is_not_yet_valid());
+    }
+
+    #[test]
     fn claims_serialization_roundtrip() {
         let original = AttestationClaimsBuilder::new()
             .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")

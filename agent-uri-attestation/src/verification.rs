@@ -23,7 +23,7 @@
 //! | [`check_expiration`] | Current time is strictly less than expiration |
 //! | [`capability_covers`] | Attested capability is prefix of or equals required |
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 
 use agent_uri::{AgentUri, CapabilityPath};
 
@@ -276,13 +276,146 @@ pub fn validate_subject(presented_uri: &str, token_subject: &str) -> Result<(), 
 /// assert!(check_expiration(now, now).is_err()); // Boundary: now >= exp is expired
 /// ```
 pub fn check_expiration(exp: DateTime<Utc>, now: DateTime<Utc>) -> Result<(), AttestationError> {
-    if now < exp {
+    check_expiration_with_leeway(exp, now, Duration::zero())
+}
+
+/// Clamps a leeway to a non-negative value.
+///
+/// A negative leeway would mean "reject tokens that are valid", which is never
+/// what a caller wants; it reads as zero instead.
+fn effective_leeway(leeway: Duration) -> Duration {
+    if leeway < Duration::zero() {
+        Duration::zero()
+    } else {
+        leeway
+    }
+}
+
+/// Adds a duration to an instant, saturating instead of panicking.
+fn saturating_add(instant: DateTime<Utc>, delta: Duration) -> DateTime<Utc> {
+    instant
+        .checked_add_signed(delta)
+        .unwrap_or(DateTime::<Utc>::MAX_UTC)
+}
+
+/// Pure function: checks expiration, tolerating a clock difference.
+///
+/// A token is expired once `now` reaches `exp + leeway`. The leeway exists
+/// because the issuer's clock and the verifier's clock are different clocks:
+/// with no tolerance, a verifier running a few seconds fast rejects tokens that
+/// have not actually expired.
+///
+/// The tolerance cuts both ways — it also accepts a token for `leeway` past its
+/// real expiry — so it belongs at the smallest value that covers the fleet's
+/// clock spread, not the largest one that avoids complaints.
+///
+/// # Errors
+///
+/// Returns [`AttestationError::TokenExpired`] when `now >= exp + leeway`. The
+/// reported instant is the token's real `exp`, not the extended one.
+///
+/// # Examples
+///
+/// ```
+/// use chrono::{Duration, Utc};
+/// use agent_uri_attestation::check_expiration_with_leeway;
+///
+/// let exp = Utc::now();
+/// let just_after = exp + Duration::seconds(10);
+///
+/// // Exactly expired with no tolerance, still accepted with 30s of it.
+/// assert!(check_expiration_with_leeway(exp, just_after, Duration::zero()).is_err());
+/// assert!(check_expiration_with_leeway(exp, just_after, Duration::seconds(30)).is_ok());
+/// ```
+pub fn check_expiration_with_leeway(
+    exp: DateTime<Utc>,
+    now: DateTime<Utc>,
+    leeway: Duration,
+) -> Result<(), AttestationError> {
+    if now < saturating_add(exp, effective_leeway(leeway)) {
         Ok(())
     } else {
         Err(AttestationError::TokenExpired {
             expired_at: exp.to_rfc3339(),
         })
     }
+}
+
+/// Pure function: rejects a token whose validity window has not opened yet.
+///
+/// The claim set carries no separate `nbf`, so `iat` is the not-before instant:
+/// a token is not valid before it was issued. Without this check a token dated
+/// into the future verifies today and keeps verifying until its `exp`, which
+/// hands a compromised or misconfigured issuer an arbitrarily post-dated
+/// credential.
+///
+/// `leeway` tolerates an issuer clock running ahead of the verifier's, which is
+/// the ordinary reason a freshly-minted token looks future-dated.
+///
+/// # Errors
+///
+/// Returns [`AttestationError::TokenNotYetValid`] when `now + leeway < iat`.
+///
+/// # Examples
+///
+/// ```
+/// use chrono::{Duration, Utc};
+/// use agent_uri_attestation::check_not_before;
+///
+/// let now = Utc::now();
+/// let issued_slightly_ahead = now + Duration::seconds(10);
+/// let issued_far_ahead = now + Duration::hours(1);
+///
+/// assert!(check_not_before(now, now, Duration::zero()).is_ok());
+/// assert!(check_not_before(issued_slightly_ahead, now, Duration::seconds(30)).is_ok());
+/// assert!(check_not_before(issued_far_ahead, now, Duration::seconds(30)).is_err());
+/// ```
+pub fn check_not_before(
+    iat: DateTime<Utc>,
+    now: DateTime<Utc>,
+    leeway: Duration,
+) -> Result<(), AttestationError> {
+    if saturating_add(now, effective_leeway(leeway)) < iat {
+        Err(AttestationError::TokenNotYetValid {
+            valid_from: iat.to_rfc3339(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+/// Pure function: checks both ends of a token's validity window.
+///
+/// This is the whole time-based verdict on a token: not yet valid, expired, or
+/// live. The not-before end is checked first, so a token dated into the future
+/// is reported as such rather than by whichever end happens to be tested first.
+///
+/// # Errors
+///
+/// Returns [`AttestationError::TokenNotYetValid`] or
+/// [`AttestationError::TokenExpired`], per [`check_not_before`] and
+/// [`check_expiration_with_leeway`].
+///
+/// # Examples
+///
+/// ```
+/// use chrono::{Duration, Utc};
+/// use agent_uri_attestation::check_validity_window;
+///
+/// let now = Utc::now();
+/// let iat = now - Duration::minutes(5);
+/// let exp = now + Duration::minutes(55);
+///
+/// assert!(check_validity_window(iat, exp, now, Duration::seconds(30)).is_ok());
+/// ```
+pub fn check_validity_window(
+    iat: DateTime<Utc>,
+    exp: DateTime<Utc>,
+    now: DateTime<Utc>,
+    leeway: Duration,
+) -> Result<(), AttestationError> {
+    check_not_before(iat, now, leeway)?;
+    check_expiration_with_leeway(exp, now, leeway)
 }
 
 /// Pure function: checks capability coverage and returns a structured error if insufficient.
@@ -530,6 +663,177 @@ mod tests {
             let exp = Utc::now() + Duration::seconds(1);
             let now = exp - Duration::seconds(1);
             assert!(check_expiration(exp, now).is_ok());
+        }
+
+        #[test]
+        fn zero_leeway_matches_the_exact_check() {
+            let now = Utc::now();
+            assert!(check_expiration_with_leeway(now, now, Duration::zero()).is_err());
+            assert_eq!(
+                check_expiration(now, now).is_err(),
+                check_expiration_with_leeway(now, now, Duration::zero()).is_err(),
+            );
+        }
+
+        #[test]
+        fn a_token_just_past_expiry_survives_within_the_leeway() {
+            let exp = Utc::now();
+            let now = exp + Duration::seconds(30);
+
+            assert!(check_expiration_with_leeway(exp, now, Duration::seconds(60)).is_ok());
+            assert!(check_expiration_with_leeway(exp, now, Duration::seconds(10)).is_err());
+        }
+
+        #[test]
+        fn the_leeway_boundary_is_exclusive() {
+            let exp = Utc::now();
+            let leeway = Duration::seconds(60);
+
+            // now == exp + leeway is expired; one second earlier is not.
+            assert!(check_expiration_with_leeway(exp, exp + leeway, leeway).is_err());
+            assert!(
+                check_expiration_with_leeway(exp, exp + leeway - Duration::seconds(1), leeway)
+                    .is_ok()
+            );
+        }
+
+        #[test]
+        fn the_reported_instant_is_the_real_expiry_not_the_extended_one() {
+            let exp = Utc::now();
+            let now = exp + Duration::hours(1);
+
+            match check_expiration_with_leeway(exp, now, Duration::seconds(60)) {
+                Err(AttestationError::TokenExpired { expired_at }) => {
+                    assert_eq!(expired_at, exp.to_rfc3339());
+                }
+                other => panic!("Expected TokenExpired, got {other:?}"),
+            }
+        }
+    }
+
+    mod not_before_tests {
+        use super::*;
+        use chrono::Duration;
+
+        #[test]
+        fn a_token_issued_now_is_valid_now() {
+            let now = Utc::now();
+            assert!(check_not_before(now, now, Duration::zero()).is_ok());
+        }
+
+        #[test]
+        fn a_past_iat_is_always_valid() {
+            let now = Utc::now();
+            let iat = now - Duration::hours(1);
+            assert!(check_not_before(iat, now, Duration::zero()).is_ok());
+        }
+
+        #[test]
+        fn a_future_iat_beyond_the_leeway_is_not_yet_valid() {
+            let now = Utc::now();
+            let iat = now + Duration::hours(1);
+
+            match check_not_before(iat, now, Duration::seconds(60)) {
+                Err(AttestationError::TokenNotYetValid { valid_from }) => {
+                    assert_eq!(valid_from, iat.to_rfc3339());
+                }
+                other => panic!("Expected TokenNotYetValid, got {other:?}"),
+            }
+        }
+
+        #[test]
+        fn a_future_iat_within_the_leeway_is_accepted() {
+            let now = Utc::now();
+            let iat = now + Duration::seconds(30);
+            assert!(check_not_before(iat, now, Duration::seconds(60)).is_ok());
+        }
+
+        #[test]
+        fn the_leeway_boundary_is_inclusive() {
+            let now = Utc::now();
+            let leeway = Duration::seconds(60);
+
+            // iat == now + leeway is accepted; a second beyond it is not.
+            assert!(check_not_before(now + leeway, now, leeway).is_ok());
+            assert!(check_not_before(now + leeway + Duration::seconds(1), now, leeway).is_err());
+        }
+
+        #[test]
+        fn a_negative_leeway_reads_as_zero() {
+            let now = Utc::now();
+
+            // Were the negative value honored, a token issued now would be
+            // rejected as not yet valid.
+            assert!(check_not_before(now, now, Duration::seconds(-60)).is_ok());
+        }
+
+        #[test]
+        fn an_absurd_leeway_saturates_instead_of_panicking() {
+            // `chrono` addition panics on overflow, so both ends have to
+            // saturate at the representable maximum.
+            let now = Utc::now();
+
+            assert!(check_not_before(now + Duration::days(365), now, Duration::MAX).is_ok());
+            assert!(check_expiration_with_leeway(now, now, Duration::MAX).is_ok());
+
+            // At the end of representable time the saturated bound is reached
+            // rather than exceeded, so the token is expired — but nothing panics.
+            let end_of_time = DateTime::<Utc>::MAX_UTC;
+            assert!(check_not_before(end_of_time, end_of_time, Duration::MAX).is_ok());
+            assert!(check_expiration_with_leeway(end_of_time, end_of_time, Duration::MAX).is_err());
+        }
+    }
+
+    mod validity_window_tests {
+        use super::*;
+        use chrono::Duration;
+
+        #[test]
+        fn a_live_token_passes_both_ends() {
+            let now = Utc::now();
+            let iat = now - Duration::minutes(5);
+            let exp = now + Duration::minutes(55);
+
+            assert!(check_validity_window(iat, exp, now, Duration::seconds(60)).is_ok());
+        }
+
+        #[test]
+        fn an_expired_token_is_reported_as_expired() {
+            let now = Utc::now();
+            let iat = now - Duration::hours(2);
+            let exp = now - Duration::hours(1);
+
+            assert!(matches!(
+                check_validity_window(iat, exp, now, Duration::seconds(60)),
+                Err(AttestationError::TokenExpired { .. })
+            ));
+        }
+
+        #[test]
+        fn a_future_dated_token_is_reported_as_not_yet_valid() {
+            let now = Utc::now();
+            let iat = now + Duration::hours(1);
+            let exp = now + Duration::hours(2);
+
+            assert!(matches!(
+                check_validity_window(iat, exp, now, Duration::seconds(60)),
+                Err(AttestationError::TokenNotYetValid { .. })
+            ));
+        }
+
+        #[test]
+        fn a_token_violating_both_ends_is_reported_as_not_yet_valid() {
+            // An incoherent window (iat after exp) is reported by the end that
+            // is checked first, so the diagnosis is stable rather than
+            // dependent on evaluation order.
+            let now = Utc::now();
+            let iat = now + Duration::hours(1);
+            let exp = now - Duration::hours(1);
+
+            assert!(matches!(
+                check_validity_window(iat, exp, now, Duration::zero()),
+                Err(AttestationError::TokenNotYetValid { .. })
+            ));
         }
     }
 

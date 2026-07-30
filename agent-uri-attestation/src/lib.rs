@@ -96,6 +96,15 @@
 //! with [`AttestationError::TokenTooLong`] before decoding or signature
 //! checking it, and [`Issuer`] refuses to mint one, so the crate never produces
 //! a token it would decline to verify.
+//!
+//! # Clocks
+//!
+//! A token's validity window is checked at both ends: [`Verifier`] rejects a
+//! token before its `iat` ([`AttestationError::TokenNotYetValid`]) and after
+//! its `exp` ([`AttestationError::TokenExpired`]). Because issuer and verifier
+//! run different clocks, both comparisons carry
+//! [`Verifier::DEFAULT_LEEWAY`] of tolerance, adjustable per verifier with
+//! [`Verifier::with_leeway`] or [`Verifier::set_leeway`].
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]
@@ -118,8 +127,9 @@ pub use error::AttestationError;
 pub use issuer::Issuer;
 pub use keys::{SigningKey, VerifyingKey};
 pub use verification::{
-    capability_covers, check_capability_coverage, check_expiration, check_token_length,
-    validate_audience, validate_capability_scope, validate_issuer, validate_subject,
+    capability_covers, check_capability_coverage, check_expiration, check_expiration_with_leeway,
+    check_not_before, check_token_length, check_validity_window, validate_audience,
+    validate_capability_scope, validate_issuer, validate_subject,
 };
 pub use verifier::Verifier;
 
@@ -134,6 +144,7 @@ pub mod prelude {
     pub use crate::{
         AttestationClaims, AttestationClaimsBuilder, AttestationError, Issuer, MAX_TOKEN_LENGTH,
         SigningKey, Verifier, VerifyingKey, capability_covers, check_capability_coverage,
-        check_expiration, check_token_length, validate_issuer, validate_subject,
+        check_expiration, check_token_length, check_validity_window, validate_issuer,
+        validate_subject,
     };
 }
