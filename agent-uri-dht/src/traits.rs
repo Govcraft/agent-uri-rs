@@ -10,6 +10,14 @@ use crate::{DhtError, Endpoint, Registration};
 /// Implementations may be in-memory (for testing/evaluation) or distributed
 /// (using libp2p Kademlia, for example).
 ///
+/// # Scope
+///
+/// Every lookup is scoped to a single trust root, because every DHT key is
+/// derived from one. There is deliberately no cross-trust-root query: the
+/// specification's discovery protocol is trust-root scoped throughout, and
+/// cross-trust-root isolation is a security property that bounds the blast
+/// radius of a trust-root key compromise.
+///
 /// # Async Considerations
 ///
 /// This trait uses synchronous methods for simplicity in the simulated
@@ -109,24 +117,6 @@ pub trait Dht: Send + Sync {
     fn lookup_prefix(
         &self,
         trust_root: &TrustRoot,
-        capability_path: &CapabilityPath,
-    ) -> Result<Vec<Registration>, DhtError>;
-
-    /// Looks up agents across all trust roots (global discovery).
-    ///
-    /// # Arguments
-    ///
-    /// * `capability_path` - The capability path to search
-    ///
-    /// # Returns
-    ///
-    /// A list of registrations from any trust root with the specified path.
-    ///
-    /// # Errors
-    ///
-    /// Returns `DhtError` if an internal error occurs.
-    fn lookup_global(
-        &self,
         capability_path: &CapabilityPath,
     ) -> Result<Vec<Registration>, DhtError>;
 }

@@ -1,6 +1,6 @@
 //! Simulated DHT implementation for evaluation.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 use std::time::Instant;
 
@@ -8,8 +8,7 @@ use agent_uri::{AgentUri, CapabilityPath, TrustRoot};
 use agent_uri_attestation::Verifier;
 
 use crate::{
-    Dht, DhtError, DhtKey, DhtStats, Endpoint, MigrationResult, PathTrie, Registration,
-    SimulationConfig,
+    Dht, DhtError, DhtKey, DhtStats, Endpoint, MigrationResult, Registration, SimulationConfig,
 };
 
 /// Simulated DHT for evaluation.
@@ -50,10 +49,7 @@ pub struct SimulatedDht {
     /// Primary index: `DhtKey` -> Registrations
     by_key: RwLock<HashMap<DhtKey, Vec<Registration>>>,
 
-    /// Secondary index: trust root string -> `PathTrie<Registration>`
-    by_path: RwLock<HashMap<String, PathTrie<Registration>>>,
-
-    /// Tertiary index: canonical `AgentUri` -> exact and ancestor keys.
+    /// Secondary index: canonical `AgentUri` -> exact and ancestor keys.
     by_uri: RwLock<HashMap<String, Vec<DhtKey>>>,
 
     /// Enforces that a stable trust-root/agent-ID pair has one immutable path.
@@ -84,7 +80,6 @@ impl SimulatedDht {
     pub fn new(config: SimulationConfig) -> Self {
         Self {
             by_key: RwLock::new(HashMap::new()),
-            by_path: RwLock::new(HashMap::new()),
             by_uri: RwLock::new(HashMap::new()),
             by_identity: RwLock::new(HashMap::new()),
             verifier: Verifier::new(),
@@ -97,7 +92,6 @@ impl SimulatedDht {
     pub fn with_verifier(config: SimulationConfig, verifier: Verifier) -> Self {
         Self {
             by_key: RwLock::new(HashMap::new()),
-            by_path: RwLock::new(HashMap::new()),
             by_uri: RwLock::new(HashMap::new()),
             by_identity: RwLock::new(HashMap::new()),
             verifier,
@@ -147,12 +141,19 @@ impl SimulatedDht {
     #[must_use]
     pub fn stats(&self) -> DhtStats {
         let by_key = self.by_key.read().expect("lock poisoned");
-        let by_path = self.by_path.read().expect("lock poisoned");
         let by_uri = self.by_uri.read().expect("lock poisoned");
 
         let total_registrations = by_uri.len();
         let unique_keys = by_key.len();
-        let unique_trust_roots = by_path.len();
+        // Derived on demand rather than kept as a standing index. `stats` is a
+        // diagnostic that already walks both indices, so the parse cost lands
+        // here instead of on every write.
+        let unique_trust_roots = by_uri
+            .keys()
+            .filter_map(|uri| AgentUri::parse(uri).ok())
+            .map(|uri| uri.trust_root().as_str().to_string())
+            .collect::<HashSet<_>>()
+            .len();
 
         let max_registrations_per_key = by_key.values().map(Vec::len).max().unwrap_or(0);
 
@@ -241,12 +242,10 @@ impl SimulatedDht {
     /// Panics if any of the internal locks are poisoned.
     pub fn clear(&self) {
         let mut by_key = self.by_key.write().expect("lock poisoned");
-        let mut by_path = self.by_path.write().expect("lock poisoned");
         let mut by_uri = self.by_uri.write().expect("lock poisoned");
         let mut by_identity = self.by_identity.write().expect("lock poisoned");
 
         by_key.clear();
-        by_path.clear();
         by_uri.clear();
         by_identity.clear();
     }
@@ -260,7 +259,6 @@ impl SimulatedDht {
     /// Panics if any of the internal locks are poisoned.
     pub fn expire_stale(&self) -> usize {
         let mut by_key = self.by_key.write().expect("lock poisoned");
-        let mut by_path = self.by_path.write().expect("lock poisoned");
         let mut by_uri = self.by_uri.write().expect("lock poisoned");
         let mut by_identity = self.by_identity.write().expect("lock poisoned");
 
@@ -294,25 +292,6 @@ impl SimulatedDht {
             }
         }
 
-        // Rebuild the convenience path index from unique URI registrations,
-        // not from ancestor-key copies.
-        if !expired_uris.is_empty() {
-            by_path.clear();
-            for (uri_str, keys) in by_uri.iter() {
-                if let Some(exact_key) = keys.last()
-                    && let Some(reg) = by_key.get(exact_key).and_then(|registrations| {
-                        registrations
-                            .iter()
-                            .find(|reg| reg.agent_uri().canonical() == *uri_str)
-                    })
-                {
-                    let trust_root_str = reg.agent_uri().trust_root().as_str().to_string();
-                    let trie = by_path.entry(trust_root_str).or_default();
-                    trie.insert(reg.agent_uri().capability_path(), reg.clone());
-                }
-            }
-        }
-
         expired_uris.len()
     }
 
@@ -324,7 +303,6 @@ impl SimulatedDht {
         // - Each DhtKey: 32 bytes
         // - Each Registration: ~500 bytes (URI + endpoints + attestation)
         // - HashMap overhead: ~64 bytes per entry
-        // - PathTrie: ~100 bytes per node
 
         let key_bytes = by_key.len() * (32 + 64);
         let registration_bytes = by_uri.len() * 500;
@@ -345,7 +323,6 @@ impl Dht for SimulatedDht {
         }
 
         let uri_str = registration.agent_uri().canonical();
-        let trust_root_str = registration.agent_uri().trust_root().as_str().to_string();
         let keys = Self::ancestor_keys(registration.agent_uri());
         let identity = Self::identity_key(registration.agent_uri());
 
@@ -371,7 +348,6 @@ impl Dht for SimulatedDht {
         // binding, capacity checks, and ancestor writes are one atomic update.
         {
             let mut by_key = self.by_key.write().expect("lock poisoned");
-            let mut by_path = self.by_path.write().expect("lock poisoned");
             let mut by_uri = self.by_uri.write().expect("lock poisoned");
             let mut by_identity = self.by_identity.write().expect("lock poisoned");
 
@@ -401,13 +377,6 @@ impl Dht for SimulatedDht {
                     ));
                 }
             }
-
-            // Secondary index (path trie) - must insert first since we need to borrow registration
-            let trie = by_path.entry(trust_root_str).or_default();
-            trie.insert(
-                registration.agent_uri().capability_path(),
-                registration.clone(),
-            );
 
             // Primary index: write once at every ancestor key. A GET for any
             // ancestor therefore returns that path and all descendants without
@@ -457,7 +426,7 @@ impl Dht for SimulatedDht {
         };
 
         // Update every ancestor-key copy in the primary index.
-        let mut updated_registration = None;
+        let mut updated_any = false;
         {
             let mut by_key = self.by_key.write().expect("lock poisoned");
             for key in &keys {
@@ -472,26 +441,11 @@ impl Dht for SimulatedDht {
                     return Err(DhtError::expired(&uri_str));
                 }
                 registration.update_endpoints(new_endpoints.clone());
-                updated_registration = Some(registration.clone());
+                updated_any = true;
             }
         }
-        let updated_registration =
-            updated_registration.ok_or_else(|| DhtError::not_found(&uri_str))?;
-
-        // Update in path trie
-        {
-            let mut by_path = self.by_path.write().expect("lock poisoned");
-            let trust_root_str = agent_uri.trust_root().as_str().to_string();
-
-            if let Some(trie) = by_path.get_mut(&trust_root_str) {
-                // Remove old and insert updated
-                let capability_path = agent_uri.capability_path();
-                let uri_str_owned = uri_str.clone();
-                trie.remove(capability_path, |r| {
-                    r.agent_uri().canonical() == uri_str_owned
-                });
-                trie.insert(capability_path, updated_registration);
-            }
+        if !updated_any {
+            return Err(DhtError::not_found(&uri_str));
         }
 
         Ok(())
@@ -508,7 +462,6 @@ impl Dht for SimulatedDht {
         // Mutate all indices under the same lock order as registration.
         {
             let mut by_key = self.by_key.write().expect("lock poisoned");
-            let mut by_path = self.by_path.write().expect("lock poisoned");
             let mut by_uri = self.by_uri.write().expect("lock poisoned");
             let mut by_identity = self.by_identity.write().expect("lock poisoned");
             let keys = by_uri
@@ -522,14 +475,6 @@ impl Dht for SimulatedDht {
                         by_key.remove(&key);
                     }
                 }
-            }
-            let trust_root_str = agent_uri.trust_root().as_str().to_string();
-
-            if let Some(trie) = by_path.get_mut(&trust_root_str) {
-                let uri_str_owned = uri_str.clone();
-                trie.remove(agent_uri.capability_path(), |r| {
-                    r.agent_uri().canonical() == uri_str_owned
-                });
             }
             by_identity.remove(&Self::identity_key(agent_uri));
         }
@@ -588,32 +533,6 @@ impl Dht for SimulatedDht {
                     .collect()
             })
             .unwrap_or_default();
-
-        Ok(results)
-    }
-
-    fn lookup_global(
-        &self,
-        capability_path: &CapabilityPath,
-    ) -> Result<Vec<Registration>, DhtError> {
-        // Simulate delay if configured
-        if let Some(delay) = self.config.simulated_delay {
-            std::thread::sleep(delay);
-        }
-
-        let by_path = self.by_path.read().expect("lock poisoned");
-
-        let mut results = Vec::new();
-
-        for trie in by_path.values() {
-            let matches: Vec<Registration> = trie
-                .get_prefix(capability_path)
-                .into_iter()
-                .filter(|r| !r.is_expired() || !self.config.auto_expire)
-                .cloned()
-                .collect();
-            results.extend(matches);
-        }
 
         Ok(results)
     }
@@ -729,32 +648,7 @@ mod tests {
     }
 
     #[test]
-    fn lookup_prefix_uses_the_ancestor_dht_key_not_the_local_trie() {
-        let dht = unverified_dht();
-        let uri =
-            AgentUri::parse("agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q")
-                .unwrap();
-
-        dht.register(Registration::new(uri, vec![Endpoint::https("a.com")]))
-            .unwrap();
-
-        // The trie is retained only for the explicitly local, cross-root
-        // convenience query. Scoped prefix discovery must remain a single
-        // exact key read from the simulated DHT index.
-        dht.by_path.write().unwrap().clear();
-
-        let results = dht
-            .lookup_prefix(
-                &TrustRoot::parse("anthropic.com").unwrap(),
-                &CapabilityPath::parse("assistant").unwrap(),
-            )
-            .unwrap();
-
-        assert_eq!(results.len(), 1);
-    }
-
-    #[test]
-    fn lookup_global_finds_across_trust_roots() {
+    fn lookup_is_scoped_to_one_trust_root() {
         let dht = unverified_dht();
 
         let uri1 =
@@ -769,11 +663,24 @@ mod tests {
         dht.register(Registration::new(uri2, vec![Endpoint::https("b.com")]))
             .unwrap();
 
-        let results = dht
-            .lookup_global(&CapabilityPath::parse("assistant/chat").unwrap())
+        // Identical capability paths under two authorities derive two distinct
+        // keys, so neither lookup can observe the other's registration. This is
+        // the cross-trust-root isolation that removing the global scan defends.
+        let path = CapabilityPath::parse("assistant/chat").unwrap();
+        let anthropic = dht
+            .lookup_exact(&TrustRoot::parse("anthropic.com").unwrap(), &path)
+            .unwrap();
+        let openai = dht
+            .lookup_exact(&TrustRoot::parse("openai.com").unwrap(), &path)
             .unwrap();
 
-        assert_eq!(results.len(), 2);
+        assert_eq!(anthropic.len(), 1);
+        assert_eq!(
+            anthropic[0].agent_uri().trust_root().as_str(),
+            "anthropic.com"
+        );
+        assert_eq!(openai.len(), 1);
+        assert_eq!(openai[0].agent_uri().trust_root().as_str(), "openai.com");
     }
 
     #[test]
