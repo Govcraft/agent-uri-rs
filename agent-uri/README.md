@@ -31,14 +31,14 @@ agent://example.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q?version=1
 
 ```toml
 [dependencies]
-agent-uri = "0.5"
+agent-uri = "0.6"
 ```
 
 For JSON serialization support:
 
 ```toml
 [dependencies]
-agent-uri = { version = "0.5", features = ["serde"] }
+agent-uri = { version = "0.6", features = ["serde"] }
 ```
 
 ## Quick Start

@@ -6,7 +6,12 @@ use std::time::Duration;
 use crate::MutationKind;
 
 /// Errors that can occur during DHT operations.
+///
+/// `#[non_exhaustive]`, so a `match` on this enum needs a `_` arm. New variants
+/// name failures currently reported more coarsely, and adding one should not
+/// be a major release.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DhtError {
     /// The agent is not registered.
     NotFound {

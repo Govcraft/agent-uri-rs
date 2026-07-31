@@ -120,6 +120,18 @@
 //! client with a TLS stack is a large dependency and this one is useful
 //! without it.
 //!
+//! # Breaking changes in 0.8.0
+//!
+//! [`AttestationError`] is `#[non_exhaustive]`, so an exhaustive `match` on it
+//! needs a `_` arm. Verification keeps growing ways to refuse a token — a
+//! revocation axis, a key window, an audience — and each deserves a variant
+//! that says which check failed rather than being folded into an existing one;
+//! on an exhaustive enum every one of those is a major release. The safe thing
+//! for the new arm to do is reject, because an unrecognised variant is still a
+//! verification failure.
+//!
+//! Matching on a specific variant is unaffected. So is everything else.
+//!
 //! # Breaking changes in 0.7.0
 //!
 //! [`AttestationError`] gains [`KeyNotYetValid`](AttestationError::KeyNotYetValid)

@@ -18,7 +18,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-agent-uri = "0.5"
+agent-uri = "0.6"
 ```
 
 Parse an existing URI:
@@ -94,7 +94,7 @@ Use `agent-uri` alone for parsing and validation. Add `agent-uri-attestation` wh
 
 ```toml
 [dependencies]
-agent-uri = "0.5"
+agent-uri = "0.6"
 ```
 
 ```rust
@@ -125,7 +125,7 @@ Agent IDs use [TypeID](https://github.com/jetify-com/typeid) format: a semantic 
 
 ```toml
 [dependencies]
-agent-uri-attestation = "0.7"
+agent-uri-attestation = "0.8"
 ```
 
 ```rust
@@ -187,7 +187,7 @@ A key's window is checked against the current time, not against the token's `iat
 
 ```toml
 [dependencies]
-agent-uri-attestation-wellknown = "0.1"
+agent-uri-attestation-wellknown = "0.2"
 ```
 
 ```rust,no_run
@@ -213,7 +213,7 @@ Discovery establishes which keys an authority stands behind. It does not establi
 
 ```toml
 [dependencies]
-agent-uri-dht = "0.11"
+agent-uri-dht = "0.12"
 ```
 
 ```rust
@@ -284,7 +284,7 @@ Its limits do not carry over, and neither do measurements taken against it. It b
 
 ```toml
 [dependencies]
-agent-uri-dht-libp2p = "0.4"
+agent-uri-dht-libp2p = "0.5"
 ```
 
 ```rust,no_run

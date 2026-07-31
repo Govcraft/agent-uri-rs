@@ -62,7 +62,12 @@ pub fn classify(bytes: &[u8]) -> Result<Shape, CodecError> {
 }
 
 /// A value read from the overlay that this node could not make sense of.
+///
+/// `#[non_exhaustive]`, so a `match` on this enum needs a `_` arm. A wire
+/// format grows new ways to be wrong; each should be nameable without a major
+/// release, and every one of them still means the value is unusable.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CodecError {
     /// The value was empty, so it carries no version byte.
     Empty,

@@ -3,6 +3,8 @@
 use std::fmt;
 use std::str::FromStr;
 
+use crate::error::TypeClassError;
+
 /// Primary type classification for agents.
 ///
 /// Represents what kind of agent this is at the most fundamental level.
@@ -39,13 +41,33 @@ impl ExtensionClass {
     ///
     /// # Errors
     ///
-    /// Returns an error if the name is empty or contains non-lowercase letters.
-    pub fn new(name: &str) -> Result<Self, &'static str> {
+    /// Returns [`TypeClassError::Empty`] for an empty name, and
+    /// [`TypeClassError::InvalidChar`] naming the first character that is not a
+    /// lowercase ASCII letter.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_uri::{ExtensionClass, TypeClassError};
+    ///
+    /// assert_eq!(ExtensionClass::new("custom").unwrap().as_str(), "custom");
+    /// assert_eq!(
+    ///     ExtensionClass::new("v2"),
+    ///     Err(TypeClassError::InvalidChar { char: '2', position: 1 })
+    /// );
+    /// ```
+    pub fn new(name: &str) -> Result<Self, TypeClassError> {
         if name.is_empty() {
-            return Err("extension class name cannot be empty");
+            return Err(TypeClassError::Empty);
         }
-        if !name.chars().all(|c| c.is_ascii_lowercase()) {
-            return Err("extension class name must be all lowercase letters");
+        // Position counted in characters, not bytes: an offset that lands
+        // mid-character points a reader at nothing (issues #33, #89).
+        if let Some((position, char)) = name
+            .chars()
+            .enumerate()
+            .find(|(_, c)| !c.is_ascii_lowercase())
+        {
+            return Err(TypeClassError::InvalidChar { char, position });
         }
         Ok(Self(name.to_string()))
     }
@@ -93,7 +115,7 @@ impl fmt::Display for TypeClass {
 }
 
 impl FromStr for TypeClass {
-    type Err = &'static str;
+    type Err = TypeClassError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -172,7 +194,55 @@ mod tests {
         // Two bytes, one character, and not a-z (issue #33).
         assert_eq!(
             ExtensionClass::new("\u{00e9}"),
-            Err("extension class name must be all lowercase letters")
+            Err(TypeClassError::InvalidChar {
+                char: '\u{00e9}',
+                position: 0
+            })
         );
+    }
+
+    #[test]
+    fn a_rejection_names_the_character_that_caused_it() {
+        // The old `&'static str` could only say "not all lowercase". A caller
+        // fixing a name wants to know which character and where.
+        assert_eq!(
+            ExtensionClass::new("v2"),
+            Err(TypeClassError::InvalidChar {
+                char: '2',
+                position: 1
+            })
+        );
+        assert_eq!(ExtensionClass::new(""), Err(TypeClassError::Empty));
+    }
+
+    #[test]
+    fn a_position_counts_characters_rather_than_bytes() {
+        // A byte offset past a multi-byte character points at nothing a reader
+        // can find in the string they wrote (issues #33, #89).
+        assert_eq!(
+            ExtensionClass::new("\u{00e9}\u{00e9}X"),
+            Err(TypeClassError::InvalidChar {
+                char: '\u{00e9}',
+                position: 0
+            })
+        );
+        assert_eq!(
+            ExtensionClass::new("ab\u{00e9}"),
+            Err(TypeClassError::InvalidChar {
+                char: '\u{00e9}',
+                position: 2
+            })
+        );
+    }
+
+    #[test]
+    fn a_type_class_rejection_is_a_std_error() {
+        // What the `&'static str` could not be: a type that composes with `?`
+        // and with every error-reporting crate.
+        fn assert_error<E: std::error::Error>(_: &E) {}
+
+        let error = "Custom".parse::<TypeClass>().unwrap_err();
+        assert_error(&error);
+        assert!(error.to_string().contains("lowercase"), "{error}");
     }
 }

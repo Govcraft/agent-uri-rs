@@ -9,7 +9,12 @@ use agent_uri_attestation::AttestationError;
 /// Every variant is a refusal to trust, never a degraded success. A caller that
 /// wanted keys and got one of these has no keys, and a verifier built without
 /// them verifies nothing rather than something.
+///
+/// `#[non_exhaustive]`, so a `match` on this enum needs a `_` arm — and that
+/// arm should assume the same thing every named variant means, because every
+/// variant added later will be another way of refusing to trust.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum DiscoveryError {
     /// The trust root is not one this crate will build a URL from.
     ///

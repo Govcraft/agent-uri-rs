@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri"
-version = "0.5.7"
+version = "0.6.0"
 dependencies = [
  "criterion 0.5.1",
  "mti",
@@ -51,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-attestation"
-version = "0.7.2"
+version = "0.8.0"
 dependencies = [
  "agent-uri",
  "base64",
@@ -69,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-attestation-wellknown"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -83,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -103,7 +103,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-dht"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -117,7 +117,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-dht-libp2p"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-eval"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
