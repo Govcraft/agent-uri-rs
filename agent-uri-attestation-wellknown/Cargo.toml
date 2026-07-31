@@ -1,9 +1,13 @@
 [package]
 name = "agent-uri-attestation-wellknown"
 version = "0.2.0"
-edition = "2024"
-license = "MIT OR Apache-2.0"
+edition.workspace = true
+license.workspace = true
 description = "Well-known key discovery for agent-uri attestation (specification 7.2)"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/agent-uri-attestation-wellknown"
+readme = "README.md"
 keywords = ["agent", "uri", "attestation", "discovery", "ed25519"]
 categories = ["authentication", "cryptography", "web-programming"]
 

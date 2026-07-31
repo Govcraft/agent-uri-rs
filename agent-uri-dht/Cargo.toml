@@ -1,9 +1,13 @@
 [package]
 name = "agent-uri-dht"
 version = "0.12.0"
-edition = "2024"
-license = "MIT OR Apache-2.0"
+edition.workspace = true
+license.workspace = true
 description = "Capability-based DHT discovery for agent:// URI scheme"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/agent-uri-dht"
+readme = "README.md"
 keywords = ["agent", "dht", "discovery", "kademlia", "capability"]
 categories = ["network-programming", "data-structures"]
 
@@ -13,6 +17,12 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
 [features]
 default = []
 serde = ["dep:serde", "agent-uri/serde"]
+
+# docs.rs builds with default features unless told otherwise, and these
+# crates default to none, so the serde impls would be missing from the
+# rendered docs.
+[package.metadata.docs.rs]
+features = ["serde"]
 
 [dependencies]
 agent-uri = { version = "0.6", path = "../agent-uri" }
