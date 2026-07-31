@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use agent_uri::AgentUri;
 use rusty_paseto::prelude::*;
+use zeroize::Zeroizing;
 
 use crate::claims::{AttestationClaims, AttestationClaimsBuilder};
 use crate::error::AttestationError;
@@ -176,10 +177,23 @@ impl Issuer {
         // A token whose agent key does not decode is one the verifier will
         // reject, so refuse to mint it here where the caller can still fix it.
         VerifyingKey::from_base64(&claims.agent_key)?;
-        // Build the PASETO key from the signing key
+
+        // Signing needs the private half in a shape `rusty_paseto` accepts,
+        // which means copying it out of the key that owns it. Both copies are
+        // wiped when this function returns:
+        //
+        // - `key_bytes` is a bare `[u8; 64]`, which zeroizes nothing on its
+        //   own. `Zeroizing` is what wipes it, and it has to: a private key
+        //   left on the stack outlives the frame and can be read out of a core
+        //   dump, a swapped page, or whatever runs on that stack next.
+        // - `key_wrapper` needs no help. `rusty_paseto`'s `Key` is
+        //   `#[zeroize(drop)]`, so it wipes itself.
+        //
+        // `paseto_key` borrows `key_wrapper` rather than copying, so it is not
+        // a third copy and holds nothing to wipe.
         let dalek_key = self.signing_key.as_dalek();
-        let key_bytes = dalek_key.to_keypair_bytes();
-        let key_wrapper = Key::<64>::from(&key_bytes);
+        let key_bytes = Zeroizing::new(dalek_key.to_keypair_bytes());
+        let key_wrapper = Key::<64>::from(&*key_bytes);
         let paseto_key = PasetoAsymmetricPrivateKey::<V4, Public>::from(&key_wrapper);
 
         // Format timestamps for PASETO
@@ -252,6 +266,8 @@ impl Issuer {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::*;
 
     fn test_uri() -> AgentUri {
@@ -369,6 +385,32 @@ mod tests {
                 assert!(actual > max);
             }
             other => panic!("Expected TokenTooLong, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn issuer_debug_does_not_print_its_signing_key() {
+        // `Issuer` derives `Debug` and holds the trust root's private key, so
+        // what it prints is decided entirely by `SigningKey`'s impl. That is
+        // fine today and nothing was checking it: a derive on `SigningKey`
+        // would leak the key through every `Issuer` in every log line, and the
+        // change would look harmless at the site that made it.
+        let seed = [0xCDu8; 32];
+        let key = SigningKey::from_bytes(&seed).expect("a valid seed");
+        let issuer = Issuer::new("acme.com", key, Duration::from_hours(1));
+
+        let shown = format!("{issuer:?}");
+        let as_hex = seed.iter().fold(String::new(), |mut out, byte| {
+            let _ = write!(out, "{byte:02x}");
+            out
+        });
+
+        assert!(shown.contains("acme.com"), "the trust root is not a secret");
+        for rendering in [as_hex, format!("{seed:?}")] {
+            assert!(
+                !shown.contains(&rendering),
+                "the signing key leaked into Debug output: {shown}"
+            );
         }
     }
 

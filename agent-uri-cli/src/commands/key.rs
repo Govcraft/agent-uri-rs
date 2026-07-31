@@ -54,7 +54,11 @@ fn generate<O: Write, E: Write>(
         return out.emit(&KeyGenerated {
             public_key,
             path: None,
-            secret_key: Some(keyfile::encode(&key)),
+            // The one place the private key is meant to leave the process in
+            // the clear, because `--stdout` asked for exactly that. Taking it
+            // out of the wrapper is the acknowledgement; it is not an oversight
+            // that this copy is not wiped, since it is on its way to stdout.
+            secret_key: Some(keyfile::encode(&key).to_string()),
         });
     }
 
