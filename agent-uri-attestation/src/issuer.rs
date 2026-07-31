@@ -212,6 +212,7 @@ impl Issuer {
             }
         })?;
         let iss_claim = IssuerClaim::from(claims.iss.as_str());
+        let jti_claim = TokenIdentifierClaim::from(claims.jti.as_str());
         let agent_key_claim = CustomClaim::try_from(("agent_key", claims.agent_key.as_str()))
             .map_err(|e| AttestationError::InvalidClaims {
                 reason: format!("invalid agent_key claim: {e}"),
@@ -238,6 +239,7 @@ impl Issuer {
             .set_claim(exp_claim)
             .set_claim(iat_claim)
             .set_claim(iss_claim)
+            .set_claim(jti_claim)
             .set_claim(agent_uri_claim)
             .set_claim(agent_key_claim)
             .set_claim(capabilities_claim);

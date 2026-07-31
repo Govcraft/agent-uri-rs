@@ -356,6 +356,25 @@ EXAMPLES:
         /// supplied and exactly matches its `aud` claim.
         #[arg(long, value_name = "AUDIENCE")]
         audience: Option<String>,
+
+        /// Refuse a specific token, by the `jti` claim it carries. Repeat to
+        /// revoke several.
+        ///
+        /// Use this for an attestation withdrawn on its own: one grant issued
+        /// in error, one agent decommissioned. Read a token's jti with
+        /// 'agent-uri attest inspect'.
+        #[arg(long, value_name = "JTI")]
+        revoked_token: Vec<String>,
+
+        /// Refuse every token signed by this key, as 64 hex characters. Repeat
+        /// to revoke several.
+        ///
+        /// Use this for a compromised signing key. It is wider than
+        /// --revoked-token on purpose: an attacker holding a stolen key mints
+        /// tokens whose jti values you have never seen, so listing tokens
+        /// individually can only ever catch the ones you already knew about.
+        #[arg(long, value_name = "HEX")]
+        revoked_key: Vec<String>,
     },
 
     /// Decode a token's claims WITHOUT verifying them.

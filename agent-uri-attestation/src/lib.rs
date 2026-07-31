@@ -31,8 +31,10 @@
 //!     .issue(&uri, &agent_key.verifying_key(), vec!["workflow/approval/read".into()])
 //!     .unwrap();
 //!
-//! // Verifier side: validate attestation
-//! let mut verifier = Verifier::new();
+//! // Verifier side: validate attestation. A verifier must say what it does
+//! // about revocation before it will accept anything; `AcceptAll` is the
+//! // explicit "this deployment does not revoke".
+//! let mut verifier = Verifier::new().with_revocation(agent_uri_attestation::AcceptAll);
 //! verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 //!
 //! let claims = verifier.verify(&token).unwrap();
@@ -45,6 +47,7 @@
 //!
 //! Attestation tokens are PASETO v4.public tokens containing:
 //!
+//! - `jti`: A unique identifier for this token, so it can be revoked
 //! - `agent_uri`: The full agent URI being attested
 //! - `agent_key`: The agent's own Ed25519 public key, base64-encoded
 //! - `capabilities`: Array of capability strings granted
@@ -64,6 +67,50 @@
 //! | Issuer/namespace binding | `iss` must equal the `agent_uri` claim's authority |
 //! | URI binding | `agent_uri` claim verified against expected |
 //! | Tamper detection | Ed25519 signature verification |
+//! | Withdrawal before expiry | [`RevocationCheck`], by `jti` or by signing key |
+//!
+//! # Breaking changes in 0.6.0
+//!
+//! Two changes, both of which reject inputs that 0.5.x accepted.
+//!
+//! ## Tokens carry a REQUIRED `jti`
+//!
+//! [`Issuer`] mints one automatically and [`Verifier`] rejects a token without
+//! one. A signature cannot be taken back, so revocation is the only way to stop
+//! honouring a token before its `exp` — and a token that cannot be *named*
+//! cannot be revoked. Making the identifier optional would have left every
+//! token issued without one permanently outside the reach of any denylist.
+//!
+//! Tokens minted by 0.5.x have no `jti` and no longer verify. Re-issue them.
+//!
+//! ## A verifier must be given a revocation source
+//!
+//! [`Verifier::new`] no longer verifies anything on its own: until
+//! [`Verifier::with_revocation`] is called, every token is refused with
+//! [`AttestationError::RevocationUnavailable`].
+//!
+//! Specification section 8.2 makes revocation checking a MUST, and the
+//! alternative default would have made the omission silent — a deployment that
+//! never wired up its denylist would behave exactly like one that had, right up
+//! until it honoured a revoked token. Say which you want:
+//!
+//! ```
+//! use agent_uri_attestation::{AcceptAll, Denylist, Verifier};
+//!
+//! // Checking against a real list.
+//! let checked = Verifier::new()
+//!     .with_revocation(Denylist::new().revoke_token("01h455vb4pex5vsknk084sn02q"));
+//!
+//! // Or stating outright that this deployment does not revoke.
+//! let unchecked = Verifier::new().with_revocation(AcceptAll);
+//! ```
+//!
+//! ## The default TTL is one hour
+//!
+//! Not breaking at the type level, but it changes what a caller who never set
+//! one gets. Previously 24 hours, chosen when `exp` was the only limit on a
+//! compromised key's blast radius. Set it explicitly with
+//! [`AttestationClaimsBuilder::ttl`] if you need longer.
 //!
 //! # Breaking change in 0.5.0
 //!
@@ -138,6 +185,7 @@ mod issuer;
 mod keys;
 #[cfg(kani)]
 mod proofs;
+pub mod revocation;
 mod verification;
 mod verifier;
 
@@ -146,6 +194,7 @@ pub use constants::MAX_TOKEN_LENGTH;
 pub use error::AttestationError;
 pub use issuer::Issuer;
 pub use keys::{Signature, SigningKey, VerifyingKey};
+pub use revocation::{AcceptAll, Denylist, RevocationCheck};
 pub use verification::{
     capability_covers, check_capability_coverage, check_expiration, check_expiration_with_leeway,
     check_not_before, check_token_length, check_validity_window, validate_audience,
@@ -162,9 +211,9 @@ pub use verifier::Verifier;
 /// ```
 pub mod prelude {
     pub use crate::{
-        AttestationClaims, AttestationClaimsBuilder, AttestationError, Issuer, MAX_TOKEN_LENGTH,
-        Signature, SigningKey, Verifier, VerifyingKey, capability_covers,
-        check_capability_coverage, check_expiration, check_token_length, check_validity_window,
-        validate_issuer, validate_subject,
+        AcceptAll, AttestationClaims, AttestationClaimsBuilder, AttestationError, Denylist, Issuer,
+        MAX_TOKEN_LENGTH, RevocationCheck, Signature, SigningKey, Verifier, VerifyingKey,
+        capability_covers, check_capability_coverage, check_expiration, check_token_length,
+        check_validity_window, validate_issuer, validate_subject,
     };
 }

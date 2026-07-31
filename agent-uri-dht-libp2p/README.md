@@ -16,7 +16,7 @@ agent-uri-dht-libp2p = "0.2"
 ## Starting a node
 
 ```rust,no_run
-use agent_uri_attestation::Verifier;
+use agent_uri_attestation::{AcceptAll, Verifier};
 use agent_uri_dht::{Dht, PeerAddr, Query, ReadOptions, WriteOptions};
 use agent_uri_dht_libp2p::Libp2pConfig;
 use libp2p::identity;
@@ -24,7 +24,7 @@ use libp2p::identity;
 # async fn example(trust_root_key: agent_uri_attestation::VerifyingKey)
 # -> Result<(), Box<dyn std::error::Error>> {
 // A node verifies attestations against the trust roots it is given.
-let mut verifier = Verifier::new();
+let mut verifier = Verifier::new().with_revocation(AcceptAll);
 verifier.add_trusted_root("anthropic.com", trust_root_key);
 
 let node = agent_uri_dht_libp2p::start(

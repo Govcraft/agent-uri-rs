@@ -301,7 +301,7 @@ pub fn matches_query(
 mod tests {
     use super::*;
     use agent_uri::CapabilityPath;
-    use agent_uri_attestation::{Issuer, SigningKey};
+    use agent_uri_attestation::{AcceptAll, Issuer, SigningKey};
     use agent_uri_dht::{Endpoint, MutationProof, Registration};
 
     const TRUST_ROOT: &str = "anthropic.com";
@@ -326,7 +326,7 @@ mod tests {
         fn new() -> Self {
             let root_key = SigningKey::generate();
             let issuer = Issuer::new(TRUST_ROOT, root_key.clone(), Duration::from_hours(1));
-            let mut verifier = Verifier::new();
+            let mut verifier = Verifier::new().with_revocation(AcceptAll);
             verifier.add_trusted_root(TRUST_ROOT, root_key.verifying_key());
             Self { verifier, issuer }
         }

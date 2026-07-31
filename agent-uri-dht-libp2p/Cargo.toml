@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-dht-libp2p"
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 license.workspace = true
 description = "Kademlia DHT backend for agent:// discovery, over libp2p-kad"
@@ -9,8 +9,8 @@ categories = ["network-programming"]
 
 [dependencies]
 agent-uri = { version = "0.5.0", path = "../agent-uri" }
-agent-uri-attestation = { version = "0.5.0", path = "../agent-uri-attestation" }
-agent-uri-dht = { version = "0.9.0", path = "../agent-uri-dht", features = ["serde"] }
+agent-uri-attestation = { version = "0.6.0", path = "../agent-uri-attestation" }
+agent-uri-dht = { version = "0.10.0", path = "../agent-uri-dht", features = ["serde"] }
 async-trait = "0.1.91"
 futures = "0.3.33"
 libp2p = { version = "0.56.0", default-features = false, features = ["tokio", "tcp", "noise", "yamux", "kad", "identify", "macros"] }

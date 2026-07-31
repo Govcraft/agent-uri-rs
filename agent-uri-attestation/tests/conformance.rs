@@ -171,7 +171,8 @@ fn verify_claims(
 /// Claims are a fixed struct, so an absent REQUIRED claim reaches us as a
 /// deserialization error rather than as a typed one.
 fn missing_field_name(reason: &str) -> Option<&'static str> {
-    const FIELDS: [&str; 6] = [
+    const FIELDS: [&str; 7] = [
+        "jti",
         "agent_uri",
         "agent_key",
         "capabilities",

@@ -129,7 +129,7 @@ agent-uri-attestation = "0.5"
 
 ```rust
 use agent_uri::AgentUri;
-use agent_uri_attestation::{Issuer, Verifier, SigningKey};
+use agent_uri_attestation::{AcceptAll, Issuer, Verifier, SigningKey};
 use std::time::Duration;
 
 // Trust root issues attestation
@@ -147,7 +147,7 @@ let token = issuer
     .unwrap();
 
 // Verifier checks token without callback
-let mut verifier = Verifier::new();
+let mut verifier = Verifier::new().with_revocation(AcceptAll);
 verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 let claims = verifier.verify(&token).unwrap();
 assert_eq!(claims.agent_uri, uri.to_string());
@@ -169,7 +169,7 @@ agent-uri-dht = "0.9"
 
 ```rust
 use agent_uri::{AgentUri, TrustRoot, CapabilityPath};
-use agent_uri_attestation::{Issuer, SigningKey, Verifier};
+use agent_uri_attestation::{AcceptAll, Issuer, SigningKey, Verifier};
 use agent_uri_dht::{
     Dht, Endpoint, MutationProof, Query, ReadOptions, Registration, SimulatedDht, SimulationConfig,
     WriteOptions,
@@ -192,7 +192,7 @@ let agent_key = SigningKey::generate();
 let token = issuer
     .issue(&uri, &agent_key.verifying_key(), vec!["assistant/chat".into()])
     .unwrap();
-let mut verifier = Verifier::new();
+let mut verifier = Verifier::new().with_revocation(AcceptAll);
 verifier.add_trusted_root("anthropic.com", signing_key.verifying_key());
 let dht = SimulatedDht::with_verifier(SimulationConfig::default(), verifier);
 let registration = Registration::new(
@@ -239,14 +239,14 @@ agent-uri-dht-libp2p = "0.2"
 ```
 
 ```rust,no_run
-use agent_uri_attestation::Verifier;
+use agent_uri_attestation::{AcceptAll, Verifier};
 use agent_uri_dht::{Dht, PeerAddr};
 use agent_uri_dht_libp2p::Libp2pConfig;
 use libp2p::identity;
 
 # async fn example(trust_root_key: agent_uri_attestation::VerifyingKey)
 # -> Result<(), Box<dyn std::error::Error>> {
-let mut verifier = Verifier::new();
+let mut verifier = Verifier::new().with_revocation(AcceptAll);
 verifier.add_trusted_root("anthropic.com", trust_root_key);
 
 let node = agent_uri_dht_libp2p::start(
