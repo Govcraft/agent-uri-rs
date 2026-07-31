@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-cli"
-version = "0.3.0"
+version = "0.3.1"
 edition.workspace = true
 license.workspace = true
 description = "Command-line tool for the agent:// identity scheme: key ceremony, attestation minting, verification, and inspection"
@@ -27,6 +27,7 @@ clap_mangen = "0.3.0"
 hex = "0.4.3"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
+zeroize = "1.9.0"
 
 [lints]
 workspace = true

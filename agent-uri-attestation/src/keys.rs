@@ -101,7 +101,35 @@ impl SigningKey {
         })
     }
 
-    /// Returns the raw key bytes.
+    /// Returns the raw private key seed.
+    ///
+    /// # This hands out unprotected secret material
+    ///
+    /// [`SigningKey`] wipes itself when dropped, and so does the `ed25519-dalek`
+    /// key it wraps. The array returned here does neither: it is a plain
+    /// `[u8; 32]`, and from the moment it is returned the private key exists in
+    /// a second place that this crate cannot reach and will not clean up. A copy
+    /// left on the stack or in a `Vec` outlives its frame and can be recovered
+    /// from a core dump, a swapped page, or whatever is allocated over it next.
+    ///
+    /// Call this only to persist or transmit the key, and wrap the result in
+    /// [`zeroize::Zeroizing`](https://docs.rs/zeroize) for as long as it is
+    /// held:
+    ///
+    /// ```
+    /// use agent_uri_attestation::SigningKey;
+    /// use zeroize::Zeroizing;
+    ///
+    /// let key = SigningKey::generate();
+    /// let seed = Zeroizing::new(key.to_bytes());
+    ///
+    /// // `seed` is wiped on drop; the bare array this returned would not be.
+    /// assert_eq!(SigningKey::from_bytes(&seed).unwrap().to_bytes(), *seed);
+    /// ```
+    ///
+    /// To *identify* a key rather than move it, use
+    /// [`verifying_key`](Self::verifying_key). The public half is not secret,
+    /// and it is what names a key everywhere else in this crate.
     #[must_use]
     pub fn to_bytes(&self) -> [u8; 32] {
         self.inner.to_bytes()
@@ -251,7 +279,17 @@ impl std::fmt::Debug for VerifyingKey {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::*;
+
+    /// Renders bytes as lowercase hex, for asserting a secret is *absent*.
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().fold(String::new(), |mut out, byte| {
+            let _ = write!(out, "{byte:02x}");
+            out
+        })
+    }
 
     #[test]
     fn signing_key_generates_unique_keys() {
@@ -320,6 +358,26 @@ mod tests {
 
         assert!(debug_output.contains("SigningKey"));
         assert!(debug_output.contains("VerifyingKey"));
+    }
+
+    #[test]
+    fn signing_key_debug_does_not_print_the_private_key() {
+        // The assertion above says what the output *contains*, which a leaking
+        // impl would satisfy just as well: printing the public key and the
+        // private one passes it. This says what the output must not contain,
+        // which is the half that matters. `{:?}` reaches logs, panic messages,
+        // and error reports without anyone deciding it should.
+        let seed = [0xABu8; 32];
+        let key = SigningKey::from_bytes(&seed).expect("a valid seed");
+
+        let shown = format!("{key:?}");
+
+        for rendering in [hex(&seed), BASE64.encode(seed), format!("{seed:?}")] {
+            assert!(
+                !shown.contains(&rendering),
+                "the private key leaked into Debug output: {shown}"
+            );
+        }
     }
 
     #[test]

@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-attestation"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "PASETO v4.public attestation for agent-uri"
@@ -24,6 +24,7 @@ chrono = { version = "0.4", features = ["serde"] }
 # This is a constraint of the dependency graph, not an un-tended version.
 rand = "0.8"
 base64 = "0.22"
+zeroize = "1.9.0"
 
 [dev-dependencies]
 kani-verifier = "0.67.0"

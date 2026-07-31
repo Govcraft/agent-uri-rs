@@ -647,9 +647,14 @@ mod tests {
     /// the payload directly. The signature is genuine and the key is trusted:
     /// these tests are about what happens *after* authentication succeeds,
     /// which is precisely where a claim reader can be too trusting.
+    ///
+    /// The keypair copy is wiped the same way [`Issuer::issue_claims`] wipes
+    /// its own. Nothing is at stake in a test key, but this is the snippet a
+    /// reader copies when they need to sign a payload by hand, so it should not
+    /// be the one that teaches the habit of leaving key material on the stack.
     fn sign_raw_payload(signing_key: &SigningKey, payload: &str) -> String {
-        let key_bytes = signing_key.as_dalek().to_keypair_bytes();
-        let key_wrapper = Key::<64>::from(&key_bytes);
+        let key_bytes = zeroize::Zeroizing::new(signing_key.as_dalek().to_keypair_bytes());
+        let key_wrapper = Key::<64>::from(&*key_bytes);
         let private_key = PasetoAsymmetricPrivateKey::<V4, Public>::from(&key_wrapper);
 
         Paseto::<V4, Public>::builder()

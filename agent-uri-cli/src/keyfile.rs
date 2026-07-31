@@ -17,6 +17,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use agent_uri_attestation::SigningKey;
+use zeroize::Zeroizing;
 
 use crate::error::CliError;
 
@@ -48,11 +49,21 @@ pub const fn check_mode(mode: u32) -> Result<(), u32> {
 }
 
 /// Encodes a signing key as 64 lowercase hex characters.
-pub fn encode(key: &SigningKey) -> String {
-    hex::encode(key.to_bytes())
+///
+/// The result is the private key in plain text, so it comes back wrapped: a
+/// bare `String` would leave the key on the heap after the caller was finished
+/// with it, and nothing would ever wipe it. Callers that genuinely mean to
+/// publish it — `key generate --stdout` is the only one — have to say so by
+/// taking it out of the wrapper.
+pub fn encode(key: &SigningKey) -> Zeroizing<String> {
+    Zeroizing::new(hex::encode(Zeroizing::new(key.to_bytes())))
 }
 
 /// Parses a signing key from its hex encoding.
+///
+/// Every intermediate here holds the private key in the clear — the decoded
+/// bytes and the seed both — so each is wiped when this returns rather than
+/// left for the allocator to hand out again.
 ///
 /// # Errors
 ///
@@ -72,21 +83,22 @@ pub fn decode(text: &str, path: &Path) -> Result<SigningKey, CliError> {
         ));
     }
 
-    let bytes = hex::decode(trimmed).map_err(|source| {
+    let bytes = Zeroizing::new(hex::decode(trimmed).map_err(|source| {
         CliError::fault(
             "malformed_key",
             format!("key file '{}' is not valid hex: {source}", path.display()),
             "the file should hold 64 lowercase hex characters and nothing else",
         )
-    })?;
+    })?);
 
-    let seed: [u8; 32] = bytes.try_into().map_err(|_| {
-        CliError::fault(
-            "malformed_key",
-            format!("key file '{}' does not hold a 32-byte key", path.display()),
-            "regenerate the key with 'agent-uri key generate'",
-        )
-    })?;
+    let seed: Zeroizing<[u8; 32]> =
+        Zeroizing::new(<[u8; 32]>::try_from(bytes.as_slice()).map_err(|_| {
+            CliError::fault(
+                "malformed_key",
+                format!("key file '{}' does not hold a 32-byte key", path.display()),
+                "regenerate the key with 'agent-uri key generate'",
+            )
+        })?);
 
     SigningKey::from_bytes(&seed).map_err(|source| {
         CliError::fault(
@@ -146,8 +158,12 @@ pub fn load(path: &Path) -> Result<SigningKey, CliError> {
 
     enforce_permissions(&metadata, path)?;
 
-    let text =
-        fs::read_to_string(path).map_err(|source| CliError::io(path, "read key file", &source))?;
+    // The file's contents are the private key in plain text. Reading it into a
+    // bare `String` would leave it on the heap for every signing operation the
+    // process performs, not just this one.
+    let text = Zeroizing::new(
+        fs::read_to_string(path).map_err(|source| CliError::io(path, "read key file", &source))?,
+    );
     decode(&text, path)
 }
 
@@ -203,8 +219,9 @@ pub fn store(path: &Path, key: &SigningKey, force: bool) -> Result<(), CliError>
     }
 
     let mut file = private_file(path)?;
+    let encoded = encode(key);
     // Newline included so the file behaves under `cat`, `read`, and text editors.
-    writeln!(file, "{}", encode(key))
+    writeln!(file, "{}", *encoded)
         .map_err(|source| CliError::io(path, "write key file", &source))?;
     file.flush()
         .map_err(|source| CliError::io(path, "write key file", &source))?;
@@ -288,7 +305,7 @@ mod tests {
 
         assert_eq!(encoded.len(), HEX_LEN);
         assert!(encoded.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_eq!(encoded, encoded.to_lowercase());
+        assert_eq!(*encoded, encoded.to_lowercase());
     }
 
     #[test]
@@ -302,7 +319,7 @@ mod tests {
     #[test]
     fn decode_tolerates_a_trailing_newline() {
         let key = SigningKey::generate();
-        let recovered = decode(&format!("{}\n", encode(&key)), Path::new("/k")).unwrap();
+        let recovered = decode(&format!("{}\n", *encode(&key)), Path::new("/k")).unwrap();
 
         assert_eq!(key.to_bytes(), recovered.to_bytes());
     }
