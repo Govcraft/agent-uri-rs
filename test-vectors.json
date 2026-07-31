@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "name": "Agent URI Test Vectors",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Canonical test vectors for agent:// URI scheme implementations. All conforming implementations MUST pass these tests.",
-  "generated": "2026-07-27",
+  "generated": "2026-07-31",
   "sections": {
     "parsing": "Valid URIs with expected component extraction",
     "invalid": "Invalid URIs that MUST be rejected",
@@ -133,13 +133,14 @@
     },
     {
       "id": "parse-007",
-      "description": "Full IPv6 address",
+      "description": "Full IPv6 address, canonicalized per RFC 5952",
       "input": "agent://[2001:db8:85a3:0000:0000:8a2e:0370:7334]/monitoring/llm_01h455vb4pex5vsknk084sn02q",
       "valid": true,
+      "note": "An IP address is held in canonical text form: leading zeros dropped and the longest run of zero groups compressed",
       "components": {
         "scheme": "agent",
-        "trust_root": "[2001:db8:85a3:0000:0000:8a2e:0370:7334]",
-        "host": "2001:db8:85a3:0000:0000:8a2e:0370:7334",
+        "trust_root": "[2001:db8:85a3::8a2e:370:7334]",
+        "host": "2001:db8:85a3::8a2e:370:7334",
         "port": null,
         "capability_path": "monitoring",
         "capability_segments": ["monitoring"],
@@ -155,6 +156,7 @@
       "description": "URI with query string (preserved but not part of identity)",
       "input": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?version=2.0&ttl=3600",
       "valid": true,
+      "note": "Query parameters serialize sorted by name, so a query round-trips through parse-serialize in one form regardless of the order it arrived in",
       "components": {
         "scheme": "agent",
         "trust_root": "anthropic.com",
@@ -165,7 +167,7 @@
         "agent_id": "llm_01h455vb4pex5vsknk084sn02q",
         "agent_id_prefix": "llm",
         "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
-        "query": "version=2.0&ttl=3600",
+        "query": "ttl=3600&version=2.0",
         "fragment": null
       }
     },
@@ -619,13 +621,36 @@
       "input": "agent://192.168.001.1/test/llm_01h455vb4pex5vsknk084sn02q",
       "error_type": "invalid_ipv4",
       "error_message": "IPv4 octets must not have leading zeros"
+    },
+    {
+      "id": "invalid-035",
+      "description": "Trailing dot on trust root (must reject, not strip)",
+      "input": "agent://example.com./chat/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_trust_root",
+      "error_message": "Domain labels must not be empty; a trailing dot is not stripped",
+      "note": "One trust root has one spelling. The absolute-form dot is a different string, so it is refused rather than folded into example.com"
+    },
+    {
+      "id": "invalid-036",
+      "description": "Percent-encoding in a capability segment (must reject, not decode)",
+      "input": "agent://example.com/ch%61t/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "invalid_capability_segment",
+      "error_message": "Capability segments admit only lowercase letters, digits, and hyphens",
+      "note": "Percent-encoding appears in the grammar only in query parameter values; a capability segment carrying '%' is refused rather than decoded"
+    },
+    {
+      "id": "invalid-037",
+      "description": "Uppercase in capability path (must reject)",
+      "input": "agent://example.com/Chat/llm_01h455vb4pex5vsknk084sn02q",
+      "error_type": "case_sensitivity",
+      "error_message": "Capability segments are lowercase identity material and are not normalized"
     }
   ],
 
   "normalization": [
     {
       "id": "norm-001",
-      "description": "Uppercase scheme normalization",
+      "description": "Uppercase scheme folds to lowercase (RFC 3986 section 3.1)",
       "input": "AGENT://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
       "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
     },
@@ -637,7 +662,7 @@
     },
     {
       "id": "norm-003",
-      "description": "Uppercase trust root normalization",
+      "description": "Uppercase trust root folds to lowercase (RFC 4343)",
       "input": "agent://ANTHROPIC.COM/chat/llm_01h455vb4pex5vsknk084sn02q",
       "canonical": "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q"
     },
@@ -667,21 +692,10 @@
     },
     {
       "id": "norm-012",
-      "description": "Complex normalization with all components",
-      "input": "AGENT://Anthropic.COM/Assistant/Chat/LLM_01H455VB4PEX5VSKNK084SN02Q?version=1.0#task",
-      "canonical": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q"
-    },
-    {
-      "id": "norm-013",
-      "description": "Trailing dot on trust root stripped",
-      "input": "agent://example.com./chat/llm_01h455vb4pex5vsknk084sn02q",
-      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
-    },
-    {
-      "id": "norm-014",
-      "description": "Percent-encoded unreserved characters decoded",
-      "input": "agent://example.com/ch%61t/llm_01h455vb4pex5vsknk084sn02q",
-      "canonical": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+      "description": "Every case-folding and stripping rule at once",
+      "input": "AGENT://Anthropic.COM/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?version=1.0#task",
+      "canonical": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
+      "note": "The capability path and agent ID are lowercase here because uppercase in either is rejected, not folded (see invalid-032, invalid-037)"
     },
     {
       "id": "norm-015",
@@ -694,8 +708,8 @@
   "equivalence": [
     {
       "id": "equiv-001",
-      "description": "Case difference - equivalent",
-      "uri_a": "agent://Anthropic.COM/Assistant/Chat/LLM_01H455VB4PEX5VSKNK084SN02Q",
+      "description": "Scheme and trust root case difference - equivalent",
+      "uri_a": "AGENT://Anthropic.COM/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
       "uri_b": "agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q",
       "equivalent": true
     },
@@ -785,8 +799,8 @@
     },
     {
       "id": "equiv-014",
-      "description": "Mixed case with query/fragment - equivalent",
-      "uri_a": "agent://EXAMPLE.COM/CHAT/LLM_01H455VB4PEX5VSKNK084SN02Q?v=1#a",
+      "description": "Foldable case difference with query/fragment - equivalent",
+      "uri_a": "AGENT://EXAMPLE.COM/chat/llm_01h455vb4pex5vsknk084sn02q?v=1#a",
       "uri_b": "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q?v=2#b",
       "equivalent": true
     }

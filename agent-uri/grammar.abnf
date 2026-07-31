@@ -395,28 +395,38 @@ HEXDIG          = DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
 ; ============================================================================
 ;
 ; For URI comparison and DHT key derivation, the following normalization
-; applies:
+; applies. Case is folded only where a standard makes a component
+; case-insensitive; every other departure from canonical form is REJECTED
+; rather than repaired, so that one identity has one spelling.
 ;
-; 1. Scheme is always lowercase: "agent" not "AGENT" or "Agent"
+; 1. Scheme is compared case-insensitively and written lowercase: "AGENT://"
+;    is accepted and folded to "agent://" (RFC 3986 section 3.1)
 ;
-; 2. Trust root domain is case-insensitive, normalized to lowercase:
-;    "Anthropic.COM" → "anthropic.com"
+; 2. Trust root domain is case-insensitive, normalized to lowercase
+;    (RFC 4343): "Anthropic.COM" → "anthropic.com". A trailing dot is
+;    REJECTED, not stripped: "example.com." is not a valid trust root.
 ;
-; 3. Port is omitted if default (no default port defined for agent scheme,
+; 3. IP literals are held in canonical text form. IPv6 follows RFC 5952:
+;    leading zeros dropped, longest run of zero groups compressed.
+;
+; 4. Port is omitted if default (no default port defined for agent scheme,
 ;    but implementations may define one, e.g., 8472)
 ;
-; 4. Capability path segments are always lowercase (enforced by grammar)
+; 5. Capability path segments are lowercase by grammar. Uppercase input is
+;    REJECTED, not folded, and a segment carrying "%" is REJECTED rather
+;    than percent-decoded.
 ;
-; 5. Agent ID prefix is always "agent" lowercase
+; 6. Agent ID prefix and suffix are lowercase by grammar. Uppercase input is
+;    REJECTED, not folded.
 ;
-; 6. Agent ID suffix uses lowercase Crockford Base32
-;
-; 7. Query parameters are sorted lexicographically by name for comparison
+; 7. Query parameters are sorted lexicographically by name, both for
+;    comparison and when serializing a preserved query
 ;
 ; 8. Empty query ("?") and empty fragment ("#") are stripped
 ;
-; 9. Percent-encoding is normalized: uppercase hex digits, decode unreserved
-;    characters
+; 9. Percent-encoding is normalized within query parameter values, the only
+;    place the grammar admits it: uppercase hex digits on output, and octets
+;    that need no encoding are written literally
 
 ; ============================================================================
 ; DHT KEY DERIVATION (Prose)
