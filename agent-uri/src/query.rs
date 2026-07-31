@@ -24,7 +24,10 @@ use crate::error::QueryError;
 /// - `attestation`: Inline PASETO attestation token
 /// - `resolver`: Hint for resolution endpoint
 /// - `ttl`: Cache TTL hint in seconds
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+///
+/// Parameters are held sorted by name, so two queries that differ only in the
+/// order they were written are equal and hash equally.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct QueryParams {
     params: BTreeMap<String, String>,
 }
