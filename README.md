@@ -387,6 +387,43 @@ the checks behind the signature: it requires that anything accepted satisfies
 what the verifier promises of it, and that a token an honest issuer would mint
 is not refused.
 
+## Releasing
+
+Publishing happens from CI and only from CI, so that a version on crates.io
+always corresponds to a tag in this repository, on `main`, whose CI was green.
+
+One crate per tag, named `<crate>-v<version>`:
+
+```bash
+git tag -s agent-uri-v0.6.0 -m 'agent-uri 0.6.0'
+git push origin agent-uri-v0.6.0
+```
+
+The tag push runs [`.github/workflows/release.yml`](.github/workflows/release.yml),
+which refuses to publish unless the tag parses, names a crate in this
+workspace, matches that crate's `Cargo.toml` version, sits on an ancestor of
+`main`, and has a successful CI run for its exact commit. Authentication is
+crates.io trusted publishing over OIDC; there is no long-lived token in the
+repository's secrets.
+
+For a release spanning several crates, push the tags in dependency order and
+let each land before the next — a dependent cannot be packaged until the
+version it requires is on the index:
+
+```text
+agent-uri
+  └─ agent-uri-attestation
+       ├─ agent-uri-dht ─── agent-uri-dht-libp2p
+       ├─ agent-uri-attestation-wellknown
+       └─ agent-uri-cli
+```
+
+All six are publishable; `agent-uri-eval` is `publish = false`. Each needs a
+trusted publisher configured on crates.io once, as described in the workflow
+header — and `agent-uri-attestation-wellknown` and `agent-uri-dht-libp2p` need
+one manual `cargo publish` first, because crates.io has no settings page for a
+crate that does not exist yet.
+
 ## Paper
 
 This implementation is based on the research paper:
