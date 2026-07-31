@@ -362,10 +362,14 @@ suite, and doctests. Beyond that:
 |---------|--------------|
 | `task test` | Unit, integration, conformance, and property tests |
 | `task fuzz` | libFuzzer over every parser entry point and the attestation verifier, a minute each (needs nightly and `cargo-fuzz`) |
-| `task kani` | Kani model-checking proofs |
-| `task miri` | Miri, for undefined behavior |
+| `task kani` | Kani model-checking proofs over `agent-uri` and `agent-uri-attestation` (needs `cargo-kani`) |
+| `task miri` | Miri, for undefined behavior (needs nightly) |
 | `task bench` | Criterion benchmarks |
 | `task msrv` | Builds on the oldest supported toolchain, read from the manifest |
+
+Three of these are too slow for a pull request and run on the weekly CI
+schedule instead, plus manual dispatch: `fuzz`, `kani`, and `miri`. Each is the
+same command the corresponding task runs locally.
 
 The parser takes untrusted input, so a panic in it is a denial of service in
 every service that parses a URI. Two harnesses guard that: adversarial property

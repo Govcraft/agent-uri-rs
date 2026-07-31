@@ -185,6 +185,86 @@ jobs:
       - name: cargo-audit
         run: cargo audit
 
+  # Kani proves properties over every input in a bounded range, which is the
+  # thing a test suite cannot do: `matching_issuers_succeed` is a statement
+  # about all issuers, not the dozen a test happened to name. The harnesses
+  # (agent-uri/src/kani_impls.rs, agent-uri-attestation/src/proofs.rs) have
+  # existed all along with nothing running them.
+  #
+  # Weekly and on demand, not per-PR: a model checker exhausts a state space,
+  # and that takes minutes per harness.
+  kani:
+    name: kani
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      # Pinned so a run is reproducible and a Kani release cannot turn a green
+      # week red on its own. Bump deliberately.
+      KANI_VERSION: 0.67.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: kani
+      # `cargo kani setup` downloads a toolchain and a solver into ~/.kani.
+      # Swatinem's cache does not reach outside the cargo directories, so this
+      # is cached separately, keyed on the version that produced it.
+      - name: Cache the Kani toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.kani
+          key: kani-toolchain-${{ env.KANI_VERSION }}
+      - name: Install Kani
+        run: |
+          cargo install --locked "kani-verifier@${KANI_VERSION}"
+          cargo kani setup
+      # Only the two crates that carry harnesses. `--workspace` would put the
+      # model checker to work compiling the CLI, the evaluation harness, and
+      # libp2p to prove nothing.
+      - name: Run the proofs
+        run: cargo kani -p agent-uri -p agent-uri-attestation
+
+  # Miri interprets the code and reports undefined behaviour: an out-of-bounds
+  # read, a dangling reference, a violated aliasing rule. This workspace is
+  # entirely safe Rust, so what it really watches is the unsafe inside the
+  # dependencies these crates lean on for base32, base64, and Ed25519.
+  #
+  # Scoped to the two crates whose tests are pure computation. agent-uri-dht,
+  # -dht-libp2p, and the CLI test against tokio, real sockets, and the
+  # filesystem, none of which Miri can execute; pointing it at them would
+  # produce a job that fails every week for reasons that are not defects.
+  miri:
+    name: miri
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      # The attestation tests read the clock, which Miri's isolation refuses.
+      # Disabling it lets `Utc::now()` through; it does not weaken any of the
+      # undefined-behaviour checks, which are what this job is for.
+      MIRIFLAGS: -Zmiri-disable-isolation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: miri
+      - name: Set up Miri
+        run: cargo miri setup
+      # `--lib` deliberately: the integration suites spend their time on
+      # end-to-end paths that the unit tests already cover in the interpreter,
+      # and Miri is roughly two orders of magnitude slower than native.
+      - name: Run tests under Miri
+        run: cargo miri test -p agent-uri -p agent-uri-attestation --lib
+
   # Code that reads untrusted input and panics is a denial of service in every
   # service that runs it: a parser for the URI, and the verifier for a token
   # handed over by whoever is presenting it. The proptests in the test job cover
