@@ -164,6 +164,7 @@ label      = 1*63( ALPHA / DIGIT / "-" )
 2. Domain labels MUST NOT start or end with a hyphen.
 3. The trust root MUST publish verification keys at a well-known endpoint (see [Section 7.2](#72-key-publication)).
 4. DNS trust roots are case-insensitive and MUST be normalized to lowercase. IPv4 addresses use dotted-decimal form and IPv6 literals use RFC 5952 canonical text in brackets. An explicit port is preserved; no default port is inferred or stripped.
+   A trailing dot MUST be rejected rather than stripped: `example.com.` is not a valid trust root, and only `example.com` names that identity.
 5. A host consisting of exactly four dot-separated labels that each contain only digits MUST be parsed as an `ipv4-address`, never as a `domain`. Such a host MUST be rejected when it is not a valid dotted-decimal address: every octet MUST be in the range 0-255 and MUST NOT carry a leading zero, per the `dec-octet` rule in [Appendix A](#appendix-a-abnf-grammar). Hosts with any other number of labels, or with a non-numeric label, remain subject to the `domain` rule.
 
 **Examples:**
@@ -191,7 +192,7 @@ segment         = 1*64( LOWER / DIGIT / "-" )
 
 1. Capability paths MUST contain at least one segment.
 2. Capability paths MUST NOT exceed 32 segments.
-3. Each segment MUST be lowercase alphanumeric with hyphens permitted.
+3. Each segment MUST be lowercase alphanumeric with hyphens permitted. Uppercase input MUST be rejected, not folded, and a segment MUST NOT carry percent-encoding: `ch%61t` is rejected rather than decoded to `chat`.
 4. Segments MUST NOT be empty (no consecutive slashes).
 5. Capability paths support prefix matching for discovery.
 6. An agent's capability path is immutable. A capability-path change MUST use a
@@ -318,18 +319,46 @@ fragment = *( pchar / "/" / "?" )
 
 Two URIs denote the same agent if and only if their canonical forms are byte-equal.
 
+An agent URI is identity material, so normalization is deliberately narrow: an
+implementation folds case only where a standard makes a component
+case-insensitive, and rejects every other departure from canonical form rather
+than repairing it. A repair maps two spellings onto one identity, and each such
+mapping is a place where two parties can disagree about which agent a string
+names. Rejection leaves exactly one spelling per identity.
+
 **Normalization Rules:**
 
-1. **Scheme**: Lowercase (`agent`, not `AGENT`)
-2. **Trust root**: DNS names lowercase with no trailing dot; IP addresses in canonical text form; explicit ports preserved
-3. **Capability path**: Already lowercase by grammar, with no trailing slash
-4. **Agent ID**: Already lowercase by grammar
-5. **Query and fragment**: Stripped entirely
+1. **Scheme**: Compared case-insensitively, written lowercase (`agent`).
+   `AGENT://` is accepted and folded, per RFC 3986 Section 3.1.
+2. **Trust root**: DNS names compared case-insensitively, written lowercase, per
+   RFC 4343. IP addresses in canonical text form — for IPv6 that is RFC 5952,
+   which drops leading zeros and compresses the longest run of zero groups.
+   Explicit ports preserved.
+3. **Capability path**: Lowercase by grammar, with no trailing slash. Uppercase
+   input is rejected, not folded.
+4. **Agent ID**: Lowercase by grammar. Uppercase input is rejected, not folded.
+5. **Query and fragment**: Stripped entirely. Where a query is preserved rather
+   than stripped, its parameters serialize sorted by name.
+
+**Rejected rather than normalized:**
+
+| Input | Disposition | Why |
+|-------|-------------|-----|
+| `AGENT://example.com/chat/llm_01h4...` | Accepted, folded | Scheme is case-insensitive by RFC 3986 |
+| `agent://Example.COM/chat/llm_01h4...` | Accepted, folded | DNS is case-insensitive by RFC 4343 |
+| `agent://example.com./chat/llm_01h4...` | **Rejected** | A trailing dot is a different spelling, not a case difference |
+| `agent://example.com/Chat/llm_01h4...` | **Rejected** | Capability segments are lowercase identity material |
+| `agent://example.com/chat/LLM_01H4...` | **Rejected** | Agent IDs are lowercase identity material |
+| `agent://example.com/ch%61t/llm_01h4...` | **Rejected** | Percent-encoding appears in the grammar only in query parameter values |
+
+Rules 3 and 4 took effect in version 0.5; earlier revisions normalized uppercase
+input in those components. The 0.4 vectors are preserved as
+`test-vectors-v0.4.json` so prior references stay checkable.
 
 **Example:**
 
 ```
-Input:  agent://Anthropic.COM/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?version=1.0#task
+Input:  AGENT://Anthropic.COM/assistant/chat/llm_01h455vb4pex5vsknk084sn02q?version=1.0#task
 Output: agent://anthropic.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q
 ```
 

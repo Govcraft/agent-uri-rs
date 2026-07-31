@@ -74,12 +74,32 @@ impl Eq for AgentUri {}
 impl AgentUri {
     /// Parses an agent URI from a string.
     ///
+    /// # Case
+    ///
+    /// Case is folded exactly where a standard makes a component
+    /// case-insensitive: the scheme (RFC 3986 section 3.1) and the trust root's
+    /// DNS name (RFC 4343). The capability path and the agent ID are identity
+    /// material that the grammar fixes as lowercase, so an uppercase letter in
+    /// either is rejected rather than folded.
+    ///
+    /// ```
+    /// use agent_uri::AgentUri;
+    ///
+    /// let uri = AgentUri::parse("AGENT://Anthropic.COM/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
+    /// assert_eq!(
+    ///     uri.as_str(),
+    ///     "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+    /// );
+    ///
+    /// assert!(AgentUri::parse("agent://anthropic.com/Chat/llm_01h455vb4pex5vsknk084sn02q").is_err());
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns `ParseError` if:
     /// - The URI is empty
     /// - The URI exceeds 512 characters
-    /// - The scheme is not "agent://"
+    /// - The scheme is not "agent" (compared case-insensitively)
     /// - Any component (trust root, path, agent ID, query, fragment) is invalid
     pub fn parse(input: &str) -> Result<Self, ParseError> {
         Self::parse_inner(input).map_err(|kind| ParseError {
@@ -339,9 +359,16 @@ impl AgentUri {
             });
         }
 
-        // Check and strip scheme
+        // Check and strip scheme. RFC 3986 section 3.1 makes the scheme
+        // case-insensitive with lowercase as the canonical form, so `AGENT://`
+        // is accepted and folded. Nothing after it is: the trust root is
+        // case-insensitive by DNS, and every remaining component is identity
+        // material the grammar fixes as lowercase.
         let scheme_prefix = format!("{SCHEME}://");
-        if !input.starts_with(&scheme_prefix) {
+        let scheme_matches = input
+            .get(..scheme_prefix.len())
+            .is_some_and(|found| found.eq_ignore_ascii_case(&scheme_prefix));
+        if !scheme_matches {
             let found = input.split("://").next().map(str::to_string);
             return Err(ParseErrorKind::InvalidScheme { found });
         }
@@ -588,6 +615,61 @@ mod tests {
             result,
             Err(ParseError {
                 kind: ParseErrorKind::TooLong { .. },
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn scheme_case_is_folded() {
+        // Vectors norm-001 and norm-002 (issue #19). RFC 3986 section 3.1.
+        for input in [
+            "AGENT://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+            "AgEnT://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+            "Agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q",
+        ] {
+            let uri = AgentUri::parse(input).unwrap();
+            assert_eq!(
+                uri.as_str(),
+                "agent://example.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+            );
+        }
+    }
+
+    #[test]
+    fn folding_the_scheme_does_not_fold_anything_after_it() {
+        // The trust root folds by DNS; the path and the agent ID do not fold at
+        // all, whatever the scheme's case was (issue #19).
+        let uri =
+            AgentUri::parse("AGENT://Anthropic.COM/chat/llm_01h455vb4pex5vsknk084sn02q").unwrap();
+        assert_eq!(
+            uri.as_str(),
+            "agent://anthropic.com/chat/llm_01h455vb4pex5vsknk084sn02q"
+        );
+
+        assert!(
+            AgentUri::parse("AGENT://example.com/Chat/llm_01h455vb4pex5vsknk084sn02q").is_err()
+        );
+        assert!(
+            AgentUri::parse("AGENT://example.com/chat/LLM_01H455VB4PEX5VSKNK084SN02Q").is_err()
+        );
+    }
+
+    #[test]
+    fn a_scheme_shorter_than_the_prefix_is_an_invalid_scheme() {
+        // `input.get(..8)` is None both for a short input and for one whose
+        // eighth byte falls inside a character; neither is `agent://`.
+        assert!(matches!(
+            AgentUri::parse("agent:/"),
+            Err(ParseError {
+                kind: ParseErrorKind::InvalidScheme { .. },
+                ..
+            })
+        ));
+        assert!(matches!(
+            AgentUri::parse("agent:/\u{00e9}x/y/llm_01h455vb4pex5vsknk084sn02q"),
+            Err(ParseError {
+                kind: ParseErrorKind::InvalidScheme { .. },
                 ..
             })
         ));
