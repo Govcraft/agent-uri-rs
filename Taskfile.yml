@@ -52,7 +52,10 @@ tasks:
       # `#[cfg(kani)]`, which only `cargo kani` sets, and it supplies the `kani`
       # crate itself. Install it once with:
       #   cargo install --locked kani-verifier && cargo kani setup
-      - cargo kani --workspace
+      #
+      # Only the two crates that carry harnesses; the CI `kani` job runs the
+      # same set weekly.
+      - cargo kani -p agent-uri -p agent-uri-attestation
 
   # Fuzzing
   #
@@ -87,7 +90,14 @@ tasks:
   miri:
     desc: Run Miri memory safety checks
     cmds:
-      - cargo +nightly miri test --workspace
+      # Scoped to the crates whose tests are pure computation. The DHT, libp2p,
+      # and CLI suites test against tokio, real sockets, and the filesystem,
+      # none of which Miri can execute.
+      #
+      # Isolation is off because the attestation tests read the clock. That
+      # weakens none of the undefined-behaviour checks this is run for.
+      # The CI `miri` job runs the same command weekly.
+      - MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly miri test -p agent-uri -p agent-uri-attestation --lib
 
   # Development tasks
   check:
