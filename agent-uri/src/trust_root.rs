@@ -54,6 +54,55 @@ pub enum Host {
 /// assert_eq!(root.host_str(), "localhost");
 /// assert_eq!(root.port(), Some(8472));
 /// ```
+///
+/// # Internationalized names
+///
+/// **A trust root is ASCII. Converting an internationalized name to A-label
+/// form is the caller's job, and this type will not tell you whether you did
+/// it right.** Three consequences, none of them accidents:
+///
+/// 1. **A non-ASCII name is rejected, not converted.** `münchen.de` is an
+///    error, not a synonym for `xn--mnchen-3ya.de`. Doing the conversion here
+///    would mean shipping a Unicode normalization table and a version of
+///    [UTS #46] inside an identity type, and two versions of that table
+///    disagreeing would make one name two identities. Refusing is the smaller
+///    surface.
+/// 2. **An `xn--` label is opaque ASCII.** It is checked as a DNS label and
+///    nothing more: no Punycode decode, no [IDNA] validity check, no
+///    bidirectional or script rules. `xn--zzzzzz` is not valid Punycode and
+///    parses anyway. If a name reaches here already broken, it stays broken.
+/// 3. **Nothing here detects confusables.** `аpple.com` with a Cyrillic `а` is
+///    rejected only because it is not ASCII; its A-label form,
+///    `xn--pple-43d.com`, is accepted and is a different trust root than
+///    `apple.com`. Two names that a person cannot tell apart are two
+///    identities, and only the second ever reaches this type. Homograph
+///    defence belongs where names are shown to people and where keys are
+///    fetched, not in a parser that sees ASCII.
+///
+/// A trailing dot is rejected rather than stripped, so the DNS root-anchored
+/// `example.com.` is not a spelling of `example.com`; only the latter names
+/// that identity. ASCII case is folded, per RFC 4343.
+///
+/// ```
+/// use agent_uri::TrustRoot;
+///
+/// // Convert before you get here.
+/// assert!(TrustRoot::parse("münchen.de").is_err());
+/// assert!(TrustRoot::parse("xn--mnchen-3ya.de").is_ok());
+///
+/// // Which means a name that was converted wrongly is accepted as written.
+/// assert!(TrustRoot::parse("xn--zzzzzz").is_ok());
+///
+/// // And a trailing dot is a different string, so it is not a trust root.
+/// assert!(TrustRoot::parse("example.com.").is_err());
+/// ```
+///
+/// See [Section 8.11 of the specification][spec] for the threat this leaves
+/// to the caller.
+///
+/// [UTS #46]: https://www.unicode.org/reports/tr46/
+/// [IDNA]: https://datatracker.ietf.org/doc/html/rfc5891
+/// [spec]: https://github.com/Govcraft/agent-uri-rs/blob/main/SPECIFICATION.md#811-internationalized-trust-root-names
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TrustRoot {
     host: Host,
@@ -658,5 +707,55 @@ mod tests {
 
             assert!(matches!(root.host(), Host::Domain(domain) if domain == input));
         }
+    }
+
+    #[test]
+    fn a_non_ascii_host_is_refused_and_not_converted() {
+        // Section 8.11: converting here would put a Unicode version table on
+        // the identity path, where two versions disagreeing make one name two
+        // trust roots.
+        for input in [
+            "münchen.de",
+            "\u{43f}\u{440}\u{438}\u{43c}\u{435}\u{440}.com",
+            "café.fr",
+        ] {
+            let result = TrustRoot::parse(input);
+            assert!(
+                matches!(result, Err(TrustRootError::InvalidChar { .. })),
+                "{input} was not refused as a non-ASCII host: {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_a_label_is_an_opaque_dns_label() {
+        // `xn--` gets no Punycode decode and no IDNA check. The second of
+        // these does not decode to anything, and parses anyway; documenting
+        // that is the point of section 8.11, so it is pinned rather than
+        // wished away.
+        let converted = TrustRoot::parse("xn--mnchen-3ya.de").expect("an A-label is ASCII");
+        assert_eq!(converted.host_str(), "xn--mnchen-3ya.de");
+
+        let nonsense = TrustRoot::parse("xn--zzzzzz").expect("not decoded, so not refused");
+        assert_eq!(nonsense.host_str(), "xn--zzzzzz");
+    }
+
+    #[test]
+    fn a_homograph_is_a_different_trust_root_and_nothing_here_says_so() {
+        // `xn--pple-43d.com` is the A-label form of `apple.com` spelled with
+        // a Cyrillic first letter. Both parse, and they are unrelated.
+        let latin = TrustRoot::parse("apple.com").expect("valid");
+        let cyrillic = TrustRoot::parse("xn--pple-43d.com").expect("valid");
+
+        assert_ne!(latin, cyrillic);
+        assert_ne!(latin.host_str(), cyrillic.host_str());
+    }
+
+    #[test]
+    fn a_root_anchored_name_is_not_a_second_spelling() {
+        // Rejecting rather than stripping removes an equivalence question at
+        // the cost of refusing a form DNS accepts (sections 4.1 and 8.11).
+        assert!(TrustRoot::parse("example.com.").is_err());
+        assert!(TrustRoot::parse("example.com").is_ok());
     }
 }
