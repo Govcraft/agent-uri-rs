@@ -45,6 +45,13 @@ allow = [
     # foldhash, via hashbrown, via the libp2p stack. Permissive, OSI approved,
     # FSF free.
     "Zlib",
+    # webpki-roots and webpki-root-certs, via agent-uri-attestation-wellknown.
+    # This is the licence Mozilla's CA root set carries, and it covers the
+    # certificate data rather than code. Fetching a trust root's key document
+    # over HTTPS needs trust anchors from somewhere, and every source of them
+    # carries this licence. Permissive; grants use, modification, and
+    # redistribution with no copyleft on anything else.
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.8
 
@@ -88,6 +95,16 @@ skip = [
     # multistream-select is still on unsigned-varint 0.7; libp2p-core, multiaddr
     # and multihash are on 0.8.
     { crate = "unsigned-varint@0.7.2", reason = "multistream-select 0.13 via libp2p 0.56" },
+    # The two below are libp2p and reqwest holding opposite sides of the same
+    # crate, in agent-uri-dht-libp2p and agent-uri-attestation-wellknown. No
+    # crate in this workspace depends on either version directly, so neither is
+    # selectable from here; they collapse when libp2p's graph catches up.
+    # if-watch 3.2 (libp2p-tcp) is on core-foundation 0.9; rustls-platform-
+    # verifier and security-framework (reqwest) are on 0.10. macOS and iOS only.
+    { crate = "core-foundation@0.9.4", reason = "if-watch 3.2 via libp2p-tcp; reqwest's TLS stack is on 0.10" },
+    # hashlink 0.10 (libp2p-swarm) is on hashbrown 0.15; indexmap 2.14, via h2
+    # and hyper, is on 0.17.
+    { crate = "hashbrown@0.15.5", reason = "hashlink 0.10 via libp2p-swarm; the hyper stack is on 0.17" },
 ]
 
 [sources]

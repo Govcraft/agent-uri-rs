@@ -1,6 +1,6 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.8.1
+**Version:** 0.8.2
 **Status:** Draft
 **Last Updated:** 2026-07-31
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
@@ -890,7 +890,10 @@ GET https://{trust-root}/.well-known/agent-keys.json
     "not_before": "2026-01-01T00:00:00Z",
     "not_after": "2027-01-01T00:00:00Z"
   }],
-  "revoked_keys": []
+  "revoked_keys": [{
+    "public_key": "<base64-encoded public key>",
+    "kid": "key-2025-07"
+  }]
 }
 ```
 
@@ -899,7 +902,11 @@ GET https://{trust-root}/.well-known/agent-keys.json
 1. Trust roots MUST serve this endpoint over HTTPS.
 2. Multiple keys MAY be published for rotation.
 3. Keys MUST include validity periods (`not_before`, `not_after`).
-4. Revoked keys SHOULD be listed in `revoked_keys`.
+4. Revoked keys SHOULD be listed in `revoked_keys`. Each entry MUST carry
+   `public_key`, and MAY carry the `kid` the key had while it was published. It
+   is the key material that a verifier can act on: a revocation is checked
+   against the key that signed the token, and a verifier that has already
+   dropped the key it is being told about cannot turn a name back into one.
 5. Verifiers MUST reject a token whose signing key is outside its published
    validity period, evaluated against the verifier's current time rather than
    against the token's `iat`. Evaluating against `iat` would make `not_after`
@@ -907,6 +914,22 @@ GET https://{trust-root}/.well-known/agent-keys.json
    as long as anything it signed beforehand had left to live.
 6. Verifiers MAY apply their clock-skew tolerance to both bounds, for the same
    reason [Section 7.4](#74-verification-flow) applies it to `iat` and `exp`.
+7. A verifier MUST reject a document that names a `trust_root` other than the
+   one whose endpoint served it, and MUST NOT follow a redirect away from that
+   endpoint. What makes a document evidence at all is the authority it was
+   fetched from; without both of these, any authority could publish keys for
+   anybody's namespace.
+8. A verifier MUST bound what it will read from the endpoint, and SHOULD treat
+   an unreachable endpoint as an absence of keys rather than as a reason to
+   accept anything.
+
+**What discovery does and does not establish:**
+
+Fetching a document establishes which keys an authority stands behind. It does
+not establish that the authority should be trusted. A verifier that fetches
+`evil.example`'s keys learns exactly which keys `evil.example` signs with, and
+nothing about whether to believe what it attests. Which trust roots matter is a
+deployment decision, and this endpoint does not make it.
 
 **Rotation:**
 
@@ -1728,6 +1751,7 @@ sharding removes it, because only sharding adds keys.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.8.2 | 2026-07-31 | §7.2 given the shape of a `revoked_keys` entry, which was named but never defined, and required to carry key material rather than only a name; the verifier-side obligations discovery implies added: refuse a document naming another trust root, do not follow redirects away from the endpoint, bound what is read, and treat an unreachable endpoint as an absence of keys; what a fetched document does and does not establish stated outright |
 | 0.8.1 | 2026-07-31 | §7.2 given the verifier-side obligation its published validity periods implied: a key outside its window MUST be refused, judged at verification time rather than against the token's `iat`, with the rotation overlap that keeps in-flight tokens working stated as a schedule; §7.4 step 3 amended to carry the same check, and the distinction between a published schedule and unplanned revocation made explicit |
 | 0.8.0 | 2026-07-31 | `jti` added to §7.1 as a REQUIRED claim, since §8.2 revocation cannot name a token that has no identifier; §7.4 given an explicit revocation step, placed after signature verification so the presenter cannot choose which list entry is consulted, and a verifier without a revocation list required to reject rather than skip it; §8.2 expanded with the two granularities of revocation and why per-token listing alone cannot bound a key compromise |
 | 0.7.1 | 2026-07-31 | Trust root stated to be ASCII, with conversion of internationalized names placed on whatever accepts them from a person and `xn--` labels defined as opaque; the resulting confusability and mis-conversion exposure added as §8.11 |

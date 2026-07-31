@@ -106,6 +106,20 @@
 //! [`Verifier::add_trusted_root`] is unchanged and still replaces every key a
 //! root had, which is what a deployment that pins a single key wants.
 //!
+//! # Where the keys come from
+//!
+//! Section 7.2 also says where a root's keys live: a document served at
+//! `https://{trust-root}/.well-known/agent-keys.json`. [`KeyDocument`] reads
+//! one and hands back a [`TrustStore`] and a [`Denylist`], so a caller holding
+//! that document — from a config file, a secrets manager, a deployment
+//! artefact — can build a verifier from it without any of this crate touching
+//! the network.
+//!
+//! Fetching it over HTTPS, with the caching and refreshing that implies, is
+//! `agent-uri-attestation-wellknown`. It is a separate crate because an HTTP
+//! client with a TLS stack is a large dependency and this one is useful
+//! without it.
+//!
 //! # Breaking changes in 0.7.0
 //!
 //! [`AttestationError`] gains [`KeyNotYetValid`](AttestationError::KeyNotYetValid)
@@ -230,6 +244,7 @@ mod claims;
 mod constants;
 mod error;
 mod issuer;
+pub mod key_document;
 mod keys;
 #[cfg(kani)]
 mod proofs;
@@ -242,6 +257,7 @@ pub use claims::{AttestationClaims, AttestationClaimsBuilder};
 pub use constants::MAX_TOKEN_LENGTH;
 pub use error::AttestationError;
 pub use issuer::Issuer;
+pub use key_document::{KeyDocument, PublishedKey, RevokedKey};
 pub use keys::{Signature, SigningKey, VerifyingKey};
 pub use revocation::{AcceptAll, Denylist, RevocationCheck};
 pub use trust::{KeyValidity, TrustStore, TrustedKey};
