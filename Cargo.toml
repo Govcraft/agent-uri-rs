@@ -13,6 +13,15 @@ members = [
 [workspace.package]
 edition = "2024"
 license = "MIT OR Apache-2.0"
+# The oldest toolchain this workspace builds on, verified by the `msrv` CI job
+# against this exact version. 1.91 is where `Duration::from_mins` and
+# `from_hours` stabilized, which the attestation crate's default leeway and TTL
+# are written in terms of; 1.90 rejects them.
+#
+# Raising it is a minor release, not a patch, and the number here is the claim
+# consumers plan against — so change it because a feature is worth the cost,
+# never because CI happened to move on.
+rust-version = "1.91"
 # Every crate here ships from this repository, so the keys that build a crate's
 # crates.io and docs.rs pages belong once, at the top. A crate that spells them
 # out itself is a crate that will drift.

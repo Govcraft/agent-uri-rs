@@ -2,6 +2,7 @@
 name = "agent-uri"
 version = "0.6.0"
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "Parser and validator for agent:// URI scheme"
 repository.workspace = true

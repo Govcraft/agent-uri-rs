@@ -2,6 +2,7 @@
 name = "agent-uri-cli"
 version = "0.5.1"
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "Command-line tool for the agent:// identity scheme: key ceremony, attestation minting, verification, and inspection"
 repository.workspace = true

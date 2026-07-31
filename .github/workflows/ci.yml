@@ -105,6 +105,48 @@ jobs:
       - name: Test the fuzz harness
         run: cargo test --manifest-path agent-uri-attestation/fuzz/Cargo.toml --lib
 
+  # A declared MSRV that nothing checks is a claim, not a guarantee: the next
+  # dependency bump or the next `if let ... &&` raises it silently and the first
+  # anyone hears is a consumer's build failing. This job pins the exact version
+  # `workspace.package.rust-version` names.
+  #
+  # It builds rather than tests: the MSRV is a promise about compiling this
+  # workspace's code, and dev-dependencies (nextest, criterion, the libp2p test
+  # harnesses) carry their own, higher floors that have nothing to do with what
+  # a consumer needs.
+  msrv:
+    name: msrv
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      # The manifest is repository content, and on a fork's pull request that
+      # is the contributor's content. It is matched against a version shape
+      # before it reaches $GITHUB_OUTPUT, so a crafted manifest cannot smuggle a
+      # newline and define outputs of its own.
+      - name: Read MSRV from the workspace manifest
+        id: msrv
+        run: |
+          version=$(
+            grep -m1 -oE '^rust-version = "[0-9]+(\.[0-9]+){1,2}"' Cargo.toml \
+              | grep -oE '[0-9]+(\.[0-9]+){1,2}'
+          )
+          if [ -z "$version" ]; then
+            echo "workspace.package.rust-version is missing or not a version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Install Rust ${{ steps.msrv.outputs.version }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-${{ steps.msrv.outputs.version }}
+      - name: Build on the declared MSRV
+        run: cargo build --workspace --all-features
+
   docs:
     name: rustdoc
     runs-on: ubuntu-latest

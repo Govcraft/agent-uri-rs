@@ -111,6 +111,19 @@ tasks:
     cmds:
       - cargo fmt --all -- --check
 
+  msrv:
+    desc: Build on the oldest toolchain the workspace claims to support
+    cmds:
+      # Reads the version from the manifest so there is one place to change it.
+      # Builds rather than tests: the MSRV is a promise about compiling this
+      # workspace's code, and the dev-dependencies have higher floors of their
+      # own that no consumer inherits.
+      - |
+        version=$(grep -m1 -oE '^rust-version = "[0-9]+(\.[0-9]+){1,2}"' Cargo.toml \
+          | grep -oE '[0-9]+(\.[0-9]+){1,2}')
+        rustup toolchain install "$version" --profile minimal
+        cargo "+$version" build --workspace --all-features
+
   deny:
     desc: Run cargo-deny checks (advisories, licenses, bans, sources)
     cmds:
