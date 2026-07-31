@@ -67,7 +67,8 @@ base64url-char      = ALPHA / DIGIT / "-" / "_"
 
 claims-json         = "{" ws claims-members ws "}"
 
-claims-members      = agent-uri-claim sep
+claims-members      = jti-claim sep
+                      agent-uri-claim sep
                       agent-key-claim sep
                       capabilities-claim sep
                       iss-claim sep
@@ -81,6 +82,16 @@ ws                  = *( %x20 / %x09 / %x0A / %x0D )
 ; ============================================================================
 ; REQUIRED CLAIMS
 ; ============================================================================
+
+; jti: This token's unique identifier
+; Format: 26-character Crockford base32, the same encoding an agent-id suffix
+; uses. A token with no jti cannot be named in a revocation list, so it could
+; never be withdrawn before its exp; see SPECIFICATION.md sections 7.1 and 8.2.
+jti-claim           = %x22 "jti" %x22 ":" ws %x22 token-id %x22
+token-id            = 26( CROCKFORD )
+                      ; A UUIDv7, so identifiers sort by issuance time
+CROCKFORD           = DIGIT / %x61-68 / %x6A-6B / %x6D-6E / %x70-74 / %x76-7A
+                      ; 0-9 a-h j k m n p-t v-z: lowercase, less i l o u
 
 ; agent_uri: The full agent URI being attested
 ; Format: Must conform to agent-uri ABNF grammar

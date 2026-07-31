@@ -22,14 +22,21 @@
 //! but a tightening is exactly the kind of change that can also reject genuine
 //! tokens. This test is the evidence that it does not.
 
-use agent_uri_attestation::{AttestationError, Verifier, VerifyingKey};
+use agent_uri_attestation::{AcceptAll, AttestationError, Verifier, VerifyingKey};
 
 /// Minted under `rusty_paseto` 0.9.0 with a trust-root seed of `[7u8; 32]`.
 ///
-/// Claims: `iss` acme.com, `iat` 2026-01-01, `exp` 2126-01-01. The expiry is a
-/// century out so the vector does not rot; a `TokenExpired` failure here means
-/// the clock, not the token.
-const TOKEN_FROM_0_9: &str = "v4.public.eyJhZ2VudF9rZXkiOiJHWDlySStGc2hUTEdxOGc0K3MxZXA0bStESGF5a2dNMEE1djZpejAyaldFPSIsImFnZW50X3VyaSI6ImFnZW50Oi8vYWNtZS5jb20vdGVzdC9hZ2VudF8wMWg0NTV2YjRwZXg1dnNrbmswODRzbjAycSIsImNhcGFiaWxpdGllcyI6WyJ0ZXN0L3JlYWQiXSwiZXhwIjoiMjEyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwiaWF0IjoiMjAyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwiaXNzIjoiYWNtZS5jb20iLCJuYmYiOiIyMDI2LTA3LTMxVDE3OjIwOjUzLjAwMjU3NzQ4MloifdVclS6K4TPzo_2DVQh7FrB7pPd4-qVXNyfQW1CgixP1QTTHcrKTxrn7njqp78TwgBnZOFWZuDxp4WFUkuxHCwQ";
+/// Claims: `jti` 01h455vb4pex5vsknk084sn02q, `iss` acme.com, `iat` 2026-01-01,
+/// `exp` 2126-01-01. The expiry is a century out so the vector does not rot; a
+/// `TokenExpired` failure here means the clock, not the token.
+const TOKEN_FROM_0_9: &str = "v4.public.eyJhZ2VudF9rZXkiOiJHWDlySStGc2hUTEdxOGc0K3MxZXA0bStESGF5a2dNMEE1djZpejAyaldFPSIsImFnZW50X3VyaSI6ImFnZW50Oi8vYWNtZS5jb20vdGVzdC9hZ2VudF8wMWg0NTV2YjRwZXg1dnNrbmswODRzbjAycSIsImNhcGFiaWxpdGllcyI6WyJ0ZXN0L3JlYWQiXSwiZXhwIjoiMjEyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwiaWF0IjoiMjAyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwiaXNzIjoiYWNtZS5jb20iLCJqdGkiOiIwMWg0NTV2YjRwZXg1dnNrbmswODRzbjAycSIsIm5iZiI6IjIwMjYtMDctMzFUMTc6NTY6MzQuMTU2MzQzNjgxWiJ9I5tLmEw09FLg7jGQbCiCuH6S0k8sVxEkwfCy8vkuHUn-X7T754BGnrrbwG7yIYZShK_M9CIDPcWAvJUEUTD6AA";
+
+/// The same, minted under 0.9.0 before `jti` existed, and therefore without one.
+///
+/// Kept as the evidence for what the 0.6.0 breaking change actually breaks.
+/// Every other claim is well-formed and the signature is genuine, so the only
+/// reason this is refused is the missing identifier.
+const TOKEN_FROM_0_9_WITHOUT_JTI: &str = "v4.public.eyJhZ2VudF9rZXkiOiJHWDlySStGc2hUTEdxOGc0K3MxZXA0bStESGF5a2dNMEE1djZpejAyaldFPSIsImFnZW50X3VyaSI6ImFnZW50Oi8vYWNtZS5jb20vdGVzdC9hZ2VudF8wMWg0NTV2YjRwZXg1dnNrbmswODRzbjAycSIsImNhcGFiaWxpdGllcyI6WyJ0ZXN0L3JlYWQiXSwiZXhwIjoiMjEyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwiaWF0IjoiMjAyNi0wMS0wMVQwMDowMDowMC4wMDBaIiwiaXNzIjoiYWNtZS5jb20iLCJuYmYiOiIyMDI2LTA3LTMxVDE3OjIwOjUzLjAwMjU3NzQ4MloifdVclS6K4TPzo_2DVQh7FrB7pPd4-qVXNyfQW1CgixP1QTTHcrKTxrn7njqp78TwgBnZOFWZuDxp4WFUkuxHCwQ";
 
 /// The trust root's public key, from seed `[7u8; 32]`.
 const ROOT_PUBLIC_KEY: &str = "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=";
@@ -39,7 +46,7 @@ const AGENT_PUBLIC_KEY: &str = "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=";
 
 fn verifier() -> Verifier {
     let key = VerifyingKey::from_base64(ROOT_PUBLIC_KEY).expect("the checked-in root key parses");
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", key);
     verifier
 }
@@ -50,6 +57,7 @@ fn a_token_minted_by_rusty_paseto_0_9_still_verifies() {
         .verify(TOKEN_FROM_0_9)
         .expect("a token minted under 0.9 must still verify");
 
+    assert_eq!(claims.jti, "01h455vb4pex5vsknk084sn02q");
     assert_eq!(claims.iss, "acme.com");
     assert_eq!(
         claims.agent_uri,
@@ -72,12 +80,28 @@ fn the_checked_in_token_is_not_accepted_under_the_wrong_root_key() {
     // this token under a key that did not sign it, the first test would prove
     // nothing about signature verification at all.
     let other = VerifyingKey::from_base64(AGENT_PUBLIC_KEY).expect("a valid, unrelated key");
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", other);
 
     assert_eq!(
         verifier.verify(TOKEN_FROM_0_9),
         Err(AttestationError::InvalidSignature)
+    );
+}
+
+#[test]
+fn a_token_minted_before_jti_existed_is_refused_for_exactly_that_reason() {
+    // What 0.6.0 breaks, stated as a test rather than only as a release note.
+    // The signature is genuine and every other claim is well-formed, so this
+    // isolates the new requirement: a token nobody can name is a token nobody
+    // can revoke, and it is refused on that ground alone.
+    let error = verifier()
+        .verify(TOKEN_FROM_0_9_WITHOUT_JTI)
+        .expect_err("a token with no jti must be refused");
+
+    assert!(
+        matches!(&error, AttestationError::InvalidClaims { reason } if reason.contains("jti")),
+        "expected the refusal to name the jti claim, got: {error}"
     );
 }
 

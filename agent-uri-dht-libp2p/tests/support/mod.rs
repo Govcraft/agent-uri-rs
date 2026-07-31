@@ -11,7 +11,7 @@ use std::num::NonZeroUsize;
 use std::time::Duration;
 
 use agent_uri::AgentUri;
-use agent_uri_attestation::{Issuer, SigningKey, Verifier};
+use agent_uri_attestation::{AcceptAll, Issuer, SigningKey, Verifier};
 use agent_uri_dht::{
     Dht, DhtError, Endpoint, Mutation, MutationProof, Query, Quorum, ReadOptions, Registration,
     WriteOptions,
@@ -122,9 +122,14 @@ impl Overlay {
             .with_query_timeout(Duration::from_secs(10))
     }
 
-    /// A verifier holding this overlay's trust root.
+    /// A verifier holding this overlay's trust root, revoking nothing.
+    ///
+    /// [`AcceptAll`] because these tests are about the overlay: what it stores,
+    /// what it serves, and who it refuses. Revocation has its own tests in
+    /// `agent-uri-attestation`, and without an explicit source here every
+    /// lookup would fail before the overlay was exercised at all.
     pub fn verifier(&self) -> Verifier {
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root(TRUST_ROOT, self.root_key.verifying_key());
         verifier
     }

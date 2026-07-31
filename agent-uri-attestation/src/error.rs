@@ -71,6 +71,37 @@ pub enum AttestationError {
         /// The untrusted issuer
         issuer: String,
     },
+    /// The verifier has no revocation source, so it cannot honour any token.
+    ///
+    /// Specification section 8.2 requires that verifiers check revocation
+    /// before accepting. A verifier with nothing to check against cannot do
+    /// that, and accepting anyway would mean reporting a token as verified
+    /// when one of the required checks was silently skipped. Supply a source
+    /// with [`Verifier::with_revocation`](crate::Verifier::with_revocation) —
+    /// [`Denylist`](crate::Denylist) for a real one, or
+    /// [`AcceptAll`](crate::AcceptAll) to state that this deployment does not
+    /// revoke.
+    ///
+    /// Nothing in the token has been authenticated when this is returned; it
+    /// describes the verifier, not the token.
+    RevocationUnavailable,
+    /// The token's `jti` is on the revocation list.
+    ///
+    /// The signature is good and the claims are authentic. The issuer has
+    /// withdrawn this particular attestation.
+    TokenRevoked {
+        /// The revoked token's identifier
+        jti: String,
+    },
+    /// The key that signed this token has been revoked.
+    ///
+    /// Wider than [`Self::TokenRevoked`]: every token this key ever signed is
+    /// refused, including ones that were never individually listed. This is
+    /// what a key compromise looks like from the verifying side.
+    KeyRevoked {
+        /// The trust root whose key was revoked
+        issuer: String,
+    },
     /// URI in token does not match expected URI.
     UriMismatch {
         /// URI in the token
@@ -154,6 +185,21 @@ impl fmt::Display for AttestationError {
             Self::UntrustedIssuer { issuer } => write!(
                 f,
                 "issuer '{issuer}' is not in trusted roots; add it with verifier.add_trusted_root()"
+            ),
+            Self::RevocationUnavailable => write!(
+                f,
+                "this verifier has no revocation source, so it cannot accept any token; \
+                 supply one with verifier.with_revocation(), using Denylist for a real list \
+                 or AcceptAll to declare that this deployment does not revoke"
+            ),
+            Self::TokenRevoked { jti } => write!(
+                f,
+                "token '{jti}' has been revoked by its issuer; request a new attestation"
+            ),
+            Self::KeyRevoked { issuer } => write!(
+                f,
+                "the signing key for trust root '{issuer}' has been revoked, so every token \
+                 it signed is refused; obtain the trust root's current key"
             ),
             Self::UriMismatch {
                 token_uri,

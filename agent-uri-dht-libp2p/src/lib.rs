@@ -24,8 +24,10 @@
 //!
 //! # async fn example(trust_root_key: agent_uri_attestation::VerifyingKey, token: String)
 //! # -> Result<(), Box<dyn std::error::Error>> {
-//! // A node verifies attestations against the trust roots it is given.
-//! let mut verifier = Verifier::new();
+//! // A node verifies attestations against the trust roots it is given, and
+//! // must also say what it does about revocation. `AcceptAll` states that this
+//! // node does not revoke; a `Denylist` is what checks a real list.
+//! let mut verifier = Verifier::new().with_revocation(agent_uri_attestation::AcceptAll);
 //! verifier.add_trusted_root("anthropic.com", trust_root_key);
 //!
 //! let node = agent_uri_dht_libp2p::start(

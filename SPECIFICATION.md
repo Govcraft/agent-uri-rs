@@ -1,6 +1,6 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.7.1
+**Version:** 0.8.0
 **Status:** Draft
 **Last Updated:** 2026-07-31
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
@@ -813,6 +813,7 @@ v4.public.<payload>[.<footer>]
 
 | Claim | Type | Required | Description |
 |-------|------|----------|-------------|
+| `jti` | string | REQUIRED | Unique token identifier |
 | `iss` | string | REQUIRED | Issuing trust root |
 | `agent_uri` | string | REQUIRED | Canonical Agent URI being attested |
 | `agent_key` | string | REQUIRED | Agent's own Ed25519 public key, base64-encoded |
@@ -825,6 +826,7 @@ v4.public.<payload>[.<footer>]
 
 ```json
 {
+  "jti": "01h455vb4pex5vsknk084sn02q",
   "iss": "acme.com",
   "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
   "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -833,6 +835,24 @@ v4.public.<payload>[.<footer>]
   "capabilities": ["workflow/approval/invoice"]
 }
 ```
+
+**Token Identifier:**
+
+The `jti` claim names one token. Two attestations of the same URI with the same
+capabilities are otherwise indistinguishable, which means neither can be spoken
+about: not in a log, not in an incident report, and not in the revocation list
+[Section 8.2](#82-trust-root-key-compromise) requires verifiers to consult. A
+signature cannot be withdrawn, so an unnameable token is one that must be
+honoured until it expires.
+
+1. Trust roots MUST include `jti` in every issued token.
+2. The value MUST be unique per token. It SHOULD be a UUIDv7 rendered as a
+   26-character Crockford base32 string, which is the same encoding an
+   `agent-id` suffix uses ([Section 3.5](#35-agent-id)); reusing it means an
+   implementation needs one alphabet rather than two, and the v7 timestamp makes
+   identifiers sort by issuance.
+3. Verifiers MUST reject a token with no `jti`. Treating it as optional would
+   place every such token permanently beyond the reach of revocation.
 
 **Agent Key Binding:**
 
@@ -918,15 +938,26 @@ Complete verification of an agent presenting URI and attestation:
 5. Check `iss` == `trust_root` from URI.
 6. Check `agent_uri` == the canonical full agent URI.
 7. Check `agent_key` decodes to a valid Ed25519 public key.
-8. Check every capability equals the URI path or is its descendant.
-9. Check at least one capability covers the requested operation or registration path.
-10. If `aud` is present, require an explicit, exact verifier audience match.
-11. Where the presenter claims to *be* the agent, require proof of possession of
-    `agent_key`. Steps 1 to 10 authenticate the token; only this authenticates
+8. Check `jti` is present, and that neither it nor the verifying key appears in
+   the revocation list of [Section 8.2](#82-trust-root-key-compromise). This
+   step MUST follow step 3: `jti` and `iss` are claims, so consulting a list by
+   them before the signature is checked lets the presenter choose which entry is
+   looked up, and therefore choose one that is not listed.
+9. Check every capability equals the URI path or is its descendant.
+10. Check at least one capability covers the requested operation or registration path.
+11. If `aud` is present, require an explicit, exact verifier audience match.
+12. Where the presenter claims to *be* the agent, require proof of possession of
+    `agent_key`. Steps 1 to 11 authenticate the token; only this authenticates
     the presenter. For registration that proof is the mutation proof of
     [Section 6.6](#66-write-authorization).
 
 All checks MUST pass. Failure at any step MUST reject the attestation.
+
+A verifier that has no revocation list available cannot perform step 8, and MUST
+therefore reject rather than proceed. Accepting a token with a required check
+skipped would report it as verified on evidence that was never gathered; a
+deployment that does not revoke states that explicitly instead, which makes the
+choice auditable rather than indistinguishable from an oversight.
 
 ### 7.5 Audience Restriction
 
@@ -978,6 +1009,39 @@ Agents interacting with multiple specific parties MAY hold multiple attestations
 3. **Key rotation with overlap**: Rotate periodically with overlapping validity windows.
 
 4. **Hardware security modules**: Protect signing keys with HSMs.
+
+**Revocation has two granularities, and both are needed:**
+
+| Revoke | By | Effect |
+|--------|-----|--------|
+| One token | `jti` ([Section 7.1](#71-token-format)) | That attestation stops being honoured; everything else the root issued is unaffected |
+| One key | The trust root's public key | Every token that key ever signed stops being honoured, including tokens never individually listed |
+
+Per-token revocation is the tool for a grant issued in error. It is *not*
+sufficient for compromise: an attacker holding a stolen signing key mints tokens
+whose `jti` values the trust root has never seen, so a list of known token
+identifiers can only ever name the attestations that were already known about.
+Key revocation is what bounds that, because it does not require enumerating what
+it refuses.
+
+**Requirements:**
+
+1. Verifiers MUST check both a token's `jti` and the key that verified its
+   signature against the revocation list before accepting.
+2. Verifiers MUST perform this check *after* signature verification. `jti` and
+   `iss` are claims; consulting a list by them beforehand lets the presenter
+   choose which entry is looked up.
+3. A verifier with no revocation list available MUST reject. See
+   [Section 7.4](#74-verification-flow).
+4. Where both a token and its signing key are revoked, a verifier SHOULD report
+   the key. It is the larger fact, and a caller told only that one token was
+   withdrawn may reasonably request another from the same root — which is
+   precisely what a compromised key benefits from.
+
+**Residual Risk:** Revocation is only as current as the list a verifier holds.
+Between a compromise and the list reaching every verifier, tokens minted with
+the stolen key are honoured. The `exp` claim bounds that window from the other
+end, which is why the default token lifetime is short.
 
 **Scope Limitation:** Compromise affects only the compromised trust root's agents. Cross-trust-root isolation prevents lateral movement.
 
@@ -1629,6 +1693,7 @@ sharding removes it, because only sharding adds keys.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.8.0 | 2026-07-31 | `jti` added to §7.1 as a REQUIRED claim, since §8.2 revocation cannot name a token that has no identifier; §7.4 given an explicit revocation step, placed after signature verification so the presenter cannot choose which list entry is consulted, and a verifier without a revocation list required to reject rather than skip it; §8.2 expanded with the two granularities of revocation and why per-token listing alone cannot bound a key compromise |
 | 0.7.1 | 2026-07-31 | Trust root stated to be ASCII, with conversion of internationalized names placed on whatever accepts them from a person and `xn--` labels defined as opaque; the resulting confusability and mis-conversion exposure added as §8.11 |
 | 0.7.0 | 2026-07-30 | Mutation proofs required to cover the `expires_at` the write results in, and nodes required to store that value rather than derive one, closing the rewritable expiry described in §6.6; per-key capacity required to be charged to the registering path's own key and not to an ancestor, with the resulting subtree lockout added to §8.4 |
 | 0.6.0 | 2026-07-30 | Direct and sharded record models distinguished; sharded key derivation, pointer pages, and shard descriptors defined normatively; prefix lookup no longer claimed to be one exact-key read; §6.2 requirement 6 restated as a protocol ceiling rather than a provisioning matter; pointer injection added as §8.10; placeholder key vectors in B.4 replaced with computed digests |

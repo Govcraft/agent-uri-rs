@@ -3,7 +3,7 @@
 use std::io::Write;
 
 use agent_uri::{AgentUri, CapabilityPath};
-use agent_uri_attestation::{AttestationClaims, AttestationError, Issuer, Verifier};
+use agent_uri_attestation::{AttestationClaims, AttestationError, Denylist, Issuer, Verifier};
 use chrono::Utc;
 
 use crate::cli::AttestCommand;
@@ -53,6 +53,8 @@ pub fn run<O: Write, E: Write>(
             agent,
             capability,
             audience,
+            revoked_token,
+            revoked_key,
         } => verify(
             &VerifyRequest {
                 token,
@@ -60,6 +62,8 @@ pub fn run<O: Write, E: Write>(
                 agent: agent.as_deref(),
                 capability: capability.as_deref(),
                 audience: audience.as_deref(),
+                revoked_tokens: revoked_token,
+                revoked_keys: revoked_key,
             },
             out,
         ),
@@ -85,6 +89,8 @@ struct VerifyRequest<'a> {
     agent: Option<&'a str>,
     capability: Option<&'a str>,
     audience: Option<&'a str>,
+    revoked_tokens: &'a [String],
+    revoked_keys: &'a [String],
 }
 
 /// Resolves the issuing authority for a token, enforcing the issuer/namespace binding.
@@ -202,7 +208,13 @@ fn verify<O: Write, E: Write>(
 ) -> Result<(), CliError> {
     let token = resolve_token(request.token)?;
 
-    let mut verifier = Verifier::new();
+    let revoked = revocation_list(request)?;
+    // Nothing revoked means nothing was checked against, and the report says so
+    // rather than listing a check that did no work. A reader who sees
+    // "revocation" in the list is entitled to believe a list was consulted.
+    let checked_revocation = !request.revoked_tokens.is_empty() || !request.revoked_keys.is_empty();
+
+    let mut verifier = Verifier::new().with_revocation(revoked);
     for root in request.trust_roots {
         verifier.add_trusted_root(root.root.clone(), root.key.clone());
     }
@@ -213,6 +225,14 @@ fn verify<O: Write, E: Write>(
         "trust root".to_string(),
         "issuer/namespace binding".to_string(),
     ];
+
+    if checked_revocation {
+        checks.push(format!(
+            "revocation ({} token(s), {} key(s))",
+            request.revoked_tokens.len(),
+            request.revoked_keys.len()
+        ));
+    }
 
     if request.audience.is_some() {
         checks.push("audience".to_string());
@@ -252,9 +272,42 @@ fn verify<O: Write, E: Write>(
 
     out.verdict_good("VERIFIED");
     out.note(&format!("  checks passed: {}", checks.join(", ")));
+    if !checked_revocation {
+        // The verdict is real but narrower than it looks, and the gap is not
+        // one a reader can infer from a word that says VERIFIED. A token whose
+        // issuer withdrew it yesterday passes everything above.
+        out.note("  revocation was NOT checked: no --revoked-token or --revoked-key was given.");
+        out.note("  a token its issuer has since withdrawn would still pass the checks above.");
+    }
     out.blank();
 
     out.emit(&Verification::new(view, checks))
+}
+
+/// Builds the denylist from the revocations named on the command line.
+///
+/// An empty list is not the same as no list: it says the caller supplied no
+/// revocations, which the report above discloses rather than passing off as a
+/// revocation check that found nothing.
+fn revocation_list(request: &VerifyRequest<'_>) -> Result<Denylist, CliError> {
+    let mut denylist = Denylist::new();
+
+    for jti in request.revoked_tokens {
+        denylist.insert_token(jti);
+    }
+
+    for hex_key in request.revoked_keys {
+        let key = trust::decode_public(hex_key).map_err(|source| {
+            CliError::refused(
+                "invalid_revoked_key",
+                format!("--revoked-key '{hex_key}' is not a public key: {source}"),
+                "pass the 64 hex characters printed by 'agent-uri key public'",
+            )
+        })?;
+        denylist.insert_key(&key);
+    }
+
+    Ok(denylist)
 }
 
 /// Decodes a token's claims without verifying them.

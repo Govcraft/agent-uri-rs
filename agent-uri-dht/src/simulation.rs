@@ -820,7 +820,7 @@ mod tests {
     // the serde representation both round to.
     use crate::registration::system_time_to_millis;
     use agent_uri::{CapabilityPath, TrustRoot};
-    use agent_uri_attestation::Issuer;
+    use agent_uri_attestation::{AcceptAll, Issuer};
     use futures::executor::block_on;
     use std::num::NonZeroUsize;
     use std::time::{Duration, SystemTime};
@@ -1254,7 +1254,7 @@ mod tests {
             signing_key.clone(),
             Duration::from_hours(1),
         );
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("anthropic.com", signing_key.verifying_key());
         let dht = SimulatedDht::with_verifier(SimulationConfig::default(), verifier);
         let agent_key = SigningKey::generate();
@@ -1285,7 +1285,7 @@ mod tests {
     fn attesting_dht(agent_key: &SigningKey, uri: &AgentUri) -> (SimulatedDht, String) {
         let root_key = SigningKey::generate();
         let issuer = Issuer::new("anthropic.com", root_key.clone(), Duration::from_hours(1));
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("anthropic.com", root_key.verifying_key());
         let token = issuer
             .issue(

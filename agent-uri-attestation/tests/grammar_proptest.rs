@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use agent_uri::AgentUri;
 use agent_uri_attestation::{
-    AttestationClaimsBuilder, AttestationError, Issuer, SigningKey, Verifier,
+    AcceptAll, AttestationClaimsBuilder, AttestationError, Issuer, SigningKey, Verifier,
 };
 use proptest::prelude::*;
 
@@ -122,7 +122,7 @@ proptest! {
             "agent://test.com/test/service/llm_01h455vb4pex5vsknk084sn02q"
         ).unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
         // Issue token
@@ -175,7 +175,7 @@ proptest! {
             "agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q"
         ).unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
         let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec![]).unwrap();
@@ -200,7 +200,7 @@ proptest! {
 
         let token = issuer.issue_claims(&claims).unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
         let verified = verifier.verify_for_audience(&token, &aud).unwrap();
@@ -225,7 +225,7 @@ proptest! {
 
             let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec![]).unwrap();
 
-            let mut verifier = Verifier::new();
+            let mut verifier = Verifier::new().with_revocation(AcceptAll);
             verifier.add_trusted_root(&domain, signing_key.verifying_key());
 
             let claims = verifier.verify(&token).unwrap();
@@ -247,7 +247,7 @@ proptest! {
             "agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q"
         ).unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
         let caps = vec![
@@ -298,7 +298,7 @@ fn timestamp_format_is_iso8601() {
     let issuer = Issuer::new("test.com", signing_key.clone(), Duration::from_secs(3600));
     let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
     let token = issuer
@@ -330,7 +330,7 @@ fn agent_uri_field_format() {
         AgentUri::parse("agent://test.com/workflow/approval/rule_fsm_01h455vb4pex5vsknk084sn02q")
             .unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
     let token = issuer
@@ -353,7 +353,7 @@ fn max_capabilities_accepted() {
     let issuer = Issuer::new("test.com", signing_key.clone(), Duration::from_secs(3600));
     let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
     // Per grammar: 64 items practical limit
@@ -374,7 +374,7 @@ fn capability_string_edge_cases() {
     let issuer = Issuer::new("test.com", signing_key.clone(), Duration::from_secs(3600));
     let uri = AgentUri::parse("agent://test.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("test.com", signing_key.verifying_key());
 
     // Every grant is either the identity path or one of its descendants.
@@ -435,7 +435,7 @@ fn issuer_equals_trust_root() {
     let uri = AgentUri::parse("agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q")
         .unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     let token = issuer
@@ -460,7 +460,7 @@ fn localhost_with_port_trust_root() {
     let uri = AgentUri::parse("agent://localhost:8472/debug/test/llm_01h455vb4pex5vsknk084sn02q")
         .unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("localhost:8472", signing_key.verifying_key());
 
     let token = issuer
@@ -507,7 +507,7 @@ proptest! {
         prop_assert!(token.starts_with("v4.public."));
 
         // Verifier with matching trust root
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
 
         // Verify succeeds
@@ -536,7 +536,7 @@ proptest! {
         let issuer = Issuer::new(&trust_root, signing_key.clone(), Duration::from_secs(3600));
         let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), capabilities.clone()).unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
 
         // Basic verify succeeds
@@ -559,7 +559,7 @@ proptest! {
         let signing_key = SigningKey::generate();
         let trust_root = uri.trust_root().as_str().to_string();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root(&trust_root, signing_key.verifying_key());
 
         for depth in 0..=4 {
@@ -619,7 +619,7 @@ proptest! {
         let trust_root_b = uri_b.trust_root().as_str().to_string();
 
         // Both trust roots must be registered for fair test
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root(&trust_root_a, signing_key.verifying_key());
         if trust_root_a != trust_root_b {
             verifier.add_trusted_root(&trust_root_b, signing_key.verifying_key());
@@ -655,7 +655,7 @@ proptest! {
         let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec![]).unwrap();
 
         // Verify with key 2
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root(&trust_root, signing_key_2.verifying_key());
 
         let result = verifier.verify(&token);

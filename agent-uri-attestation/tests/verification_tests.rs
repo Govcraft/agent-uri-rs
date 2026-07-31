@@ -8,8 +8,9 @@ use std::time::Duration;
 use agent_uri::AgentUri;
 use agent_uri::CapabilityPath;
 use agent_uri_attestation::{
-    AttestationClaimsBuilder, AttestationError, Issuer, SigningKey, Verifier, capability_covers,
-    check_capability_coverage, check_expiration, validate_issuer, validate_subject,
+    AcceptAll, AttestationClaimsBuilder, AttestationError, Issuer, SigningKey, Verifier,
+    capability_covers, check_capability_coverage, check_expiration, validate_issuer,
+    validate_subject,
 };
 use chrono::{Duration as ChronoDuration, Utc};
 
@@ -415,7 +416,7 @@ mod verify_for_capability_tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let required = CapabilityPath::parse("workflow/approval").unwrap();
@@ -440,7 +441,7 @@ mod verify_for_capability_tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let required = CapabilityPath::parse("workflow/approval").unwrap();
@@ -464,7 +465,7 @@ mod verify_for_capability_tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         // A sibling descendant is not covered.
@@ -487,7 +488,7 @@ mod verify_for_capability_tests {
             .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let required = CapabilityPath::parse("workflow/approval/child").unwrap();
@@ -515,7 +516,7 @@ mod verify_for_capability_tests {
         std::thread::sleep(Duration::from_millis(50));
 
         // Zero leeway: the default tolerance would still accept this token.
-        let mut verifier = Verifier::with_leeway(Duration::ZERO);
+        let mut verifier = Verifier::with_leeway(Duration::ZERO).with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let required = CapabilityPath::parse("workflow/approval").unwrap();
@@ -541,7 +542,7 @@ mod verify_for_capability_tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         // Try to verify for different URI
@@ -567,7 +568,7 @@ mod verify_for_capability_tests {
             .unwrap();
 
         // Verifier has no trusted roots
-        let verifier = Verifier::new();
+        let verifier = Verifier::new().with_revocation(AcceptAll);
 
         let required = CapabilityPath::parse("workflow/approval").unwrap();
         let result = verifier.verify_for_capability(&token, &uri, &required);
@@ -596,7 +597,7 @@ mod verify_for_capability_tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let required = CapabilityPath::parse("workflow/approval/read/detail").unwrap();
@@ -620,7 +621,7 @@ mod verify_for_capability_tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         // Require broader capability

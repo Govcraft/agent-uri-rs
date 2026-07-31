@@ -1,6 +1,7 @@
 //! Token verifier for validating attestations.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use agent_uri::AgentUri;
@@ -14,6 +15,7 @@ use agent_uri::CapabilityPath;
 use crate::claims::AttestationClaims;
 use crate::error::AttestationError;
 use crate::keys::VerifyingKey;
+use crate::revocation::RevocationCheck;
 use crate::verification;
 
 /// Verifies attestation tokens for agent URIs.
@@ -24,7 +26,7 @@ use crate::verification;
 /// # Example
 ///
 /// ```
-/// use agent_uri_attestation::{Issuer, Verifier, SigningKey};
+/// use agent_uri_attestation::{AcceptAll, Issuer, Verifier, SigningKey};
 /// use agent_uri::AgentUri;
 /// use std::time::Duration;
 ///
@@ -38,8 +40,9 @@ use crate::verification;
 /// ).unwrap();
 /// let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec!["test".into()]).unwrap();
 ///
-/// // Create a verifier with the issuer's public key
-/// let mut verifier = Verifier::new();
+/// // Create a verifier with the issuer's public key, and say what it does
+/// // about revocation. Without that it accepts nothing at all.
+/// let mut verifier = Verifier::new().with_revocation(AcceptAll);
 /// verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 ///
 /// // Verify the token
@@ -50,6 +53,7 @@ use crate::verification;
 pub struct Verifier {
     trusted_roots: HashMap<String, VerifyingKey>,
     leeway: Duration,
+    revocation: Option<Arc<dyn RevocationCheck>>,
 }
 
 impl Default for Verifier {
@@ -57,6 +61,7 @@ impl Default for Verifier {
         Self {
             trusted_roots: HashMap::new(),
             leeway: Self::DEFAULT_LEEWAY,
+            revocation: None,
         }
     }
 }
@@ -96,9 +101,50 @@ impl Verifier {
     #[must_use]
     pub fn with_leeway(leeway: Duration) -> Self {
         Self {
-            trusted_roots: HashMap::new(),
             leeway,
+            ..Self::default()
         }
+    }
+
+    /// Supplies the revocation source this verifier consults.
+    ///
+    /// Required before any token verifies. See
+    /// [`AttestationError::RevocationUnavailable`] for why there is no
+    /// permissive default, and [`crate::revocation`] for the two things that
+    /// get revoked.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_uri_attestation::{AcceptAll, Denylist, Verifier};
+    ///
+    /// // A real denylist, rebuilt from wherever revocations are recorded.
+    /// let checked = Verifier::new()
+    ///     .with_revocation(Denylist::new().revoke_token("01h455vb4pex5vsknk084sn02q"));
+    /// assert!(checked.checks_revocation());
+    ///
+    /// // Or an explicit statement that this deployment does not revoke.
+    /// let unchecked = Verifier::new().with_revocation(AcceptAll);
+    /// assert!(unchecked.checks_revocation());
+    /// ```
+    #[must_use]
+    pub fn with_revocation(mut self, revocation: impl RevocationCheck + 'static) -> Self {
+        self.revocation = Some(Arc::new(revocation));
+        self
+    }
+
+    /// Sets the revocation source in place.
+    pub fn set_revocation(&mut self, revocation: impl RevocationCheck + 'static) {
+        self.revocation = Some(Arc::new(revocation));
+    }
+
+    /// Returns true once a revocation source has been supplied.
+    ///
+    /// While this is false every token is rejected with
+    /// [`AttestationError::RevocationUnavailable`].
+    #[must_use]
+    pub fn checks_revocation(&self) -> bool {
+        self.revocation.is_some()
     }
 
     /// Sets the clock-skew tolerance applied to `iat` and `exp`.
@@ -215,12 +261,39 @@ impl Verifier {
             });
         }
 
+        // A verifier that cannot answer "has this been revoked?" is not
+        // configured to verify. Refused before any crypto, because the answer
+        // does not depend on the token and doing the work first would only
+        // spend it on a rejection.
+        //
+        // Ordered after the empty-roots check so that a verifier missing both
+        // still reports the older, more basic fault rather than this one.
+        let Some(revocation) = self.revocation.as_deref() else {
+            return Err(AttestationError::RevocationUnavailable);
+        };
+
         // Try each trusted key until one works
         let (issuer, claims) = self.extract_and_verify(token)?;
 
         // Validate issuer is trusted (already verified by finding the key)
-        if !self.trusted_roots.contains_key(&issuer) {
+        let Some(signing_key) = self.trusted_roots.get(&issuer) else {
             return Err(AttestationError::UntrustedIssuer { issuer });
+        };
+
+        // Revocation, on both axes, and only now: `jti` and `iss` come out of
+        // the token, so believing either before the signature was checked would
+        // be taking the attacker's word for which token this is. An attacker
+        // who could revoke by supplying claims could also un-revoke by
+        // supplying different ones.
+        if revocation.is_key_revoked(signing_key) {
+            return Err(AttestationError::KeyRevoked {
+                issuer: issuer.clone(),
+            });
+        }
+        if revocation.is_token_revoked(&claims.jti) {
+            return Err(AttestationError::TokenRevoked {
+                jti: claims.jti.clone(),
+            });
         }
 
         // Bind the authenticated issuer to the attested URI's namespace.
@@ -347,7 +420,7 @@ impl Verifier {
     /// ```
     /// use agent_uri::AgentUri;
     /// use agent_uri::CapabilityPath;
-    /// use agent_uri_attestation::{Issuer, Verifier, SigningKey};
+    /// use agent_uri_attestation::{AcceptAll, Issuer, Verifier, SigningKey};
     /// use std::time::Duration;
     ///
     /// let signing_key = SigningKey::generate();
@@ -358,7 +431,7 @@ impl Verifier {
     /// ).unwrap();
     /// let token = issuer.issue(&uri, &SigningKey::generate().verifying_key(), vec!["workflow/approval".into()]).unwrap();
     ///
-    /// let mut verifier = Verifier::new();
+    /// let mut verifier = Verifier::new().with_revocation(AcceptAll);
     /// verifier.add_trusted_root("acme.com", signing_key.verifying_key());
     ///
     /// // "workflow" capability covers "workflow/approval"
@@ -590,6 +663,11 @@ fn timestamp_claim(
 
 /// Extract `AttestationClaims` from parsed JSON value.
 fn extract_claims(json: &serde_json::Value) -> Result<AttestationClaims, AttestationError> {
+    // REQUIRED. A token with no `jti` cannot be named, and a token that cannot
+    // be named cannot be revoked, so accepting one would leave a hole that no
+    // denylist can close. Rejecting here is the only place that guarantees
+    // every claim set this crate hands back is revocable.
+    let jti = required_str_claim(json, "jti")?.to_string();
     let agent_uri = required_str_claim(json, "agent_uri")?.to_string();
     let agent_key = required_str_claim(json, "agent_key")?.to_string();
     let iss = required_str_claim(json, "iss")?.to_string();
@@ -617,6 +695,7 @@ fn extract_claims(json: &serde_json::Value) -> Result<AttestationClaims, Attesta
     };
 
     Ok(AttestationClaims {
+        jti,
         agent_uri,
         agent_key,
         capabilities,
@@ -634,6 +713,7 @@ mod tests {
     use super::*;
     use crate::issuer::Issuer;
     use crate::keys::SigningKey;
+    use crate::revocation::{AcceptAll, Denylist};
 
     fn test_uri() -> AgentUri {
         AgentUri::parse("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap()
@@ -667,6 +747,7 @@ mod tests {
     fn valid_claims_value() -> serde_json::Value {
         let now = Utc::now();
         serde_json::json!({
+            "jti": "01h455vb4pex5vsknk084sn02q",
             "agent_uri": test_uri().canonical(),
             "agent_key": SigningKey::generate().verifying_key().to_base64(),
             "capabilities": ["test"],
@@ -693,10 +774,235 @@ mod tests {
         sign_raw_payload(signing_key, &claims.to_string())
     }
 
+    /// A verifier that trusts `signing_key` for `acme.com` and revokes nothing.
+    ///
+    /// [`AcceptAll`] is here because these tests are about the other checks;
+    /// revocation has its own tests, below. Without it every one of them would
+    /// fail with `RevocationUnavailable` before reaching what it means to
+    /// assert, which is the whole point of the strict default.
     fn verifier_trusting(signing_key: &SigningKey) -> Verifier {
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(crate::AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
         verifier
+    }
+
+    #[test]
+    fn a_verifier_with_no_revocation_source_accepts_nothing() {
+        // The strict default. A token that is valid in every other way is
+        // still refused, because the verifier cannot answer one of the
+        // questions verification is made of.
+        let signing_key = SigningKey::generate();
+        let token = token_dated(&signing_key, chrono::Duration::hours(1));
+
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        assert!(!verifier.checks_revocation());
+        assert_eq!(
+            verifier.verify(&token),
+            Err(AttestationError::RevocationUnavailable)
+        );
+    }
+
+    #[test]
+    fn the_unconfigured_refusal_names_the_verifier_and_not_the_token() {
+        // A caller who reads "revoked" when the truth is "not configured" goes
+        // looking for a denylist entry that does not exist. The message has to
+        // send them to their own construction site.
+        let message = AttestationError::RevocationUnavailable.to_string();
+
+        assert!(message.contains("with_revocation"), "{message}");
+        assert!(message.contains("AcceptAll"), "{message}");
+    }
+
+    #[test]
+    fn every_verify_entry_point_refuses_without_a_revocation_source() {
+        // `verify` is not the only door. A path that skipped the check would
+        // be an unguarded way in, and the interesting ones are the
+        // higher-level helpers that look like they only add restrictions.
+        let signing_key = SigningKey::generate();
+        let token = token_dated(&signing_key, chrono::Duration::hours(1));
+        let uri = test_uri();
+        let capability = CapabilityPath::parse("test").expect("a valid capability");
+
+        let mut verifier = Verifier::new();
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        let unavailable = Err(AttestationError::RevocationUnavailable);
+        assert_eq!(verifier.verify(&token), unavailable);
+        assert_eq!(verifier.verify_for_audience(&token, "api"), unavailable);
+        assert_eq!(verifier.verify_for_uri(&token, &uri), unavailable);
+        assert_eq!(
+            verifier.verify_for_uri_and_audience(&token, &uri, "api"),
+            unavailable
+        );
+        assert_eq!(
+            verifier.verify_for_capability(&token, &uri, &capability),
+            unavailable
+        );
+        assert_eq!(
+            verifier.verify_for_capability_and_audience(&token, &uri, &capability, "api"),
+            unavailable
+        );
+    }
+
+    #[test]
+    fn accept_all_restores_the_permissive_behaviour_explicitly() {
+        let signing_key = SigningKey::generate();
+        let token = issue_raw(
+            &signing_key,
+            &claims_valid_for(
+                Utc::now() - chrono::Duration::minutes(1),
+                Utc::now() + chrono::Duration::hours(1),
+            ),
+        );
+
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        assert!(verifier.checks_revocation());
+        assert!(verifier.verify(&token).is_ok());
+    }
+
+    #[test]
+    fn a_revoked_token_is_refused_by_its_jti() {
+        let signing_key = SigningKey::generate();
+        let claims = claims_valid_for(
+            Utc::now() - chrono::Duration::minutes(1),
+            Utc::now() + chrono::Duration::hours(1),
+        );
+        let token = issue_raw(&signing_key, &claims);
+
+        let mut verifier =
+            Verifier::new().with_revocation(Denylist::new().revoke_token(&claims.jti));
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        assert_eq!(
+            verifier.verify(&token),
+            Err(AttestationError::TokenRevoked {
+                jti: claims.jti.clone()
+            })
+        );
+    }
+
+    #[test]
+    fn revoking_one_token_leaves_its_siblings_alone() {
+        // Per-token revocation has to be surgical. If revoking one attestation
+        // took out every token the same root issued, nobody would use it and
+        // the only remaining tool would be the one that revokes a whole key.
+        let signing_key = SigningKey::generate();
+        let doomed = claims_valid_for(
+            Utc::now() - chrono::Duration::minutes(1),
+            Utc::now() + chrono::Duration::hours(1),
+        );
+        let mut spared = doomed.clone();
+        spared.jti = "01h455vb4pex5vsknk084sn02r".into();
+
+        let mut verifier =
+            Verifier::new().with_revocation(Denylist::new().revoke_token(&doomed.jti));
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        assert!(verifier.verify(&issue_raw(&signing_key, &doomed)).is_err());
+        assert!(verifier.verify(&issue_raw(&signing_key, &spared)).is_ok());
+    }
+
+    #[test]
+    fn a_revoked_key_refuses_every_token_it_signed() {
+        // The compromise case. Two tokens with different `jti` values, neither
+        // named in any list, both refused because the key is.
+        let signing_key = SigningKey::generate();
+        let first = claims_valid_for(
+            Utc::now() - chrono::Duration::minutes(1),
+            Utc::now() + chrono::Duration::hours(1),
+        );
+        let mut second = first.clone();
+        second.jti = "01h455vb4pex5vsknk084sn02r".into();
+
+        let denylist = Denylist::new().revoke_key(&signing_key.verifying_key());
+        assert_eq!(denylist.revoked_token_count(), 0, "nothing is listed by id");
+
+        let mut verifier = Verifier::new().with_revocation(denylist);
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        for claims in [&first, &second] {
+            assert_eq!(
+                verifier.verify(&issue_raw(&signing_key, claims)),
+                Err(AttestationError::KeyRevoked {
+                    issuer: "acme.com".into()
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn revocation_is_checked_after_the_signature_and_not_before() {
+        // `jti` and `iss` come out of the token. Consulting the denylist before
+        // the signature was checked would mean an attacker chooses which entry
+        // is looked up -- and could therefore choose one that is not listed.
+        // A token forged under an untrusted key must fail as a signature
+        // problem, never as a clean "not revoked".
+        let trusted = SigningKey::generate();
+        let attacker = SigningKey::generate();
+        let claims = claims_valid_for(
+            Utc::now() - chrono::Duration::minutes(1),
+            Utc::now() + chrono::Duration::hours(1),
+        );
+
+        let mut verifier =
+            Verifier::new().with_revocation(Denylist::new().revoke_token(&claims.jti));
+        verifier.add_trusted_root("acme.com", trusted.verifying_key());
+
+        // Signed by the wrong key, and carrying a `jti` that is on the list.
+        let forged = issue_raw(&attacker, &claims);
+
+        assert_eq!(
+            verifier.verify(&forged),
+            Err(AttestationError::InvalidSignature),
+            "an unauthenticated token must not be reported on by its own claims"
+        );
+    }
+
+    #[test]
+    fn key_revocation_outranks_token_revocation_in_reporting() {
+        // Both apply. The key is the bigger fact: a caller told only that one
+        // token was withdrawn might reasonably ask for another from the same
+        // root, which is exactly what a compromised key wants them to do.
+        let signing_key = SigningKey::generate();
+        let claims = claims_valid_for(
+            Utc::now() - chrono::Duration::minutes(1),
+            Utc::now() + chrono::Duration::hours(1),
+        );
+
+        let denylist = Denylist::new()
+            .revoke_token(&claims.jti)
+            .revoke_key(&signing_key.verifying_key());
+
+        let mut verifier = Verifier::new().with_revocation(denylist);
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+
+        assert_eq!(
+            verifier.verify(&issue_raw(&signing_key, &claims)),
+            Err(AttestationError::KeyRevoked {
+                issuer: "acme.com".into()
+            })
+        );
+    }
+
+    #[test]
+    fn a_token_with_no_jti_is_refused() {
+        // REQUIRED. A token nobody can name is a token nobody can revoke, so
+        // accepting one would leave a hole that no denylist could close.
+        let signing_key = SigningKey::generate();
+        let token = token_without_claim(&signing_key, "jti");
+
+        let error = verifier_trusting(&signing_key)
+            .verify(&token)
+            .expect_err("a token with no jti must be refused");
+
+        assert!(
+            matches!(&error, AttestationError::InvalidClaims { reason } if reason.contains("jti")),
+            "{error}"
+        );
     }
 
     #[test]
@@ -708,7 +1014,7 @@ mod tests {
 
     #[test]
     fn add_trusted_root() {
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         let signing_key = SigningKey::generate();
 
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
@@ -749,6 +1055,7 @@ mod tests {
         exp: chrono::DateTime<Utc>,
     ) -> AttestationClaims {
         AttestationClaims {
+            jti: "01h455vb4pex5vsknk084sn02q".into(),
             agent_uri: test_uri().to_string(),
             agent_key: SigningKey::generate().verifying_key().to_base64(),
             capabilities: vec!["test".into()],
@@ -777,7 +1084,7 @@ mod tests {
 
         let tampered = tamper(&token);
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         assert_eq!(
@@ -799,7 +1106,7 @@ mod tests {
             .unwrap();
 
         // The right authority, but the wrong key registered for it.
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", SigningKey::generate().verifying_key());
 
         assert_eq!(
@@ -810,7 +1117,7 @@ mod tests {
 
     #[test]
     fn a_malformed_token_is_reported_as_an_invalid_format() {
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", SigningKey::generate().verifying_key());
 
         // Structurally not a token: nothing was verified because there was nothing
@@ -832,7 +1139,7 @@ mod tests {
 
         let token = issue_raw(&signing_key, &claims);
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         match verifier.verify(&token) {
@@ -865,7 +1172,7 @@ mod tests {
 
         let tampered = tamper(&issue_raw(&signing_key, &claims));
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         assert_eq!(
@@ -886,7 +1193,7 @@ mod tests {
 
         let token = issue_raw(&signing_key, &claims);
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         assert!(verifier.verify(&token).is_ok());
@@ -906,7 +1213,7 @@ mod tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let claims = verifier.verify(&token).unwrap();
@@ -927,7 +1234,7 @@ mod tests {
             .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         // Register key under different trust root
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
@@ -952,7 +1259,7 @@ mod tests {
             .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         // Register different key
         verifier.add_trusted_root("acme.com", signing_key2.verifying_key());
 
@@ -978,7 +1285,7 @@ mod tests {
             .issue(&uri, &SigningKey::generate().verifying_key(), vec![])
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let claims = verifier.verify_for_uri(&token, &uri).unwrap();
@@ -998,7 +1305,7 @@ mod tests {
             .issue(&uri1, &SigningKey::generate().verifying_key(), vec![])
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let result = verifier.verify_for_uri(&token, &uri2);
@@ -1045,7 +1352,7 @@ mod tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         // verify
@@ -1093,7 +1400,7 @@ mod tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let required = CapabilityPath::parse("workflow/approval").unwrap();
@@ -1138,7 +1445,7 @@ mod tests {
             .unwrap();
         let token = issuer.issue_claims(&claims).unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         assert!(matches!(
@@ -1205,7 +1512,7 @@ mod tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let claims = verifier.verify(&token).unwrap();
@@ -1221,7 +1528,7 @@ mod tests {
     #[test]
     fn verify_rejects_oversized_token() {
         let signing_key = SigningKey::generate();
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let token = oversized_token();
@@ -1238,7 +1545,7 @@ mod tests {
     fn oversized_token_is_rejected_before_any_key_is_tried() {
         // Many trusted roots, none of which should be consulted: the length
         // check must short-circuit ahead of the O(trusted keys) signature loop.
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         for index in 0..32 {
             verifier.add_trusted_root(
                 format!("root{index}.com"),
@@ -1277,7 +1584,7 @@ mod tests {
             )
             .unwrap();
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
         assert!(verifier.verify(&token).is_ok());
 
@@ -1291,7 +1598,7 @@ mod tests {
     #[test]
     fn every_verify_entry_point_enforces_the_cap() {
         let signing_key = SigningKey::generate();
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let token = oversized_token();
@@ -1323,7 +1630,7 @@ mod tests {
     #[test]
     fn token_at_the_cap_is_not_rejected_for_length() {
         let signing_key = SigningKey::generate();
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         let token = format!("v4.public.{}", "A".repeat(crate::MAX_TOKEN_LENGTH - 10));
@@ -1569,7 +1876,7 @@ mod tests {
         let signing_key = SigningKey::generate();
         let token = token_dated(&signing_key, chrono::Duration::seconds(10));
 
-        let mut verifier = Verifier::with_leeway(Duration::ZERO);
+        let mut verifier = Verifier::with_leeway(Duration::ZERO).with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         assert!(matches!(
@@ -1590,7 +1897,7 @@ mod tests {
         // Default tolerance accepts it; exact comparison does not.
         assert!(verifier_trusting(&signing_key).verify(&token).is_ok());
 
-        let mut strict = Verifier::with_leeway(Duration::ZERO);
+        let mut strict = Verifier::with_leeway(Duration::ZERO).with_revocation(AcceptAll);
         strict.add_trusted_root("acme.com", signing_key.verifying_key());
         assert!(matches!(
             strict.verify(&token),
@@ -1607,7 +1914,7 @@ mod tests {
             Duration::from_secs(5)
         );
 
-        let mut verifier = Verifier::new();
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
         verifier.set_leeway(Duration::ZERO);
         assert_eq!(verifier.leeway(), Duration::ZERO);
     }
@@ -1619,7 +1926,7 @@ mod tests {
         let signing_key = SigningKey::generate();
         let token = token_dated(&signing_key, chrono::Duration::hours(1));
 
-        let mut verifier = Verifier::with_leeway(Duration::MAX);
+        let mut verifier = Verifier::with_leeway(Duration::MAX).with_revocation(AcceptAll);
         verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
         assert!(verifier.verify(&token).is_ok());

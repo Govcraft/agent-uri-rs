@@ -6,9 +6,20 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use typeid_suffix::prelude::*;
 
 use crate::error::AttestationError;
 use crate::keys::VerifyingKey;
+
+/// Mints a fresh token identifier.
+///
+/// A `UUIDv7` rendered in Crockford base32, which is what an agent ID suffix
+/// already is. Reusing that encoding means a reader of this crate's wire format
+/// needs one alphabet rather than two, and v7's leading timestamp makes the
+/// identifiers sort by issuance.
+fn new_jti() -> String {
+    TypeIdSuffix::new::<V7>().to_string()
+}
 
 /// Claims embedded in an attestation token.
 ///
@@ -57,6 +68,18 @@ use crate::keys::VerifyingKey;
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttestationClaims {
+    /// A unique identifier for this token.
+    ///
+    /// Two tokens attesting the same URI with the same capabilities are
+    /// otherwise indistinguishable, which means neither can be named: not in a
+    /// log, not in an incident report, and not in a denylist. This claim is what
+    /// makes one token a thing that can be talked about, and it is what
+    /// [revocation](crate::RevocationCheck) revokes.
+    ///
+    /// The value is a 26-character Crockford base32 `UUIDv7`, the same encoding
+    /// an [`AgentId`](agent_uri::AgentId) suffix uses, so nothing new is needed
+    /// to read one. Being a v7 UUID it also sorts by issuance time.
+    pub jti: String,
     /// The full agent URI being attested
     pub agent_uri: String,
     /// The agent's own Ed25519 public key, base64-encoded.
@@ -217,6 +240,7 @@ impl AttestationClaims {
 /// ```
 #[derive(Debug, Clone)]
 pub struct AttestationClaimsBuilder {
+    jti: Option<String>,
     agent_uri: Option<String>,
     agent_key: Option<String>,
     capabilities: Vec<String>,
@@ -226,17 +250,48 @@ pub struct AttestationClaimsBuilder {
 }
 
 impl AttestationClaimsBuilder {
-    /// Creates a new builder with default TTL of 24 hours.
+    /// Creates a new builder with a default TTL of
+    /// [`DEFAULT_TTL`](Self::DEFAULT_TTL).
     #[must_use]
     pub fn new() -> Self {
         Self {
+            jti: None,
             agent_uri: None,
             agent_key: None,
             capabilities: Vec::new(),
             issuer: None,
-            ttl: Duration::from_hours(24),
+            ttl: Self::DEFAULT_TTL,
             audience: None,
         }
+    }
+
+    /// How long an issued token is valid when the caller does not say.
+    ///
+    /// One hour. `exp` is the blast radius of a signing key that has been
+    /// compromised but not yet noticed: until the revocation list is updated
+    /// and every verifier has seen it, an attacker holding the key can mint
+    /// tokens, and the ones already minted keep working until they lapse.
+    ///
+    /// The previous default was 24 hours, chosen when there was no revocation
+    /// mechanism at all and `exp` was the *only* control. Revocation
+    /// ([`RevocationCheck`](crate::RevocationCheck)) is now the primary one, so
+    /// the default no longer has to carry that weight alone — but a default is
+    /// what most tokens get, and an hour costs a caller who genuinely needs
+    /// longer one explicit [`ttl`](Self::ttl) call.
+    pub const DEFAULT_TTL: Duration = Duration::from_hours(1);
+
+    /// Sets the token's unique identifier.
+    ///
+    /// Rarely needed: [`build`](Self::build) mints a fresh one when this is not
+    /// called, which is what you want unless you are reproducing a specific
+    /// token in a test or minting an id in some other system of record.
+    ///
+    /// The value is not validated. A caller who supplies a duplicate has made
+    /// two tokens that revoking either revokes both.
+    #[must_use]
+    pub fn jti(mut self, jti: impl Into<String>) -> Self {
+        self.jti = Some(jti.into());
+        self
     }
 
     /// Sets the agent URI to attest.
@@ -325,6 +380,7 @@ impl AttestationClaimsBuilder {
             now + chrono::Duration::from_std(self.ttl).map_err(|_| AttestationError::InvalidTtl)?;
 
         Ok(AttestationClaims {
+            jti: self.jti.unwrap_or_else(new_jti),
             agent_uri,
             agent_key,
             capabilities,

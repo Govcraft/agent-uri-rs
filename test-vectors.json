@@ -1315,6 +1315,7 @@
       "description": "Valid attestation - all claims correct, no audience restriction",
       "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn01q",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1331,6 +1332,7 @@
       "description": "Valid attestation - audience present and matches verifier",
       "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn02q",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1348,6 +1350,7 @@
       "description": "REJECT - audience present but does not match verifier",
       "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn03q",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1367,6 +1370,7 @@
       "description": "REJECT - issuer does not match trust root",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn04q",
         "iss": "other.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1385,6 +1389,7 @@
       "description": "REJECT - subject does not match agent URI",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn05q",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02r",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1403,6 +1408,7 @@
       "description": "REJECT - attestation expired",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn06q",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1421,6 +1427,7 @@
       "description": "REJECT - capabilities do not cover URI path",
       "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn07q",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/invoice/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1439,6 +1446,7 @@
       "description": "REJECT - empty capabilities list",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn08q",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1458,6 +1466,7 @@
       "description": "Valid - exact identity-path capability",
       "agent_uri": "agent://acme.com/workflow/approval/invoice/high-value/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn09q",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/invoice/high-value/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1475,6 +1484,7 @@
       "description": "Valid - one of multiple capabilities covers path",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0aq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1492,6 +1502,7 @@
       "description": "REJECT - ancestor capability lies outside identity scope",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0bq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1510,6 +1521,7 @@
       "description": "REJECT - capability is child of path (child cannot cover parent)",
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0cq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1528,6 +1540,7 @@
       "description": "REJECT - missing required claim: iss",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0dq",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
         "iat": "2026-01-01T00:00:00Z",
@@ -1545,6 +1558,7 @@
       "description": "REJECT - missing required claim: agent_uri",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0eq",
         "iss": "acme.com",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
         "iat": "2026-01-01T00:00:00Z",
@@ -1562,6 +1576,7 @@
       "description": "REJECT - missing required claim: exp",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0fq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1579,6 +1594,7 @@
       "description": "REJECT - missing required claim: iat",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0gq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1596,6 +1612,7 @@
       "description": "REJECT - missing required claim: capabilities",
       "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0hq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1613,6 +1630,7 @@
       "description": "REJECT - attestation at exact expiration boundary (exp == current_time)",
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0jq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1631,6 +1649,7 @@
       "description": "Valid - audience absent allows any verifier",
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0kq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1648,6 +1667,7 @@
       "description": "REJECT - iat is in the future (not yet valid)",
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0mq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1666,6 +1686,7 @@
       "description": "Valid - subject matches after URI normalization",
       "agent_uri": "agent://ACME.COM/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0nq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1683,6 +1704,7 @@
       "description": "Valid - issuer matches trust root after normalization",
       "agent_uri": "agent://ACME.COM/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0pq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1700,6 +1722,7 @@
       "description": "REJECT - audience case-sensitive mismatch",
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0qq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
@@ -1719,6 +1742,7 @@
       "description": "REJECT - missing required claim: agent_key",
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0rq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "iat": "2026-01-01T00:00:00Z",
@@ -1736,6 +1760,7 @@
       "description": "REJECT - agent_key does not decode to 32 bytes",
       "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
       "claims": {
+        "jti": "01h455vb4pex5vsknk084sn0sq",
         "iss": "acme.com",
         "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
         "agent_key": "bm90LWEta2V5",
@@ -1748,6 +1773,24 @@
       "valid": false,
       "error_type": "invalid_key_format",
       "note": "Section 7.1 requirement 3: an unreadable agent_key MUST be rejected, not treated as absent"
+    },
+    {
+      "id": "att-026",
+      "description": "REJECT - missing required claim: jti",
+      "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+      "claims": {
+        "iss": "acme.com",
+        "agent_uri": "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        "agent_key": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
+        "iat": "2026-01-01T00:00:00Z",
+        "exp": "2026-12-31T23:59:59Z",
+        "capabilities": ["workflow"]
+      },
+      "verifier": "any-verifier.com",
+      "current_time": "2026-06-15T12:00:00Z",
+      "valid": false,
+      "error_type": "missing_claim",
+      "note": "Section 7.1: jti is REQUIRED. A token with no identifier cannot be named in a revocation list, so accepting one would leave a token that section 8.2 revocation can never reach"
     }
   ]
 }

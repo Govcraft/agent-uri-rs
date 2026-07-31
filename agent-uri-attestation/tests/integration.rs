@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use agent_uri::AgentUri;
 use agent_uri_attestation::{
-    AttestationClaimsBuilder, AttestationError, Issuer, SigningKey, Verifier, VerifyingKey,
+    AcceptAll, AttestationClaimsBuilder, AttestationError, Issuer, SigningKey, Verifier,
+    VerifyingKey,
 };
 
 fn test_uri() -> AgentUri {
@@ -18,7 +19,7 @@ fn round_trip_issue_and_verify() {
     let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
     let uri = test_uri();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     // Act
@@ -44,7 +45,7 @@ fn verify_for_uri_matches() {
     let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
     let uri = test_uri();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     let token = issuer
@@ -63,7 +64,7 @@ fn verify_for_uri_rejects_mismatch() {
     let uri2 =
         AgentUri::parse("agent://acme.com/workflow/other/rule_01h455vb4pex5vsknk084sn02q").unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     let token = issuer
@@ -81,7 +82,7 @@ fn rejects_untrusted_issuer() {
     let uri = AgentUri::parse("agent://evil.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q")
         .unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     let token = issuer
@@ -104,7 +105,7 @@ fn rejects_invalid_signature() {
     let issuer = Issuer::new("acme.com", signing_key1, Duration::from_secs(3600));
     let uri = test_uri();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     // Register different key than what signed the token
     verifier.add_trusted_root("acme.com", signing_key2.verifying_key());
 
@@ -131,7 +132,7 @@ fn expired_token_rejected() {
 
     // Zero leeway: this test is about expiry itself, so the default clock-skew
     // tolerance would keep a 1ms token alive well past the sleep below.
-    let mut verifier = Verifier::with_leeway(Duration::ZERO);
+    let mut verifier = Verifier::with_leeway(Duration::ZERO).with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     let token = issuer
@@ -179,7 +180,7 @@ fn multiple_capabilities() {
     let issuer = Issuer::new("acme.com", signing_key.clone(), Duration::from_secs(3600));
     let uri = test_uri();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     let capabilities = vec![
@@ -240,7 +241,7 @@ fn token_with_audience() {
 
     let token = issuer.issue_claims(&claims).unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", signing_key.verifying_key());
 
     let verified_claims = verifier
@@ -264,7 +265,7 @@ fn issuer_generate_creates_working_issuer() {
         .unwrap();
 
     // Should be able to verify with the issuer's own public key
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", issuer.verifying_key());
 
     let claims = verifier.verify(&token).unwrap();
@@ -282,7 +283,7 @@ fn multiple_trusted_roots() {
     let uri1 = test_uri();
     let uri2 = AgentUri::parse("agent://other.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
 
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", signing_key1.verifying_key());
     verifier.add_trusted_root("other.com", signing_key2.verifying_key());
 
@@ -312,7 +313,7 @@ fn trust_root_extraction_from_claims() {
 
 #[test]
 fn verifier_tracks_trusted_root_count() {
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     assert_eq!(verifier.trusted_root_count(), 0);
 
     verifier.add_trusted_root("acme.com", SigningKey::generate().verifying_key());
@@ -324,7 +325,7 @@ fn verifier_tracks_trusted_root_count() {
 
 #[test]
 fn verifier_checks_trusted_root_existence() {
-    let mut verifier = Verifier::new();
+    let mut verifier = Verifier::new().with_revocation(AcceptAll);
     verifier.add_trusted_root("acme.com", SigningKey::generate().verifying_key());
 
     assert!(verifier.has_trusted_root("acme.com"));
