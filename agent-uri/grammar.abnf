@@ -205,8 +205,6 @@ agent-id        = agent-prefix "_" type-suffix
 ;   - "Find all agents that do chat" → path match  
 ;   - "Find all LLM-based chat agents" → both
 ;
-; Structure: type-class [ "_" type-subclass [ "_" type-variant ] ]
-;
 ; Examples:
 ;   llm                 ; Any LLM-based agent
 ;   llm_chat            ; LLM specialized for chat
@@ -218,40 +216,54 @@ agent-id        = agent-prefix "_" type-suffix
 ;   composite           ; Orchestrates other agents
 ;   composite_pipeline  ; Sequential pipeline orchestrator
 ;   composite_router    ; Dynamic routing orchestrator
+;
+; The prefix is a TypeID prefix and nothing more: lowercase letters and
+; underscores, starting and ending with a letter. This rule is the syntax, and
+; it matches SPECIFICATION.md Appendix A.
 
-agent-prefix    = type-class *( "_" type-modifier )
+agent-prefix    = LOWER *( LOWER / "_" ) LOWER / LOWER
 
-; Primary type classes (extensible, but these are the core set)
+; Prefix constraints (inherited from TypeID spec):
+;   - Max 63 characters total
+;   - Only lowercase letters [a-z] and underscores
+;   - Must start with a letter
+;   - Must end with a letter
+;   - No digits allowed
+;
+; Valid:   a, llm, llm_chat, llm_chat_streaming, composite_pipeline_async
+; Invalid: llm_v2 (digit), LLM (uppercase), _llm (leading underscore)
+;
+; NOTE: consecutive underscores are permitted. `llm__chat` is a well-formed
+; TypeID prefix, so it is a well-formed agent prefix. An earlier revision of
+; this file wrote the rule as `type-class *( "_" type-modifier )` with
+; `type-modifier = 1*( LOWER )`, which forbids them. That was stricter than
+; both Appendix A and the TypeID specification, and a parser enforcing it
+; would refuse identifiers other TypeID implementations mint (issue #96).
+
+; ----------------------------------------------------------------------------
+; Prefix semantics (convention, not syntax)
+; ----------------------------------------------------------------------------
+;
+; By convention a prefix reads as a type class followed by refining modifiers,
+; separated by underscores:
+;
+;   type-class      = "llm" / "rule" / "human" / "composite"
+;                   / "sensor" / "actuator" / "hybrid"
+;                   / 1*( LOWER )        ; extension class
+;   type-modifier   = 1*( LOWER )
 ;
 ; llm        — Large language model based agent
-; rule       — Deterministic rule/logic based agent  
+; rule       — Deterministic rule/logic based agent
 ; human      — Human-in-the-loop agent
 ; composite  — Meta-agent that orchestrates other agents
 ; sensor     — Agent that observes/monitors (read-only)
 ; actuator   — Agent that effects changes (write-only)
 ; hybrid     — Mixed LLM + rule-based reasoning
 ;
-type-class      = "llm" / "rule" / "human" / "composite" 
-                / "sensor" / "actuator" / "hybrid"
-                / extension-class
-
-; Allow future extension with any valid TypeID prefix segment.
-; One letter is enough: TypeID prefixes run from 1 to 63 characters.
-extension-class = 1*( LOWER )
-
-; Type modifiers refine the class (optional, may be chained)
-; No digits allowed per TypeID spec
-type-modifier   = 1*( LOWER )
-
-; Prefix constraints (inherited from TypeID spec):
-;   - Max 63 characters total
-;   - Only lowercase letters [a-z] and underscores
-;   - Must start with letter (type-class requirement satisfies this)
-;   - Must end with letter (type-modifier ends with LOWER)
-;   - No digits allowed
-;
-; Valid:   a, llm, llm_chat, llm_chat_streaming, composite_pipeline_async
-; Invalid: llm_v2 (digit), LLM (uppercase), _llm (leading underscore)
+; These two rules are deliberately NOT part of `agent-prefix` above. They
+; describe how a prefix is meant to be read, and a prefix that does not read
+; that way is still valid: an implementation MUST accept `llm__chat` and MUST
+; NOT infer a modifier from the empty run between the underscores.
 
 ; ============================================================================
 ; TYPE SUFFIX (UUIDv7 in Base32)

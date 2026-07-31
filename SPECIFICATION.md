@@ -1,6 +1,6 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.8.2
+**Version:** 0.8.3
 **Status:** Draft
 **Last Updated:** 2026-07-31
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
@@ -266,6 +266,8 @@ The prefix encodes the agent's implementation type:
 | `hybrid` | Combined approaches |
 
 Custom prefixes SHOULD follow the pattern `type_modifier_modifier`.
+
+That pattern is a naming convention and not part of the syntax above. A prefix that does not read as a class followed by non-empty modifiers is still well formed: the `prefix` rule permits any arrangement of lowercase letters and underscores between the first and last letter, including consecutive underscores, exactly as the TypeID specification does. An implementation MUST accept `llm__chat`. Refusing it would reject identifiers that conforming TypeID implementations mint. An implementation that exposes the class and modifiers separately MUST NOT report a modifier for the empty run between consecutive underscores.
 
 **Examples:**
 
@@ -1751,6 +1753,7 @@ sharding removes it, because only sharding adds keys.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.8.3 | 2026-07-31 | §4.3 clarified: the `type_modifier_modifier` pattern stated to be a naming convention rather than syntax, consecutive underscores confirmed well formed as in the TypeID specification, and an implementation exposing the class and modifiers separately required not to report a modifier for the empty run between them |
 | 0.8.2 | 2026-07-31 | §7.2 given the shape of a `revoked_keys` entry, which was named but never defined, and required to carry key material rather than only a name; the verifier-side obligations discovery implies added: refuse a document naming another trust root, do not follow redirects away from the endpoint, bound what is read, and treat an unreachable endpoint as an absence of keys; what a fetched document does and does not establish stated outright |
 | 0.8.1 | 2026-07-31 | §7.2 given the verifier-side obligation its published validity periods implied: a key outside its window MUST be refused, judged at verification time rather than against the token's `iat`, with the rotation overlap that keeps in-flight tokens working stated as a schedule; §7.4 step 3 amended to carry the same check, and the distinction between a published schedule and unplanned revocation made explicit |
 | 0.8.0 | 2026-07-31 | `jti` added to §7.1 as a REQUIRED claim, since §8.2 revocation cannot name a token that has no identifier; §7.4 given an explicit revocation step, placed after signature verification so the presenter cannot choose which list entry is consulted, and a verifier without a revocation list required to reject rather than skip it; §8.2 expanded with the two granularities of revocation and why per-token listing alone cannot bound a key compromise |

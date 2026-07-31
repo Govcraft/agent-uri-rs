@@ -250,6 +250,11 @@ mod strategies {
     }
 
     /// Generate a valid agent prefix (type class + optional modifiers, max 63 chars)
+    ///
+    /// Separators are runs of one to three underscores, not single ones: a
+    /// prefix is a TypeID prefix, and TypeID permits a run anywhere between the
+    /// first and last letter (issue #96). Generating only single underscores
+    /// would leave every property here blind to inputs the parser must accept.
     pub fn agent_prefix() -> impl Strategy<Value = String> {
         let type_classes = prop::sample::select(vec![
             "llm",
@@ -261,12 +266,18 @@ mod strategies {
             "hybrid",
         ]);
 
-        (type_classes, prop::collection::vec(type_modifier(), 0..=3)).prop_filter_map(
-            "prefix too long",
-            |(class, modifiers)| {
+        let separated_modifier = (1..=3usize, type_modifier());
+
+        (
+            type_classes,
+            prop::collection::vec(separated_modifier, 0..=3),
+        )
+            .prop_filter_map("prefix too long", |(class, modifiers)| {
                 let mut prefix = class.to_string();
-                for m in modifiers {
-                    prefix.push('_');
+                for (underscores, m) in modifiers {
+                    for _ in 0..underscores {
+                        prefix.push('_');
+                    }
                     prefix.push_str(&m);
                 }
                 if prefix.len() <= MAX_AGENT_PREFIX_LENGTH {
@@ -274,8 +285,7 @@ mod strategies {
                 } else {
                     None
                 }
-            },
-        )
+            })
     }
 
     /// Generate a valid TypeID suffix (26 chars, first char 0-7, rest base32)
@@ -547,6 +557,30 @@ mod agent_id_tests {
         #[test]
         fn agent_prefix_length_constraint(prefix in agent_prefix()) {
             prop_assert!(prefix.len() <= MAX_AGENT_PREFIX_LENGTH);
+        }
+
+        #[test]
+        fn a_modifier_is_never_empty(prefix in agent_prefix()) {
+            // The class/modifier reading is a convention over the text, and an
+            // empty string satisfies no reading of it. A run of underscores
+            // must therefore contribute no modifier at all rather than a blank
+            // one (issue #96).
+            let parsed = AgentPrefix::parse(&prefix).unwrap();
+
+            prop_assert!(
+                parsed.modifiers().iter().all(|m| !m.is_empty()),
+                "empty modifier from prefix: {}",
+                prefix
+            );
+        }
+
+        #[test]
+        fn a_prefix_survives_parsing_verbatim(prefix in agent_prefix()) {
+            // The modifiers view is lossy, so the text has to be kept
+            // somewhere. `as_str` is where.
+            let parsed = AgentPrefix::parse(&prefix).unwrap();
+
+            prop_assert_eq!(parsed.as_str(), &prefix);
         }
 
         #[test]

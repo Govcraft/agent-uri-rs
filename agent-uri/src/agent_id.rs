@@ -556,6 +556,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_prefix_with_consecutive_underscores() {
+        // Vector aid-019 (issue #96). TypeID permits a run of underscores
+        // inside a prefix, and an agent ID is a TypeID, so refusing this would
+        // reject identifiers other implementations mint. Only the last
+        // underscore separates prefix from suffix.
+        let id = AgentId::parse("llm__chat_01h455vb4pex5vsknk084sn02q").unwrap();
+
+        assert_eq!(id.prefix().as_str(), "llm__chat");
+        assert_eq!(id.suffix(), "01h455vb4pex5vsknk084sn02q");
+    }
+
+    #[test]
     fn parse_empty_fails() {
         let result = AgentId::parse("");
         assert!(matches!(result, Err(AgentIdError::Empty)));

@@ -379,6 +379,26 @@
         "query": "name=%C3%A9",
         "fragment": null
       }
+    },
+    {
+      "id": "parse-020",
+      "description": "Agent ID prefix with consecutive underscores",
+      "input": "agent://example.com/chat/llm__chat_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "components": {
+        "scheme": "agent",
+        "trust_root": "example.com",
+        "host": "example.com",
+        "port": null,
+        "capability_path": "chat",
+        "capability_segments": ["chat"],
+        "agent_id": "llm__chat_01h455vb4pex5vsknk084sn02q",
+        "agent_id_prefix": "llm__chat",
+        "agent_id_suffix": "01h455vb4pex5vsknk084sn02q",
+        "query": null,
+        "fragment": null
+      },
+      "note": "A prefix is a TypeID prefix, which permits a run of underscores. An implementation that refuses this rejects identifiers other TypeID implementations mint."
     }
   ],
 
@@ -1306,6 +1326,15 @@
       "valid": false,
       "error_type": "invalid_agent_id_suffix",
       "note": "Agent IDs are lowercase identity material and are not normalized"
+    },
+    {
+      "id": "aid-019",
+      "description": "Prefix with consecutive underscores - valid",
+      "agent_id": "llm__chat_01h455vb4pex5vsknk084sn02q",
+      "valid": true,
+      "prefix": "llm__chat",
+      "suffix": "01h455vb4pex5vsknk084sn02q",
+      "note": "Appendix A allows any mix of letters and underscores between the first and last letter, as does the TypeID specification. Reading a prefix as type class plus modifiers is a convention, so the empty run here carries no modifier and does not make the identifier invalid."
     }
   ],
 

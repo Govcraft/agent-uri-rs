@@ -21,6 +21,10 @@ use crate::type_class::TypeClass;
 /// - Must start and end with a letter
 /// - No digits allowed
 ///
+/// Consecutive underscores are permitted, because a prefix is a `TypeID`
+/// prefix and `TypeID` permits them. See [`modifiers`](Self::modifiers) for
+/// what that means for the class/modifier reading.
+///
 /// # Examples
 ///
 /// ```
@@ -96,7 +100,8 @@ impl AgentPrefix {
             }
         }
 
-        // Split into class and modifiers
+        // Split into class and modifiers. A run of underscores yields empty
+        // segments, which are not modifiers and are dropped; see `modifiers`.
         let parts: Vec<&str> = input.split('_').collect();
         let type_class =
             parts[0]
@@ -106,7 +111,11 @@ impl AgentPrefix {
                     reason,
                 })?;
 
-        let modifiers = parts[1..].iter().map(|s| (*s).to_string()).collect();
+        let modifiers = parts[1..]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .map(|s| (*s).to_string())
+            .collect();
 
         Ok(Self {
             type_class,
@@ -122,12 +131,35 @@ impl AgentPrefix {
     }
 
     /// Returns the modifiers (subclasses).
+    ///
+    /// Reading a prefix as a type class followed by refining modifiers is a
+    /// convention, not syntax: the specification says custom prefixes SHOULD
+    /// follow `type_modifier_modifier`, and a prefix that does not is still
+    /// valid. So this is a lossy view rather than a decomposition. Empty
+    /// segments, which a run of underscores produces, are not modifiers and do
+    /// not appear here, which means the class and the modifiers do not always
+    /// reassemble into the prefix. [`as_str`](Self::as_str) is the authority on
+    /// what the prefix actually is.
+    ///
+    /// ```
+    /// use agent_uri::AgentPrefix;
+    ///
+    /// // `llm__chat` is a well-formed TypeID prefix, so it parses.
+    /// let prefix = AgentPrefix::parse("llm__chat").unwrap();
+    ///
+    /// assert_eq!(prefix.type_class().as_str(), "llm");
+    /// assert_eq!(prefix.modifiers(), &["chat"]);
+    /// assert_eq!(prefix.as_str(), "llm__chat");
+    /// ```
     #[must_use]
     pub fn modifiers(&self) -> &[String] {
         &self.modifiers
     }
 
     /// Returns the normalized string representation.
+    ///
+    /// This is the prefix exactly as it was written, and the only view of it
+    /// that is lossless.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.normalized
@@ -236,6 +268,51 @@ mod tests {
 
         assert_eq!(prefix.type_class().as_str(), "a");
         assert!(prefix.modifiers().is_empty());
+    }
+
+    #[test]
+    fn parse_consecutive_underscores_is_accepted() {
+        // A TypeID prefix may carry a run of underscores, so this crate must
+        // accept one: refusing it would reject identifiers other TypeID
+        // implementations mint. The empty segment between them is not a
+        // modifier, and the exact text survives in `as_str`.
+        let prefix = AgentPrefix::parse("llm__chat").unwrap();
+
+        assert_eq!(prefix.type_class().as_str(), "llm");
+        assert_eq!(prefix.modifiers(), &["chat"]);
+        assert_eq!(prefix.as_str(), "llm__chat");
+    }
+
+    #[test]
+    fn parse_long_underscore_run_yields_no_empty_modifiers() {
+        let prefix = AgentPrefix::parse("a___b").unwrap();
+
+        assert_eq!(prefix.modifiers(), &["b"]);
+        assert!(
+            prefix.modifiers().iter().all(|m| !m.is_empty()),
+            "an empty string is not a modifier by any reading"
+        );
+    }
+
+    #[test]
+    fn a_prefix_with_only_underscores_between_two_letters_has_one_modifier() {
+        let prefix = AgentPrefix::parse("llm____streaming").unwrap();
+
+        assert_eq!(prefix.modifiers(), &["streaming"]);
+    }
+
+    #[test]
+    fn underscore_runs_are_distinct_values_despite_a_shared_reading() {
+        // The class/modifier view is lossy on purpose. The values are not: two
+        // prefixes that differ in text remain different prefixes, so nothing
+        // downstream can conflate the two identities.
+        let one = AgentPrefix::parse("llm_chat").unwrap();
+        let two = AgentPrefix::parse("llm__chat").unwrap();
+
+        assert_eq!(one.type_class(), two.type_class());
+        assert_eq!(one.modifiers(), two.modifiers());
+        assert_ne!(one, two);
+        assert_ne!(one.as_str(), two.as_str());
     }
 
     #[test]
