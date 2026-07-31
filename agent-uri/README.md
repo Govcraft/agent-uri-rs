@@ -120,6 +120,14 @@ println!("Prefix: {}", parsed.prefix());  // task_runner
 println!("UUID: {}", parsed.uuid());      // extracts the UUIDv7
 ```
 
+`new` follows `mti`, which this crate mints TypeIDs with: it sanitizes a prefix
+the grammar refuses rather than failing, so `AgentId::new("LLM Chat!")` yields
+the prefix `llmchat` and `AgentId::new("123")` falls back to `agent`. That is
+what you want for a prefix you wrote and not for one that arrived from a peer,
+a config file, or a URI, because the ID you get back names a class nobody
+asked for. For those, `AgentId::try_new` reports the prefix instead of
+rewriting it.
+
 ### Query and Fragment
 
 ```rust

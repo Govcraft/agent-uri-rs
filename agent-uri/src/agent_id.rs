@@ -23,7 +23,7 @@ use std::str::FromStr;
 use mti::prelude::*;
 
 use crate::agent_prefix::AgentPrefix;
-use crate::constants::{AGENT_SUFFIX_LENGTH, MAX_AGENT_ID_LENGTH};
+use crate::constants::{AGENT_SUFFIX_LENGTH, MAX_AGENT_ID_LENGTH, MAX_AGENT_PREFIX_LENGTH};
 use crate::error::AgentIdError;
 
 /// Base32 alphabet for `TypeID` suffix (Crockford-derived).
@@ -33,6 +33,59 @@ use crate::error::AgentIdError;
 /// character. Asking it of `c as u8` truncates: `'İ'` (U+0130) becomes `0x30`,
 /// which is `'0'`, and twelve of them read as twelve zeros (issue #33).
 const BASE32_ALPHABET: &str = "0123456789abcdefghjkmnpqrstvwxyz";
+
+/// The type class a prefix falls back to when sanitizing leaves nothing.
+///
+/// [`AgentId::new`] rewrites rather than refuses, and rewriting can consume the
+/// whole input: `new("123")` has no letter to keep. A bare `TypeID` may have an
+/// empty prefix, but this grammar's `agent-prefix` may not, so there is nothing
+/// to fall back to except a class that says only what the input already said,
+/// which is that the thing is an agent.
+const FALLBACK_TYPE_CLASS: &str = "agent";
+
+/// Rewrites any string into a prefix `agent-prefix` accepts.
+///
+/// The rules are the ones `mti` applies to a bare `TypeID` prefix, tightened
+/// where this grammar is tighter:
+///
+/// - ASCII uppercase folds to lowercase; every other character outside
+///   `[a-z_]` is dropped. Folding is ASCII-only on purpose: mapping `İ` to `i`
+///   would let a non-ASCII character name an ASCII agent (issue #33).
+/// - A run of underscores collapses to one, and a leading underscore is
+///   dropped, because `type-modifier` is `1*LOWER` and an empty modifier is
+///   not a modifier.
+/// - The result is cut to 63 characters and then loses any trailing
+///   underscore, because a prefix must end in a letter.
+/// - If nothing survives, the result is [`FALLBACK_TYPE_CLASS`].
+///
+/// The output always parses as an [`AgentPrefix`]; `sanitizing_is_total` and
+/// the `agent_id_new_never_panics` property test hold this invariant up.
+fn sanitize_prefix(input: &str) -> String {
+    let mut out = String::new();
+
+    for c in input.chars().map(|c| c.to_ascii_lowercase()) {
+        if out.len() == MAX_AGENT_PREFIX_LENGTH {
+            break;
+        }
+        match c {
+            'a'..='z' => out.push(c),
+            '_' if !out.is_empty() && !out.ends_with('_') => out.push('_'),
+            _ => {}
+        }
+    }
+
+    // The loop only ever keeps an underscore that had a letter before it. The
+    // letter after it is what the cut above can take away.
+    while out.ends_with('_') {
+        out.pop();
+    }
+
+    if out.is_empty() {
+        FALLBACK_TYPE_CLASS.to_string()
+    } else {
+        out
+    }
+}
 
 /// A validated agent identifier in `TypeID` format.
 ///
@@ -60,6 +113,13 @@ const BASE32_ALPHABET: &str = "0123456789abcdefghjkmnpqrstvwxyz";
 /// let id = AgentId::new("llm_chat");
 /// assert_eq!(id.suffix().len(), 26);
 /// ```
+///
+/// # Constructing one
+///
+/// [`AgentId::parse`] reads an existing ID. The other two mint a fresh one and
+/// differ only in what they do with a prefix the grammar rejects:
+/// [`AgentId::new`] rewrites it, [`AgentId::try_new`] reports it. Prefer
+/// `try_new` for any prefix that did not come from your own source.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AgentId {
     prefix: AgentPrefix,
@@ -68,33 +128,96 @@ pub struct AgentId {
 }
 
 impl AgentId {
-    /// Creates a new agent ID with the given prefix and a fresh `UUIDv7`.
+    /// Creates a new agent ID with the given prefix and a fresh `UUIDv7`,
+    /// sanitizing the prefix if the grammar does not already accept it.
     ///
-    /// # Panics
+    /// This is the split `mti` draws, and this crate mints `TypeID`s with
+    /// `mti`: `create_type_id` sanitizes and `try_create_type_id` refuses.
+    /// Sanitizing is described on [`AgentId::try_new`]'s counterpart below;
+    /// in short, anything outside `[a-z_]` is dropped, uppercase is folded,
+    /// and a prefix left with nothing becomes `agent`.
     ///
-    /// Panics if the prefix is invalid. Use `AgentId::try_new` for fallible creation.
+    /// # Choosing between this and [`AgentId::try_new`]
+    ///
+    /// Sanitizing means you get an agent ID with *a* prefix, not necessarily
+    /// the one you named. That is what you want when the prefix is a label you
+    /// wrote: minting an ID should not be fallible over a string literal. It is
+    /// not what you want when the prefix arrived from somewhere — a peer, a
+    /// config file, a URI — because a rewritten prefix is a different agent
+    /// class than the one that was asked for, and silence about that is how a
+    /// caller ends up registering under a name it never chose. Untrusted input
+    /// belongs in [`AgentId::try_new`] or [`AgentId::parse`], which refuse.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentId;
+    ///
+    /// // A prefix the grammar already accepts is kept verbatim.
+    /// let id = AgentId::new("llm_chat");
+    /// assert_eq!(id.prefix().as_str(), "llm_chat");
+    ///
+    /// // Anything else is rewritten rather than refused.
+    /// assert_eq!(AgentId::new("LLM Chat!").prefix().as_str(), "llmchat");
+    /// assert_eq!(AgentId::new("__llm__chat__").prefix().as_str(), "llm_chat");
+    /// assert_eq!(AgentId::new("123").prefix().as_str(), "agent");
+    ///
+    /// // Every one of them is a parsable agent ID.
+    /// assert!(AgentId::parse(&AgentId::new("123").to_string()).is_ok());
+    /// ```
     #[must_use]
     pub fn new(prefix: &str) -> Self {
-        Self::try_new(prefix).expect("valid prefix")
+        let sanitized = sanitize_prefix(prefix);
+        let Ok(agent_prefix) = AgentPrefix::parse(&sanitized) else {
+            unreachable!("sanitize_prefix returns a parsable prefix, got {sanitized:?}")
+        };
+
+        Self::mint(agent_prefix)
     }
 
-    /// Creates a new agent ID with the given prefix and a fresh `UUIDv7`.
+    /// Creates a new agent ID with the given prefix and a fresh `UUIDv7`,
+    /// refusing a prefix the grammar does not accept.
+    ///
+    /// Use this whenever the prefix came from outside your own source: it
+    /// reports what [`AgentId::new`] would have quietly rewritten.
     ///
     /// # Errors
     ///
     /// Returns `AgentIdError` if the prefix is invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent_uri::AgentId;
+    ///
+    /// assert!(AgentId::try_new("llm_chat").is_ok());
+    /// assert!(AgentId::try_new("LLM Chat!").is_err());
+    /// ```
     pub fn try_new(prefix: &str) -> Result<Self, AgentIdError> {
         let agent_prefix = AgentPrefix::parse(prefix).map_err(AgentIdError::InvalidPrefix)?;
-        let type_id = prefix.create_type_id::<V7>();
-        let suffix = type_id
-            .suffix_str()
-            .map_err(|e| AgentIdError::TypeIdError(e.to_string()))?;
 
-        Ok(Self {
-            prefix: agent_prefix,
-            suffix,
-            inner: type_id,
-        })
+        Ok(Self::mint(agent_prefix))
+    }
+
+    /// Mints an agent ID from a prefix that has already been validated.
+    ///
+    /// Both constructors end here, and nothing here can fail: the prefix has
+    /// already been validated, a fresh `UUIDv7` suffix is always well formed,
+    /// and `mti` assembles a `TypeID` from the two without consulting either.
+    /// Minting used to go through `mti`'s fallible accessors, which gave
+    /// [`AgentId::new`] a failure to `expect` on top of the one it already had.
+    fn mint(prefix: AgentPrefix) -> Self {
+        let suffix = TypeIdSuffix::new::<V7>();
+        let suffix_string = suffix.to_string();
+        // A no-op: `AgentPrefix` is strictly narrower than a `TypeID` prefix.
+        // It is how a `TypeIdPrefix` is obtained without a fallible parse.
+        let inner = MagicTypeId::new(prefix.as_str().create_prefix_sanitized(), suffix);
+
+        Self {
+            prefix,
+            suffix: suffix_string,
+            inner,
+        }
     }
 
     /// Parses an agent ID from a string.
@@ -285,6 +408,121 @@ mod tests {
         let id = AgentId::new("llm_chat");
         assert_eq!(id.prefix().as_str(), "llm_chat");
         assert_eq!(id.suffix().len(), 26);
+    }
+
+    #[test]
+    fn creating_an_id_from_an_invalid_prefix_sanitizes_rather_than_panics() {
+        // The whole of issue #28: this call used to be a panic, and the
+        // signature never said so.
+        let id = AgentId::new("LLM Chat!");
+        assert_eq!(id.prefix().as_str(), "llmchat");
+        assert_eq!(id.suffix().len(), AGENT_SUFFIX_LENGTH);
+    }
+
+    #[test]
+    fn sanitizing_keeps_a_prefix_the_grammar_already_accepts() {
+        // Sanitizing has to be the identity on valid input, or `new` would be
+        // renaming agents that were named correctly.
+        for prefix in [
+            "llm",
+            "a",
+            "llm_chat",
+            "llm_chat_streaming",
+            "composite",
+            &"a".repeat(MAX_AGENT_PREFIX_LENGTH),
+        ] {
+            assert_eq!(sanitize_prefix(prefix), prefix);
+            assert_eq!(AgentId::new(prefix).prefix().as_str(), prefix);
+        }
+    }
+
+    #[test]
+    fn sanitizing_drops_what_the_grammar_has_no_room_for() {
+        assert_eq!(sanitize_prefix("LLM"), "llm");
+        assert_eq!(sanitize_prefix("llm-chat"), "llmchat");
+        assert_eq!(sanitize_prefix("llm2chat"), "llmchat");
+        assert_eq!(sanitize_prefix("llm chat"), "llmchat");
+        // A run of underscores would leave an empty modifier, and
+        // `type-modifier` is `1*LOWER`.
+        assert_eq!(sanitize_prefix("__llm__chat__"), "llm_chat");
+        // Non-ASCII is dropped, not transliterated: `İ` must not become `i`
+        // and name an agent nobody asked for (issue #33).
+        assert_eq!(sanitize_prefix("llm\u{0130}chat"), "llmchat");
+        assert_eq!(sanitize_prefix("\u{1f300}"), FALLBACK_TYPE_CLASS);
+    }
+
+    #[test]
+    fn sanitizing_a_prefix_down_to_nothing_yields_the_fallback_class() {
+        for prefix in ["", "123", "!!!", "___", "-", " "] {
+            assert_eq!(
+                sanitize_prefix(prefix),
+                FALLBACK_TYPE_CLASS,
+                "{prefix:?} left something behind"
+            );
+            assert_eq!(AgentId::new(prefix).prefix().as_str(), FALLBACK_TYPE_CLASS);
+        }
+    }
+
+    #[test]
+    fn sanitizing_cuts_to_the_maximum_prefix_length() {
+        let sanitized = sanitize_prefix(&"a".repeat(MAX_AGENT_PREFIX_LENGTH + 37));
+        assert_eq!(sanitized.len(), MAX_AGENT_PREFIX_LENGTH);
+
+        // The cut can strand the separator on the end, where a prefix must
+        // have a letter.
+        let sanitized = sanitize_prefix(&format!("{}_b", "a".repeat(MAX_AGENT_PREFIX_LENGTH)));
+        assert_eq!(sanitized.len(), MAX_AGENT_PREFIX_LENGTH);
+        assert!(!sanitized.ends_with('_'));
+    }
+
+    #[test]
+    fn sanitizing_is_total() {
+        // The invariant `new` rests on: whatever comes out parses. The
+        // property test in `no_panic_proptest.rs` says the same over
+        // arbitrary input; these are the cases worth naming.
+        for prefix in [
+            "",
+            "!!!",
+            "___",
+            "9",
+            "_a",
+            "a_",
+            "A__B",
+            "\u{0130}",
+            "\u{200b}llm",
+            &"_".repeat(200),
+            &format!("{}_x", "z".repeat(MAX_AGENT_PREFIX_LENGTH - 1)),
+        ] {
+            let sanitized = sanitize_prefix(prefix);
+            assert!(
+                AgentPrefix::parse(&sanitized).is_ok(),
+                "{prefix:?} sanitized to {sanitized:?}, which the grammar refuses"
+            );
+        }
+    }
+
+    #[test]
+    fn try_new_reports_what_new_would_have_rewritten() {
+        assert!(AgentId::try_new("llm_chat").is_ok());
+        for prefix in ["LLM Chat!", "", "123", "llm-chat"] {
+            assert!(
+                AgentId::try_new(prefix).is_err(),
+                "{prefix:?} was accepted verbatim"
+            );
+        }
+    }
+
+    #[test]
+    fn a_minted_id_always_parses_back() {
+        // `new` returning a value the crate's own parser refuses would be a
+        // quieter failure than the panic it replaced.
+        for prefix in ["llm_chat", "LLM Chat!", "123", "", &"a".repeat(200)] {
+            let minted = AgentId::new(prefix).to_string();
+            assert!(
+                AgentId::parse(&minted).is_ok(),
+                "{prefix:?} minted {minted:?}, which does not parse"
+            );
+        }
     }
 
     #[test]

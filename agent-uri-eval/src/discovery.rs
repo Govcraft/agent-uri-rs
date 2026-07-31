@@ -165,9 +165,9 @@ impl DiscoveryEvaluator {
         path: &CapabilityPath,
         agent_prefix: &str,
     ) -> Result<String, DiscoveryError> {
-        // Fallibly, not `AgentId::new`, which panics: this function returns a
-        // Result precisely so a caller with a bad prefix gets an error to handle
-        // rather than a process that dies mid-evaluation.
+        // Fallibly, not `AgentId::new`, which sanitizes: this function returns
+        // a Result precisely so a caller with a bad prefix is told about it,
+        // rather than silently registering under a prefix it never named.
         let agent_id = AgentId::try_new(agent_prefix).map_err(|e| DiscoveryError::Dht {
             operation: "build_agent_id".to_string(),
             message: format!("'{agent_prefix}' is not a valid agent prefix: {e}"),
@@ -421,9 +421,10 @@ mod tests {
 
     #[test]
     fn an_invalid_prefix_is_an_error_not_a_panic() {
-        // This function returns a Result, and used to call `AgentId::new`, which
-        // panics. A caller handing it a bad prefix took the whole process down
-        // mid-evaluation instead of getting an error it could report.
+        // This function returns a Result, and used to call `AgentId::new`,
+        // which sanitizes. A caller handing it a bad prefix would register an
+        // agent under a rewritten prefix instead of getting an error it could
+        // report.
         let mut eval = evaluator();
         let path = CapabilityPath::parse("assistant/chat").unwrap();
 
