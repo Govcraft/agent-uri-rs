@@ -1,6 +1,6 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.8.0
+**Version:** 0.8.1
 **Status:** Draft
 **Last Updated:** 2026-07-31
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
@@ -900,6 +900,39 @@ GET https://{trust-root}/.well-known/agent-keys.json
 2. Multiple keys MAY be published for rotation.
 3. Keys MUST include validity periods (`not_before`, `not_after`).
 4. Revoked keys SHOULD be listed in `revoked_keys`.
+5. Verifiers MUST reject a token whose signing key is outside its published
+   validity period, evaluated against the verifier's current time rather than
+   against the token's `iat`. Evaluating against `iat` would make `not_after`
+   advisory: a key withdrawn at noon would keep producing acceptable tokens for
+   as long as anything it signed beforehand had left to live.
+6. Verifiers MAY apply their clock-skew tolerance to both bounds, for the same
+   reason [Section 7.4](#74-verification-flow) applies it to `iat` and `exp`.
+
+**Rotation:**
+
+Requirement 5 is what makes the overlap in a published key list load-bearing
+rather than decorative. A rotation that is safe for tokens already in flight
+publishes the incoming key's `not_before` at or before the outgoing key's
+`not_after`, with the gap between them at least as long as the longest token
+lifetime the root issues:
+
+```
+outgoing:  not_after  = T + longest_ttl
+incoming:  not_before = T
+```
+
+Every token signed before `T` expires by `T + longest_ttl`, so no token is ever
+refused for naming a key that was current when it was minted. Trust roots
+SHOULD retain a rotated-out key for that interval and SHOULD then remove it, so
+that the number of keys a verifier must try stays bounded by the rotation
+schedule rather than by the root's history.
+
+A validity period is not revocation. It is a schedule, published in advance,
+and a verifier that holds the key already holds the schedule. Revocation
+([Section 8.2](#82-trust-root-key-compromise)) is unplanned news that has to
+reach the verifier. A compromised key needs both: removal from what the root
+publishes, and an entry on the revocation list for every verifier still holding
+a stale copy of the key document.
 
 ### 7.3 Capability Binding
 
@@ -933,7 +966,9 @@ Complete verification of an agent presenting URI and attestation:
 
 1. Parse agent URI; extract `trust_root`, `capability_path`, `agent_id`.
 2. Fetch/cache verification key from trust root's well-known endpoint.
-3. Verify PASETO signature using the key.
+3. Verify PASETO signature using the key, and reject if that key is outside the
+   validity period the trust root published for it
+   ([Section 7.2](#72-key-publication)).
 4. Check `exp` > current time (not expired).
 5. Check `iss` == `trust_root` from URI.
 6. Check `agent_uri` == the canonical full agent URI.
@@ -1693,6 +1728,7 @@ sharding removes it, because only sharding adds keys.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.8.1 | 2026-07-31 | §7.2 given the verifier-side obligation its published validity periods implied: a key outside its window MUST be refused, judged at verification time rather than against the token's `iat`, with the rotation overlap that keeps in-flight tokens working stated as a schedule; §7.4 step 3 amended to carry the same check, and the distinction between a published schedule and unplanned revocation made explicit |
 | 0.8.0 | 2026-07-31 | `jti` added to §7.1 as a REQUIRED claim, since §8.2 revocation cannot name a token that has no identifier; §7.4 given an explicit revocation step, placed after signature verification so the presenter cannot choose which list entry is consulted, and a verifier without a revocation list required to reject rather than skip it; §8.2 expanded with the two granularities of revocation and why per-token listing alone cannot bound a key compromise |
 | 0.7.1 | 2026-07-31 | Trust root stated to be ASCII, with conversion of internationalized names placed on whatever accepts them from a person and `xn--` labels defined as opaque; the resulting confusability and mis-conversion exposure added as §8.11 |
 | 0.7.0 | 2026-07-30 | Mutation proofs required to cover the `expires_at` the write results in, and nodes required to store that value rather than derive one, closing the rewritable expiry described in §6.6; per-key capacity required to be charged to the registering path's own key and not to an ancestor, with the resulting subtree lockout added to §8.4 |

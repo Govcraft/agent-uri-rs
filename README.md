@@ -124,7 +124,7 @@ Agent IDs use [TypeID](https://github.com/jetify-com/typeid) format: a semantic 
 
 ```toml
 [dependencies]
-agent-uri-attestation = "0.5"
+agent-uri-attestation = "0.7"
 ```
 
 ```rust
@@ -158,13 +158,35 @@ Tokens use PASETO v4.public (Ed25519 signatures). The URI path is identity-defin
 
 The `agent_key` claim is what keeps a token from being a bearer credential. Registration records are world-readable and carry their token inline, so without it anyone who performed a lookup would hold a credential naming a URI and its capabilities and nothing about who may present it.
 
+A trust root can hold more than one key at a time, which is what lets it rotate without breaking tokens already in flight:
+
+```rust
+# use agent_uri_attestation::{AcceptAll, SigningKey, TrustedKey, Verifier};
+# use chrono::{Duration, Utc};
+# let outgoing = SigningKey::generate().verifying_key();
+# let incoming = SigningKey::generate().verifying_key();
+let mut verifier = Verifier::new().with_revocation(AcceptAll);
+
+// Keep honouring the outgoing key for one token lifetime past the changeover.
+verifier.add_trusted_key(
+    "acme.com",
+    TrustedKey::new(outgoing).with_id("key-2026").not_after(Utc::now() + Duration::hours(1)),
+);
+verifier.add_trusted_key("acme.com", TrustedKey::new(incoming).with_id("key-2027"));
+
+// Afterwards, retire it.
+verifier.remove_trusted_key("acme.com", "key-2026");
+```
+
+A key's window is checked against the current time, not against the token's `iat`, so a retired key stops working the moment it retires rather than lingering for as long as its last tokens live.
+
 ### agent-uri-dht
 
 **Finds agents by what they do, not where they are.**
 
 ```toml
 [dependencies]
-agent-uri-dht = "0.9"
+agent-uri-dht = "0.11"
 ```
 
 ```rust
@@ -235,7 +257,7 @@ Its limits do not carry over, and neither do measurements taken against it. It b
 
 ```toml
 [dependencies]
-agent-uri-dht-libp2p = "0.2"
+agent-uri-dht-libp2p = "0.4"
 ```
 
 ```rust,no_run
