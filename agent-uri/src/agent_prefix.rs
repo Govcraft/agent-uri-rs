@@ -222,30 +222,20 @@ mod tests {
     }
 
     #[test]
-    fn parse_one_letter_type_class_reports_the_type_class_reason() {
-        let result = AgentPrefix::parse("a_b");
+    fn parse_one_letter_type_class_with_a_modifier() {
+        // A one-letter type class is a valid TypeID prefix segment (issue #20).
+        let prefix = AgentPrefix::parse("a_b").unwrap();
 
-        // Previously this reported InvalidChar { char: 'a', position: 0 } for a valid character.
-        assert!(matches!(
-            result,
-            Err(AgentPrefixError::InvalidTypeClass {
-                class,
-                reason: "extension class name must be at least 2 characters",
-            }) if class == "a"
-        ));
+        assert_eq!(prefix.type_class().as_str(), "a");
+        assert_eq!(prefix.modifiers(), &["b"]);
     }
 
     #[test]
-    fn parse_single_letter_prefix_reports_the_type_class_reason() {
-        let result = AgentPrefix::parse("a");
+    fn parse_single_letter_prefix() {
+        let prefix = AgentPrefix::parse("a").unwrap();
 
-        assert!(matches!(
-            result,
-            Err(AgentPrefixError::InvalidTypeClass {
-                class,
-                reason: "extension class name must be at least 2 characters",
-            }) if class == "a"
-        ));
+        assert_eq!(prefix.type_class().as_str(), "a");
+        assert!(prefix.modifiers().is_empty());
     }
 
     #[test]

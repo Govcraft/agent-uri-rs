@@ -1015,10 +1015,10 @@
   "length_limits": [
     {
       "id": "len-001",
-      "description": "Minimum valid URI length",
+      "description": "Minimum practical URI length (single-letter agent-ID prefix)",
       "input": "agent://a.co/x/a_01234567890123456789012345",
       "valid": true,
-      "length": 45
+      "length": 43
     },
     {
       "id": "len-002",
