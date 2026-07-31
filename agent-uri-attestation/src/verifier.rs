@@ -599,7 +599,7 @@ impl Verifier {
     ) -> Result<(&str, &TrustedKey, AttestationClaims), AttestationError> {
         let now = Utc::now();
         let leeway = self.leeway_chrono();
-        let mut last_error = None;
+        let mut best_error: Option<AttestationError> = None;
 
         for trying_active_keys in [true, false] {
             for (trust_root, trusted) in self.trust.iter() {
@@ -613,10 +613,13 @@ impl Verifier {
                         // The key signed it, but does the token claim the root
                         // this key is held under?
                         if claims.iss != *trust_root {
-                            last_error = Some(AttestationError::TrustRootMismatch {
-                                token_root: claims.iss.clone(),
-                                expected_root: trust_root.to_string(),
-                            });
+                            keep_most_specific(
+                                &mut best_error,
+                                AttestationError::TrustRootMismatch {
+                                    token_root: claims.iss.clone(),
+                                    expected_root: trust_root.to_string(),
+                                },
+                            );
                             continue;
                         }
                         return match validity {
@@ -637,16 +640,59 @@ impl Verifier {
                             }
                         };
                     }
-                    Err(e) => {
-                        last_error = Some(e);
-                    }
+                    Err(e) => keep_most_specific(&mut best_error, e),
                 }
             }
         }
 
-        Err(last_error.unwrap_or(AttestationError::UntrustedIssuer {
+        Err(best_error.unwrap_or(AttestationError::UntrustedIssuer {
             issuer: "unknown".to_string(),
         }))
+    }
+}
+
+/// How much a failed attempt actually learned about the token.
+///
+/// When no trusted key verifies a token, every key produces its own error and
+/// only one of them can be reported. The interesting question is which one says
+/// the most, and that is settled by how far each attempt got:
+///
+/// - **2 — past the signature.** This key really did sign the token, and what
+///   it authenticated is wrong: the claims are unreadable, the window has
+///   lapsed, the issuer is not the root the key is held under. Only one key can
+///   ever reach this rank for a given token, and it is the one whose opinion
+///   the caller wants.
+/// - **1 — the signature failed.** The token is a well-formed v4.public token,
+///   but this is not the key that signed it. The ordinary answer for every key
+///   in the store that is simply not the right one.
+/// - **0 — nothing was verified.** The string is not a token at all, or the
+///   *stored key* is unusable. Neither says anything about whether the token is
+///   genuine, so neither should outrank a key that got further.
+///
+/// New variants land at rank 2 by default, which is the safe direction: a
+/// post-signature failure reported in place of a generic `InvalidSignature`
+/// tells the caller more, never less.
+fn diagnostic_rank(error: &AttestationError) -> u8 {
+    match error {
+        AttestationError::InvalidTokenFormat { .. }
+        | AttestationError::InvalidKeyFormat { .. }
+        | AttestationError::TokenTooLong { .. } => 0,
+        AttestationError::InvalidSignature => 1,
+        _ => 2,
+    }
+}
+
+/// Keeps whichever of the two errors is more specific, preferring the one
+/// already held on a tie.
+///
+/// Ties are broken toward the incumbent because the store is walked in a fixed
+/// order (active keys first, then roots lexicographically), so "first at this
+/// rank" is a property of the token and the store rather than of a hash seed.
+/// That is what makes the reported error reproducible across processes.
+fn keep_most_specific(best: &mut Option<AttestationError>, candidate: AttestationError) {
+    match best {
+        Some(held) if diagnostic_rank(held) >= diagnostic_rank(&candidate) => {}
+        _ => *best = Some(candidate),
     }
 }
 
@@ -2328,5 +2374,165 @@ mod tests {
                 "Expected TokenNotYetValid, got {result:?}",
             );
         }
+    }
+
+    /// A verifier trusting `signing_key` for `acme.com` alongside `decoys`
+    /// unrelated roots, each with its own key.
+    ///
+    /// The decoys are what makes the error-selection tests bite: every one of
+    /// them fails the token with a plain `InvalidSignature`, so a verifier that
+    /// reports whichever key it happened to try last reports the decoys'
+    /// verdict instead of the real one.
+    fn verifier_with_decoy_roots(signing_key: &SigningKey, decoys: usize) -> Verifier {
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
+        verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+        for n in 0..decoys {
+            verifier.add_trusted_root(
+                format!("decoy-{n}.example"),
+                SigningKey::generate().verifying_key(),
+            );
+        }
+        verifier
+    }
+
+    #[test]
+    fn the_key_that_signed_the_token_outvotes_the_keys_that_did_not() {
+        // The bug this replaces: with several trusted roots, the surviving
+        // error was whichever key came last in hash order. The one key that
+        // authenticated the token and found it expired knows what is wrong with
+        // it; the decoys only know it was not theirs.
+        let signing_key = SigningKey::generate();
+        let now = Utc::now();
+        let expired_at = now - chrono::Duration::days(3);
+        let token = issue_raw(
+            &signing_key,
+            &claims_valid_for(now - chrono::Duration::days(4), expired_at),
+        );
+
+        let verifier = verifier_with_decoy_roots(&signing_key, 16);
+
+        match verifier.verify(&token) {
+            Err(AttestationError::TokenExpired {
+                expired_at: reported,
+            }) => {
+                let parsed = chrono::DateTime::parse_from_rfc3339(&reported)
+                    .expect("expired_at must be RFC 3339");
+                assert_eq!(parsed.timestamp(), expired_at.timestamp());
+            }
+            other => panic!("expected TokenExpired from the signing key, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_reported_error_does_not_depend_on_which_store_it_came_from() {
+        // Determinism, stated as the property a caller actually relies on:
+        // build the same verifier repeatedly and the same token must be refused
+        // the same way every time. Each `Verifier` gets a fresh store, so a
+        // hash-ordered one would disagree with itself across iterations.
+        let signing_key = SigningKey::generate();
+        let now = Utc::now();
+        let token = issue_raw(
+            &signing_key,
+            &claims_valid_for(
+                now - chrono::Duration::days(4),
+                now - chrono::Duration::days(3),
+            ),
+        );
+
+        let first = verifier_with_decoy_roots(&signing_key, 16).verify(&token);
+
+        for _ in 0..32 {
+            let again = verifier_with_decoy_roots(&signing_key, 16).verify(&token);
+            assert_eq!(first, again, "the same token must be refused the same way");
+        }
+    }
+
+    #[test]
+    fn a_token_no_trusted_key_signed_is_still_a_signature_failure() {
+        // The other side of the ranking: when nothing gets past the signature,
+        // the answer stays the ordinary one rather than being dragged up by a
+        // more exotic variant.
+        let stranger = SigningKey::generate();
+        let token = live_token(&stranger);
+
+        let verifier = verifier_with_decoy_roots(&SigningKey::generate(), 8);
+
+        assert_eq!(
+            verifier.verify(&token),
+            Err(AttestationError::InvalidSignature)
+        );
+    }
+
+    #[test]
+    fn a_malformed_token_reports_its_shape_even_beside_many_keys() {
+        // Every key returns the same structural complaint here, so the point is
+        // that ranking never promotes one of them into something else.
+        let verifier = verifier_with_decoy_roots(&SigningKey::generate(), 8);
+
+        assert!(matches!(
+            verifier.verify("not-a-token"),
+            Err(AttestationError::InvalidTokenFormat { .. })
+        ));
+    }
+
+    #[test]
+    fn a_signature_failure_outranks_a_structural_one() {
+        // The ranking is a pure function, so state its contract directly rather
+        // than only through tokens that happen to exercise it.
+        let structural = AttestationError::InvalidTokenFormat {
+            reason: "truncated".to_string(),
+        };
+        let cryptographic = AttestationError::InvalidSignature;
+        let authenticated = AttestationError::TrustRootMismatch {
+            token_root: "acme.com".to_string(),
+            expected_root: "other.example".to_string(),
+        };
+
+        assert!(diagnostic_rank(&structural) < diagnostic_rank(&cryptographic));
+        assert!(diagnostic_rank(&cryptographic) < diagnostic_rank(&authenticated));
+
+        // An unusable stored key describes the verifier, not the token, so it
+        // must not outrank a key that actually reached the signature.
+        let bad_key = AttestationError::InvalidKeyFormat {
+            reason: "wrong length".to_string(),
+        };
+        assert!(diagnostic_rank(&bad_key) < diagnostic_rank(&cryptographic));
+    }
+
+    #[test]
+    fn keeping_the_most_specific_error_is_order_independent() {
+        // Whichever order the two arrive in, the more specific one survives.
+        let specific = || AttestationError::TokenExpired {
+            expired_at: "2026-01-01T00:00:00Z".to_string(),
+        };
+        let generic = || AttestationError::InvalidSignature;
+
+        let mut best = None;
+        keep_most_specific(&mut best, generic());
+        keep_most_specific(&mut best, specific());
+        assert_eq!(best, Some(specific()));
+
+        let mut best = None;
+        keep_most_specific(&mut best, specific());
+        keep_most_specific(&mut best, generic());
+        assert_eq!(best, Some(specific()));
+    }
+
+    #[test]
+    fn a_tie_keeps_the_error_that_arrived_first() {
+        // Ties resolve toward the incumbent, which is what makes the fixed
+        // iteration order of the trust store determine the outcome.
+        let first = AttestationError::InvalidTokenFormat {
+            reason: "first".to_string(),
+        };
+        let second = AttestationError::InvalidTokenFormat {
+            reason: "second".to_string(),
+        };
+
+        let mut best = None;
+        keep_most_specific(&mut best, first.clone());
+        keep_most_specific(&mut best, second);
+
+        assert_eq!(best, Some(first));
     }
 }
