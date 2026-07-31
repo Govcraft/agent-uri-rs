@@ -54,7 +54,12 @@ use crate::record::{IdentityRecord, WireKind, millis};
 ///
 /// Every variant is a reason to drop the record and, for most of them, a reason
 /// to think less of the peer that sent it.
+///
+/// `#[non_exhaustive]`, so a `match` on this enum needs a `_` arm, and dropping
+/// the record is what that arm should do: a refusal this version cannot name is
+/// still a refusal.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Rejection {
     /// The record does not belong at the key it arrived on.
     WrongKey,

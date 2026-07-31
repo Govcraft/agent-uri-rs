@@ -78,6 +78,49 @@
 //! - **Agent ID**: `TypeID` format with semantic prefix and `UUIDv7` suffix
 //!
 //! See `grammar.abnf` for the complete formal specification.
+//!
+//! # Breaking changes in 0.6.0
+//!
+//! Two changes, neither of which affects a caller who only propagates errors.
+//!
+//! ## Error enums are `#[non_exhaustive]`
+//!
+//! An exhaustive `match` on [`ParseErrorKind`], [`TrustRootError`],
+//! [`CapabilityPathError`], [`PathSegmentError`], [`AgentIdError`],
+//! [`AgentPrefixError`], [`QueryError`], [`FragmentError`], [`BuilderError`],
+//! or [`TypeClassError`] now needs a `_` arm.
+//!
+//! A parser learns to be more specific over time: a rejection reported today as
+//! a generic bad character turns out to deserve a variant of its own, and
+//! naming it is an improvement a caller wants. On an exhaustive enum that
+//! improvement is a major version bump forever, so past 1.0 it stops happening
+//! and the errors stay vaguer than they need to be.
+//!
+//! The wildcard arm should say what to do about a variant this version does not
+//! recognise, rather than treat its absence as impossible:
+//!
+//! ```
+//! use agent_uri::{AgentUri, ParseErrorKind};
+//!
+//! let error = AgentUri::parse("").unwrap_err();
+//! let advice = match error.kind {
+//!     ParseErrorKind::Empty => "supply a URI",
+//!     ParseErrorKind::TooLong { .. } => "shorten it",
+//!     _ => "check the URI against the specification",
+//! };
+//! assert_eq!(advice, "supply a URI");
+//! ```
+//!
+//! Matching on a specific variant, which is the common case, is unaffected:
+//! `matches!`, `if let`, and `Result::is_err` all read the same as before.
+//!
+//! ## `TypeClass` parsing reports a real error
+//!
+//! [`ExtensionClass::new`] and `<TypeClass as FromStr>::Err` return
+//! [`TypeClassError`] instead of `&'static str`, so a type-class rejection is a
+//! [`std::error::Error`] that composes with `?` and names the offending
+//! character and its position. [`AgentPrefixError::InvalidTypeClass`]'s
+//! `reason` field carries it too.
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]
@@ -111,7 +154,7 @@ pub use constants::{
 };
 pub use error::{
     AgentIdError, AgentPrefixError, BuilderError, CapabilityPathError, FragmentError, ParseError,
-    ParseErrorKind, PathSegmentError, QueryError, TrustRootError,
+    ParseErrorKind, PathSegmentError, QueryError, TrustRootError, TypeClassError,
 };
 pub use fragment::Fragment;
 pub use path_segment::PathSegment;

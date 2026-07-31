@@ -1,4 +1,10 @@
 //! Error types for agent URI parsing.
+//!
+//! Every enum here is `#[non_exhaustive]`, because a parser learns to be more
+//! specific over time and naming a failure precisely should not cost a major
+//! release. The module is private and its types are re-exported from the crate
+//! root, so the rationale a caller needs lives in the crate-level docs, under
+//! "Breaking changes in 0.6.0"; keep the two in step.
 
 use std::fmt;
 
@@ -61,6 +67,7 @@ fn truncate_input(input: &str) -> String {
 
 /// Specific parsing error types.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ParseErrorKind {
     /// URI is empty
     Empty,
@@ -134,6 +141,7 @@ impl std::error::Error for ParseError {}
 
 /// Errors for trust root parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TrustRootError {
     /// Trust root is empty
     Empty,
@@ -213,6 +221,7 @@ impl std::error::Error for TrustRootError {}
 
 /// Errors for capability path parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CapabilityPathError {
     /// Path is empty
     Empty,
@@ -269,6 +278,7 @@ impl std::error::Error for CapabilityPathError {}
 
 /// Errors for path segment parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PathSegmentError {
     /// Segment is empty
     Empty,
@@ -309,6 +319,7 @@ impl std::error::Error for PathSegmentError {}
 
 /// Errors for agent ID parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AgentIdError {
     /// Agent ID is empty
     Empty,
@@ -357,6 +368,7 @@ impl std::error::Error for AgentIdError {}
 
 /// Errors for agent prefix parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AgentPrefixError {
     /// Prefix is empty
     Empty,
@@ -371,8 +383,8 @@ pub enum AgentPrefixError {
     InvalidTypeClass {
         /// The rejected type-class text
         class: String,
-        /// Reason for invalidity
-        reason: &'static str,
+        /// Why the type class was rejected
+        reason: TypeClassError,
     },
     /// Invalid character (not lowercase letter or underscore)
     InvalidChar {
@@ -430,10 +442,18 @@ impl fmt::Display for AgentPrefixError {
     }
 }
 
-impl std::error::Error for AgentPrefixError {}
+impl std::error::Error for AgentPrefixError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidTypeClass { reason, .. } => Some(reason),
+            _ => None,
+        }
+    }
+}
 
 /// Errors for query string parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum QueryError {
     /// Input exceeds maximum length
     TooLong {
@@ -511,6 +531,7 @@ impl std::error::Error for QueryError {}
 
 /// Errors for fragment parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FragmentError {
     /// Input exceeds maximum length
     TooLong {
@@ -551,6 +572,7 @@ impl std::error::Error for FragmentError {}
 
 /// Errors that can occur when building an agent URI.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BuilderError {
     /// The resulting URI would exceed the maximum length.
     UriTooLong {
@@ -586,6 +608,45 @@ impl std::error::Error for BuilderError {
         }
     }
 }
+
+/// Errors for type-class parsing.
+///
+/// Produced by [`ExtensionClass::new`] and by `TypeClass`'s [`FromStr`]
+/// implementation, which reaches an extension class for anything outside the
+/// core set.
+///
+/// [`ExtensionClass::new`]: crate::ExtensionClass::new
+/// [`FromStr`]: std::str::FromStr
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TypeClassError {
+    /// The class name is empty.
+    Empty,
+    /// The name contains something other than a lowercase ASCII letter.
+    InvalidChar {
+        /// The invalid character
+        char: char,
+        /// Position in the input, in characters
+        position: usize,
+    },
+}
+
+impl fmt::Display for TypeClassError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Empty => write!(f, "type class name cannot be empty"),
+            Self::InvalidChar { char, position } => {
+                write!(
+                    f,
+                    "invalid character '{char}' at position {position}; \
+                     a type class name is lowercase letters only"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for TypeClassError {}
 
 #[cfg(test)]
 mod tests {

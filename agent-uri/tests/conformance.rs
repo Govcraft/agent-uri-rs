@@ -50,6 +50,11 @@ fn component_of(kind: &ParseErrorKind) -> Component {
         ParseErrorKind::InvalidAgentId(_) => Component::AgentId,
         ParseErrorKind::InvalidQuery(_) => Component::Query,
         ParseErrorKind::InvalidFragment(_) => Component::Fragment,
+        // `ParseErrorKind` is `#[non_exhaustive]`, so this arm is required.
+        // It panics rather than guessing: an unclassified kind means the suite
+        // would silently stop checking which component refused an input, which
+        // is the only thing it checks.
+        other => panic!("unclassified ParseErrorKind {other:?}; add it to component_of"),
     }
 }
 

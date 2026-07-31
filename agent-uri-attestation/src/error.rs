@@ -3,7 +3,15 @@
 use std::fmt;
 
 /// Errors that can occur during attestation operations.
+///
+/// `#[non_exhaustive]`: verification keeps growing ways to refuse a token — a
+/// revocation axis, a key window, an audience — and each deserves a variant
+/// that says which check failed rather than being folded into an existing one.
+/// A `match` on this enum needs a `_` arm, and the safe thing for that arm to
+/// do is reject, because an unrecognised variant is still a verification
+/// failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AttestationError {
     /// A required field was not provided.
     MissingField {
