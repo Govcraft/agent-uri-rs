@@ -48,6 +48,10 @@ tasks:
   kani:
     desc: Run Kani formal proofs
     cmds:
+      # Kani is a tool, not a dependency: the harnesses are gated on
+      # `#[cfg(kani)]`, which only `cargo kani` sets, and it supplies the `kani`
+      # crate itself. Install it once with:
+      #   cargo install --locked kani-verifier && cargo kani setup
       - cargo kani --workspace
 
   # Fuzzing

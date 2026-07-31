@@ -36,7 +36,11 @@ zeroize = "1.9.0"
 typeid_suffix = "1.3.0"
 
 [dev-dependencies]
-kani-verifier = "0.67.0"
+# `kani-verifier` is deliberately absent. The proof harnesses in `src/proofs.rs`
+# are gated on `#[cfg(kani)]`, which only `cargo kani` sets, and that tool
+# supplies the `kani` crate itself. Depending on it here bought nothing and cost
+# every contributor the download. `agent-uri` carries the same harnesses with no
+# such dependency; see `task kani`.
 proptest = "1.5"
 serde_json = "1.0"
 
