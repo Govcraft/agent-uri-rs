@@ -12,8 +12,15 @@ on:
 permissions:
   contents: read
 
+# One lane per event type. Grouping on the ref alone put a scheduled run and a
+# push to main in the same lane, so an ordinary merge cancelled whatever
+# verification was in flight — silently, because a cancelled run is not a red X
+# anyone chases. The long jobs below are exactly the ones that were exposed.
+#
+# Cancelling superseded runs of the *same* event is still what you want: push
+# again to a pull request and the previous run for that branch goes away.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
