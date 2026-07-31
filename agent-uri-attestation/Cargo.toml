@@ -23,6 +23,7 @@ base64 = "0.22"
 [dev-dependencies]
 kani-verifier = "0.67.0"
 proptest = "1.5"
+serde_json = "1.0"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
