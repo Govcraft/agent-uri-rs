@@ -235,8 +235,9 @@ type-class      = "llm" / "rule" / "human" / "composite"
                 / "sensor" / "actuator" / "hybrid"
                 / extension-class
 
-; Allow future extension with any valid TypeID prefix segment
-extension-class = LOWER 1*( LOWER )
+; Allow future extension with any valid TypeID prefix segment.
+; One letter is enough: TypeID prefixes run from 1 to 63 characters.
+extension-class = 1*( LOWER )
 
 ; Type modifiers refine the class (optional, may be chained)
 ; No digits allowed per TypeID spec
@@ -249,7 +250,7 @@ type-modifier   = 1*( LOWER )
 ;   - Must end with letter (type-modifier ends with LOWER)
 ;   - No digits allowed
 ;
-; Valid:   llm, llm_chat, llm_chat_streaming, composite_pipeline_async
+; Valid:   a, llm, llm_chat, llm_chat_streaming, composite_pipeline_async
 ; Invalid: llm_v2 (digit), LLM (uppercase), _llm (leading underscore)
 
 ; ============================================================================

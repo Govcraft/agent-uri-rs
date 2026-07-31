@@ -34,20 +34,15 @@ pub struct ExtensionClass(String);
 impl ExtensionClass {
     /// Creates a new extension class.
     ///
+    /// A single letter is a valid name: an agent ID is a `TypeID`, and the
+    /// `TypeID` specification admits prefixes of one to sixty-three characters.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the name is empty, less than 2 characters,
-    /// or contains non-lowercase letters.
+    /// Returns an error if the name is empty or contains non-lowercase letters.
     pub fn new(name: &str) -> Result<Self, &'static str> {
         if name.is_empty() {
             return Err("extension class name cannot be empty");
-        }
-        // Characters, as the contract says. A single two-byte character clears a
-        // byte count, and while the lowercase check below refuses it anyway, a
-        // length check that is only right about ASCII is worth no more than the
-        // check standing behind it (issue #33).
-        if name.chars().count() < 2 {
-            return Err("extension class name must be at least 2 characters");
         }
         if !name.chars().all(|c| c.is_ascii_lowercase()) {
             return Err("extension class name must be all lowercase letters");
@@ -155,8 +150,6 @@ mod tests {
 
     #[test]
     fn extension_class_validation() {
-        // Too short
-        assert!(ExtensionClass::new("a").is_err());
         // Empty
         assert!(ExtensionClass::new("").is_err());
         // Contains uppercase
@@ -168,12 +161,18 @@ mod tests {
     }
 
     #[test]
-    fn a_one_character_name_is_too_short_however_many_bytes_it_takes() {
-        // Two bytes, one character. Both checks refuse it, but only one of them
-        // is refusing it for what is actually wrong with it (issue #33).
+    fn a_single_letter_is_a_valid_extension_class() {
+        // TypeID prefixes run from one to sixty-three characters, and an agent
+        // ID is a TypeID (issue #20).
+        assert_eq!(ExtensionClass::new("a").unwrap().as_str(), "a");
+    }
+
+    #[test]
+    fn a_one_character_name_that_is_not_a_lowercase_letter_is_refused() {
+        // Two bytes, one character, and not a-z (issue #33).
         assert_eq!(
             ExtensionClass::new("\u{00e9}"),
-            Err("extension class name must be at least 2 characters")
+            Err("extension class name must be all lowercase letters")
         );
     }
 }

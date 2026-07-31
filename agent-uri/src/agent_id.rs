@@ -295,6 +295,14 @@ mod tests {
     }
 
     #[test]
+    fn parse_single_letter_prefix() {
+        // Vectors parse-015, aid-004, and len-001 (issue #20).
+        let id = AgentId::parse("a_01h455vb4pex5vsknk084sn02q").unwrap();
+        assert_eq!(id.prefix().as_str(), "a");
+        assert_eq!(id.suffix(), "01h455vb4pex5vsknk084sn02q");
+    }
+
+    #[test]
     fn parse_simple_prefix() {
         let id = AgentId::parse("llm_01h455vb4pex5vsknk084sn02q").unwrap();
         assert_eq!(id.prefix().as_str(), "llm");
