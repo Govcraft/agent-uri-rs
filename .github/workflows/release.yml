@@ -1,0 +1,186 @@
+# Tag-driven publishing to crates.io.
+#
+# What this exists to prevent: during the assessment behind issue #16, local
+# main was seven commits behind the crates.io state. Versions 0.5.0, 0.4.0, and
+# 0.2.0 had been published from a workstation while the tree still said 0.4.0,
+# 0.3.0, and 0.1.1. Nothing tied a published version to a commit anyone could
+# look at.
+#
+# So publishing happens here and only here, and every check below exists to
+# make one guarantee: a version on crates.io corresponds to a tag in this
+# repository, on main, whose CI was green.
+#
+# # Releasing
+#
+# One crate per tag, named `<crate>-v<version>` — the format already in this
+# repository's tag history:
+#
+#     git tag -s agent-uri-v0.6.0 -m 'agent-uri 0.6.0'
+#     git push origin agent-uri-v0.6.0
+#
+# For a release that spans crates, push the tags in dependency order and let
+# each land before the next: agent-uri, then agent-uri-attestation, then
+# agent-uri-dht and agent-uri-attestation-wellknown, then agent-uri-dht-libp2p
+# and agent-uri-cli. A dependent cannot even be packaged until the version it
+# requires is on the index, so pushing them all at once fails the later ones.
+#
+# # Authentication
+#
+# Trusted publishing: crates.io is configured to trust this repository and this
+# workflow, and mints a short-lived token per run. There is no long-lived
+# credential in the repository's secrets.
+#
+# Each crate must be registered before its first release through here. On
+# crates.io, under the crate's Settings -> Trusted Publishing, add a publisher
+# with:
+#
+#     Repository owner  Govcraft
+#     Repository name   agent-uri-rs
+#     Workflow filename release.yml
+#     Environment       crates-io
+#
+# for each of the six publishable crates: agent-uri, agent-uri-attestation,
+# agent-uri-dht, agent-uri-cli, agent-uri-attestation-wellknown, and
+# agent-uri-dht-libp2p. (agent-uri-eval is `publish = false` and needs
+# nothing.) Until a crate is registered, its tag will pass every gate below and
+# be refused at the publish step.
+#
+# Two of those six — agent-uri-attestation-wellknown and agent-uri-dht-libp2p —
+# have never been published, and crates.io has no trusted-publisher settings
+# for a crate that does not exist yet. Each needs one manual `cargo publish` to
+# claim the name; every release after that can come from here.
+#
+# The `crates-io` GitHub environment is also where a required reviewer can be
+# added, if a release should need a second pair of eyes.
+name: Release
+
+on:
+  push:
+    tags:
+      - '*-v*'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      # Required to mint the OIDC token trusted publishing exchanges.
+      id-token: write
+    steps:
+      # Full history: the "is this commit on main" check needs main's ancestry,
+      # and a tag push checks out only the tagged commit by default.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The tag is the input, and a tag is written by a person. Everything
+      # derived from it is validated before use, and it is never interpolated
+      # into a shell command — it arrives as an environment variable.
+      - name: Parse the tag
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -qE '^[a-z][a-z0-9-]*-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::tag '$TAG' is not <crate>-v<semver>" >&2
+            exit 1
+          fi
+          crate=${TAG%-v*}
+          version=${TAG##*-v}
+          echo "crate=$crate" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # A tag naming a crate this workspace does not contain would otherwise
+      # fail later and more confusingly.
+      - name: Check the crate is in this workspace
+        env:
+          CRATE: ${{ steps.tag.outputs.crate }}
+        run: |
+          if [ ! -f "$CRATE/Cargo.toml" ]; then
+            echo "::error::no crate '$CRATE' in this workspace" >&2
+            exit 1
+          fi
+
+      # The tag says one version and the manifest says another is exactly how
+      # the repository and crates.io drifted apart in the first place.
+      - name: Check the tag matches the manifest
+        env:
+          CRATE: ${{ steps.tag.outputs.crate }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          manifest=$(
+            grep -m1 -oE '^version = "[^"]+"' "$CRATE/Cargo.toml" \
+              | sed 's/^version = "//; s/"$//'
+          )
+          if [ "$manifest" != "$VERSION" ]; then
+            echo "::error::tag says $VERSION, $CRATE/Cargo.toml says ${manifest:-nothing}" >&2
+            exit 1
+          fi
+
+      # A tag can be pushed from any commit, including one that was never
+      # reviewed or merged. Publishing from it would put code on crates.io that
+      # is not in the branch anyone reads.
+      - name: Check the tagged commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not an ancestor of main" >&2
+            exit 1
+          fi
+
+      # Green CI on this exact commit, not on something like it. Without this,
+      # a tag on a commit whose tests failed still publishes.
+      - name: Check CI passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # -X GET is required: `gh api` switches to POST as soon as a field is
+          # given, and this endpoint has no POST.
+          conclusion=$(
+            gh api -X GET "repos/$GITHUB_REPOSITORY/actions/runs" \
+              -f head_sha="$GITHUB_SHA" \
+              -f event=push \
+              --jq '[.workflow_runs[] | select(.name == "CI")] | first | .conclusion'
+          )
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::CI for $GITHUB_SHA concluded '${conclusion:-nothing}', not success" >&2
+            exit 1
+          fi
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+
+      # Packages and builds the crate exactly as crates.io will receive it,
+      # before anything is uploaded. A missing README or a stale path
+      # dependency fails here rather than after the version is permanent.
+      - name: Package
+        env:
+          CRATE: ${{ steps.tag.outputs.crate }}
+        run: cargo package -p "$CRATE"
+
+      # Pinned to an exact release: this action is the only thing standing
+      # between an OIDC token and a publish, and the upstream repository
+      # publishes no moving `v1` tag to float on.
+      - name: Authenticate to crates.io
+        uses: rust-lang/crates-io-auth-action@v1.0.5
+        id: auth
+
+      - name: Publish
+        env:
+          CRATE: ${{ steps.tag.outputs.crate }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish -p "$CRATE"
