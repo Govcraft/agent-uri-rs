@@ -1,0 +1,53 @@
+[package]
+name = "agent-uri-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# Detached from the workspace: these targets build only under `cargo fuzz`,
+# which supplies its own nightly flags and sanitizer settings.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.agent-uri]
+path = ".."
+
+[[bin]]
+name = "parse_uri"
+path = "fuzz_targets/parse_uri.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_trust_root"
+path = "fuzz_targets/parse_trust_root.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_query"
+path = "fuzz_targets/parse_query.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_fragment"
+path = "fuzz_targets/parse_fragment.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_agent_id"
+path = "fuzz_targets/parse_agent_id.rs"
+test = false
+doc = false
+bench = false

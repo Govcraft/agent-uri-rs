@@ -296,6 +296,30 @@ inputs, remains archived in [`test-vectors-v0.4.json`](test-vectors-v0.4.json)
 for reproducibility. Version 0.5 rejects those inputs so identity material is
 never silently rewritten.
 
+Every machine-checkable vector runs in CI, against the crate that implements it:
+parsing and identity vectors in `agent-uri`, `dht_keys` in `agent-uri-dht`, and
+the capability and attestation vectors in `agent-uri-attestation`.
+
+## Testing
+
+`task ci` runs what CI runs: formatting, clippy at `-D warnings`, the test
+suite, and doctests. Beyond that:
+
+| Command | What it does |
+|---------|--------------|
+| `task test` | Unit, integration, conformance, and property tests |
+| `task fuzz` | libFuzzer over every parser entry point, a minute each (needs nightly and `cargo-fuzz`) |
+| `task kani` | Kani model-checking proofs |
+| `task miri` | Miri, for undefined behavior |
+| `task bench` | Criterion benchmarks |
+
+The parser takes untrusted input, so a panic in it is a denial of service in
+every service that parses a URI. Two harnesses guard that: adversarial property
+tests (`agent-uri/tests/no_panic_proptest.rs`) run on every commit over mutated
+valid URIs, near-misses, and arbitrary bytes; the fuzz targets
+(`agent-uri/fuzz/fuzz_targets/`) run on the weekly schedule and can be run
+locally against the seed corpus at any time.
+
 ## Paper
 
 This implementation is based on the research paper:

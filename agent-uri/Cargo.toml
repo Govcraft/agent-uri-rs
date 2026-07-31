@@ -6,6 +6,9 @@ license = "MIT OR Apache-2.0"
 description = "Parser and validator for agent:// URI scheme"
 keywords = ["agent", "uri", "multi-agent", "identity", "a2a"]
 categories = ["parsing", "web-programming"]
+# The fuzz targets build only under `cargo fuzz`, which supplies its own
+# toolchain and flags; they have no place in the published crate.
+exclude = ["fuzz"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

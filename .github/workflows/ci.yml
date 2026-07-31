@@ -36,6 +36,9 @@ jobs:
           key: fmt
       - name: Check formatting
         run: cargo fmt --all -- --check
+      # The fuzz targets are a detached workspace, so --all does not reach them.
+      - name: Check fuzz target formatting
+        run: cargo fmt --manifest-path agent-uri/fuzz/Cargo.toml -- --check
 
   clippy:
     name: clippy (${{ matrix.name }})
@@ -87,6 +90,11 @@ jobs:
       # Nextest does not execute doctests.
       - name: Run doctests
         run: cargo test --doc --workspace --all-features
+      # The fuzz targets call the same API as the tests. They are built for real
+      # only on the schedule, so without this an API change would break them
+      # silently for a week.
+      - name: Check fuzz targets compile
+        run: cargo clippy --manifest-path agent-uri/fuzz/Cargo.toml --all-targets -- -D warnings
 
   docs:
     name: rustdoc
@@ -125,3 +133,48 @@ jobs:
       # lives in .cargo/audit.toml and mirrors deny.toml.
       - name: cargo-audit
         run: cargo audit
+
+  # A parser of untrusted input that panics is a denial of service in every
+  # service that parses one. The proptests in the test job cover this on every
+  # commit; this job spends real time on it. It runs on the weekly schedule and
+  # on demand rather than per-PR, because a fuzzing run long enough to be worth
+  # anything is longer than a PR should wait for.
+  fuzz:
+    name: fuzz (${{ matrix.target }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - parse_uri
+          - parse_trust_root
+          - parse_query
+          - parse_fragment
+          - parse_agent_id
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      # cargo-fuzz needs nightly for the sanitizer and coverage flags it passes.
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz-${{ matrix.target }}
+          workspaces: agent-uri/fuzz
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@cargo-fuzz
+      # Seeds start the run from inputs that already reach past the scheme, so
+      # the budget is spent on the parser rather than on rediscovering "agent://".
+      - name: Fuzz ${{ matrix.target }}
+        working-directory: agent-uri
+        run: |
+          cargo fuzz run ${{ matrix.target }} fuzz/seeds/${{ matrix.target }} \
+            -- -max_total_time=300 -rss_limit_mb=4096
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: agent-uri/fuzz/artifacts
