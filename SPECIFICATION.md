@@ -141,6 +141,12 @@ scheme    = "agent"
 
 Implementations MUST reject URIs exceeding these limits.
 
+The component maxima bind before the total does: the longest constructible URI is
+8 (`agent://`) + 128 + 1 + 256 + 1 + 90 = 484 characters, so the 512-character
+cap is never the limit that refuses a well-formed URI. It is checked first
+regardless, so that a hostile input is refused on its length before any component
+is parsed. Vector `len-002` carries the 484-character case.
+
 ---
 
 ## 4. Component Semantics
