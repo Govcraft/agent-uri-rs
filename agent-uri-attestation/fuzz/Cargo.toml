@@ -1,0 +1,42 @@
+[package]
+name = "agent-uri-attestation-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# Detached from the workspace: these targets build only under `cargo fuzz`,
+# which supplies its own nightly flags and sanitizer settings.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.4", features = ["derive"] }
+chrono = "0.4"
+serde_json = "1.0"
+# The same signer the issuer uses, called directly so a target can sign a
+# payload the typed `Issuer` API would refuse to mint. That is the point: the
+# verifier has to survive claims no honest issuer would produce.
+rusty_paseto = { version = "0.10", default-features = false, features = ["v4_public", "batteries_included"] }
+
+[dependencies.agent-uri]
+path = "../../agent-uri"
+
+[dependencies.agent-uri-attestation]
+path = ".."
+
+[[bin]]
+name = "verify_token"
+path = "fuzz_targets/verify_token.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "verify_signed_claims"
+path = "fuzz_targets/verify_signed_claims.rs"
+test = false
+doc = false
+bench = false

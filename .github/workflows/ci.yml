@@ -36,9 +36,11 @@ jobs:
           key: fmt
       - name: Check formatting
         run: cargo fmt --all -- --check
-      # The fuzz targets are a detached workspace, so --all does not reach them.
+      # The fuzz targets are detached workspaces, so --all does not reach them.
       - name: Check fuzz target formatting
-        run: cargo fmt --manifest-path agent-uri/fuzz/Cargo.toml -- --check
+        run: |
+          cargo fmt --manifest-path agent-uri/fuzz/Cargo.toml -- --check
+          cargo fmt --manifest-path agent-uri-attestation/fuzz/Cargo.toml -- --check
 
   clippy:
     name: clippy (${{ matrix.name }})
@@ -94,7 +96,14 @@ jobs:
       # only on the schedule, so without this an API change would break them
       # silently for a week.
       - name: Check fuzz targets compile
-        run: cargo clippy --manifest-path agent-uri/fuzz/Cargo.toml --all-targets -- -D warnings
+        run: |
+          cargo clippy --manifest-path agent-uri/fuzz/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path agent-uri-attestation/fuzz/Cargo.toml --all-targets -- -D warnings
+      # The attestation harness carries its own tests: a verifier that accepted
+      # nothing would let a fuzz run report success having exercised only the
+      # refusal path.
+      - name: Test the fuzz harness
+        run: cargo test --manifest-path agent-uri-attestation/fuzz/Cargo.toml --lib
 
   docs:
     name: rustdoc
@@ -134,11 +143,12 @@ jobs:
       - name: cargo-audit
         run: cargo audit
 
-  # A parser of untrusted input that panics is a denial of service in every
-  # service that parses one. The proptests in the test job cover this on every
-  # commit; this job spends real time on it. It runs on the weekly schedule and
-  # on demand rather than per-PR, because a fuzzing run long enough to be worth
-  # anything is longer than a PR should wait for.
+  # Code that reads untrusted input and panics is a denial of service in every
+  # service that runs it: a parser for the URI, and the verifier for a token
+  # handed over by whoever is presenting it. The proptests in the test job cover
+  # this on every commit; this job spends real time on it. It runs on the weekly
+  # schedule and on demand rather than per-PR, because a fuzzing run long enough
+  # to be worth anything is longer than a PR should wait for.
   fuzz:
     name: fuzz (${{ matrix.target }})
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -146,12 +156,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - parse_uri
-          - parse_trust_root
-          - parse_query
-          - parse_fragment
-          - parse_agent_id
+        include:
+          - crate: agent-uri
+            target: parse_uri
+          - crate: agent-uri
+            target: parse_trust_root
+          - crate: agent-uri
+            target: parse_query
+          - crate: agent-uri
+            target: parse_fragment
+          - crate: agent-uri
+            target: parse_agent_id
+          - crate: agent-uri-attestation
+            target: verify_token
+          - crate: agent-uri-attestation
+            target: verify_signed_claims
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -162,19 +181,23 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: fuzz-${{ matrix.target }}
-          workspaces: agent-uri/fuzz
+          workspaces: ${{ matrix.crate }}/fuzz
       - name: Install cargo-fuzz
         uses: taiki-e/install-action@cargo-fuzz
       # Seeds start the run from inputs that already reach past the scheme, so
-      # the budget is spent on the parser rather than on rediscovering "agent://".
+      # the budget is spent on the parser rather than on rediscovering
+      # "agent://". libFuzzer writes what it finds to the *first* corpus
+      # directory, so the working corpus is named first and the checked-in seeds
+      # second, where they are read and never written.
       - name: Fuzz ${{ matrix.target }}
-        working-directory: agent-uri
+        working-directory: ${{ matrix.crate }}
         run: |
-          cargo fuzz run ${{ matrix.target }} fuzz/seeds/${{ matrix.target }} \
+          cargo fuzz run ${{ matrix.target }} \
+            fuzz/corpus/${{ matrix.target }} fuzz/seeds/${{ matrix.target }} \
             -- -max_total_time=300 -rss_limit_mb=4096
       - name: Upload crash artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-artifacts-${{ matrix.target }}
-          path: agent-uri/fuzz/artifacts
+          path: ${{ matrix.crate }}/fuzz/artifacts

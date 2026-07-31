@@ -330,7 +330,7 @@ suite, and doctests. Beyond that:
 | Command | What it does |
 |---------|--------------|
 | `task test` | Unit, integration, conformance, and property tests |
-| `task fuzz` | libFuzzer over every parser entry point, a minute each (needs nightly and `cargo-fuzz`) |
+| `task fuzz` | libFuzzer over every parser entry point and the attestation verifier, a minute each (needs nightly and `cargo-fuzz`) |
 | `task kani` | Kani model-checking proofs |
 | `task miri` | Miri, for undefined behavior |
 | `task bench` | Criterion benchmarks |
@@ -341,6 +341,15 @@ tests (`agent-uri/tests/no_panic_proptest.rs`) run on every commit over mutated
 valid URIs, near-misses, and arbitrary bytes; the fuzz targets
 (`agent-uri/fuzz/fuzz_targets/`) run on the weekly schedule and can be run
 locally against the seed corpus at any time.
+
+The verifier reads untrusted input too — an attestation token comes from
+whoever is presenting it — and is fuzzed the same way
+(`agent-uri-attestation/fuzz/fuzz_targets/`). `verify_token` feeds it arbitrary
+strings and requires that none is accepted. `verify_signed_claims` signs
+arbitrary claims with a key the verifier trusts, which is the only way to reach
+the checks behind the signature: it requires that anything accepted satisfies
+what the verifier promises of it, and that a token an honest issuer would mint
+is not refused.
 
 ## Paper
 
