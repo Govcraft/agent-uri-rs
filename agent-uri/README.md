@@ -92,6 +92,14 @@ assert_eq!(root.port(), Some(8080));
 let without_port = root.without_port();
 ```
 
+A trust root is ASCII. A non-ASCII name is rejected rather than converted, so
+`münchen.de` is an error and not a synonym for `xn--mnchen-3ya.de`; converting
+an internationalized name to A-label form is the job of whatever accepts it
+from a person. An `xn--` label is then treated as an opaque DNS label — not
+decoded, not checked as Punycode — so nothing here detects a homograph or a
+name that was converted wrongly upstream. See the `TrustRoot` docs and
+[§8.11 of the specification](../SPECIFICATION.md#811-internationalized-trust-root-names).
+
 ### Capability Path
 
 ```rust

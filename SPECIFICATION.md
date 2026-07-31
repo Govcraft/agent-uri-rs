@@ -1,8 +1,8 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.7.0
+**Version:** 0.7.1
 **Status:** Draft
-**Last Updated:** 2026-07-30
+**Last Updated:** 2026-07-31
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
 
 ## Abstract
@@ -171,7 +171,8 @@ label      = 1*63( ALPHA / DIGIT / "-" )
 3. The trust root MUST publish verification keys at a well-known endpoint (see [Section 7.2](#72-key-publication)).
 4. DNS trust roots are case-insensitive and MUST be normalized to lowercase. IPv4 addresses use dotted-decimal form and IPv6 literals use RFC 5952 canonical text in brackets. An explicit port is preserved; no default port is inferred or stripped.
    A trailing dot MUST be rejected rather than stripped: `example.com.` is not a valid trust root, and only `example.com` names that identity.
-5. A host consisting of exactly four dot-separated labels that each contain only digits MUST be parsed as an `ipv4-address`, never as a `domain`. Such a host MUST be rejected when it is not a valid dotted-decimal address: every octet MUST be in the range 0-255 and MUST NOT carry a leading zero, per the `dec-octet` rule in [Appendix A](#appendix-a-abnf-grammar). Hosts with any other number of labels, or with a non-numeric label, remain subject to the `domain` rule.
+5. A trust root is ASCII. A host containing a non-ASCII character MUST be rejected rather than converted; a label beginning `xn--` is treated as an opaque DNS label and is not decoded or validated as Punycode. Converting an internationalized name to A-label form is the responsibility of whatever accepts it from a person, and [Section 8.11](#811-internationalized-trust-root-names) states what this leaves undetected.
+6. A host consisting of exactly four dot-separated labels that each contain only digits MUST be parsed as an `ipv4-address`, never as a `domain`. Such a host MUST be rejected when it is not a valid dotted-decimal address: every octet MUST be in the range 0-255 and MUST NOT carry a leading zero, per the `dec-octet` rule in [Appendix A](#appendix-a-abnf-grammar). Hosts with any other number of labels, or with a non-numeric label, remain subject to the `domain` rule.
 
 **Examples:**
 
@@ -1110,6 +1111,64 @@ budget, hiding legitimate agents in the way
 reversible by the same means, because descriptors take the greater level: a path
 can be pushed wide and stays wide.
 
+### 8.11 Internationalized Trust Root Names
+
+**Threat:** A trust root is ASCII, and this specification performs no
+[IDNA](#102-informative-references) processing. An implementation therefore
+cannot distinguish a domain from one that merely looks like it, and two
+spellings of one real-world name can be two identities or can be one identity
+and one error.
+
+Three distinct consequences follow, and they are consequences of the same
+decision rather than three defects:
+
+1. **Conversion is the caller's.** A non-ASCII name MUST be rejected, not
+   converted: `münchen.de` is an error and not a synonym for
+   `xn--mnchen-3ya.de`. Performing [UTS #46](#102-informative-references)
+   ToASCII inside the identity type would place a Unicode version table on the
+   identity path, where two implementations holding different table versions
+   would map one name to two trust roots. Refusing is a smaller surface than
+   disagreeing.
+
+2. **An A-label is opaque.** A label beginning `xn--` is validated as a DNS
+   label and no further: it is not decoded, and its Punycode is not checked.
+   `xn--zzzzzz` is not valid Punycode and is a valid trust root under this
+   specification. A name converted incorrectly upstream stays incorrect, and
+   nothing downstream will say so.
+
+3. **Confusables are not detected.** `apple.com` and the Cyrillic-`а`
+   homograph, whose A-label form is `xn--pple-43d.com`, are two unrelated trust
+   roots. Only the A-label form can ever reach a parser, and at that point the
+   two strings are not similar.
+
+**Mitigations:**
+
+1. **Convert once, at the edge.** An implementation that accepts names from
+   people SHOULD apply UTS #46 ToASCII at the point of entry, before the name
+   becomes an identity, and SHOULD carry the A-label form from there on. A
+   name converted twice, or converted in two places by two versions, is the
+   failure this ordering prevents.
+
+2. **Authentication does not depend on the name looking right.** A verifier
+   fetches keys from the trust root's own well-known endpoint over HTTPS
+   ([Section 7.2](#72-key-publication)). A homograph resolves to its own DNS
+   name and its own keys, so it can impersonate a familiar name to a *reader*
+   but cannot present the imitated root's attestations.
+
+3. **Display is where confusability is decided.** An implementation that shows
+   a trust root to a person SHOULD apply a confusable-detection policy there —
+   mixed-script restriction, or displaying the A-label form — rather than
+   relying on the parser, which by then has only ASCII to look at.
+
+**Residual Risk:** A user who is shown a homograph and chooses to trust it has
+been deceived before any part of this specification is reached. Nothing in the
+URI syntax, the DHT, or attestation detects it, because at every one of those
+layers the two names are simply different. Note also that a trailing dot is
+rejected rather than stripped ([Section 4.1](#41-trust-root)), so a
+root-anchored `example.com.` is not a second spelling of `example.com` but an
+invalid trust root; this removes an equivalence question at the cost of
+rejecting a form that DNS accepts.
+
 ---
 
 ## 9. IANA Considerations
@@ -1167,6 +1226,10 @@ This specification requests registration of the following well-known URI:
 - [A2A] Linux Foundation, "Agent-to-Agent (A2A) Protocol Specification", https://a2aprotocol.ai/, 2025.
 
 - [DIDs] Sporny, M., et al., "Decentralized Identifiers (DIDs) v1.0", W3C Recommendation, 2022.
+
+- [IDNA] Klensin, J., "Internationalized Domain Names in Applications (IDNA): Protocol", RFC 5891, August 2010.
+
+- [UTS46] Davis, M. and M. Suignard, "Unicode IDNA Compatibility Processing", Unicode Technical Standard #46, https://www.unicode.org/reports/tr46/.
 
 ---
 
@@ -1566,6 +1629,7 @@ sharding removes it, because only sharding adds keys.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.7.1 | 2026-07-31 | Trust root stated to be ASCII, with conversion of internationalized names placed on whatever accepts them from a person and `xn--` labels defined as opaque; the resulting confusability and mis-conversion exposure added as §8.11 |
 | 0.7.0 | 2026-07-30 | Mutation proofs required to cover the `expires_at` the write results in, and nodes required to store that value rather than derive one, closing the rewritable expiry described in §6.6; per-key capacity required to be charged to the registering path's own key and not to an ancestor, with the resulting subtree lockout added to §8.4 |
 | 0.6.0 | 2026-07-30 | Direct and sharded record models distinguished; sharded key derivation, pointer pages, and shard descriptors defined normatively; prefix lookup no longer claimed to be one exact-key read; §6.2 requirement 6 restated as a protocol ceiling rather than a provisioning matter; pointer injection added as §8.10; placeholder key vectors in B.4 replaced with computed digests |
 | 0.5.2 | 2026-07-27 | Four dot-separated all-numeric host labels defined as an ipv4-address rather than a domain; hosts of that shape whose octets are outside 0-255 or carry a leading zero are rejected |
