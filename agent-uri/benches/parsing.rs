@@ -179,6 +179,53 @@ fn bench_capability_path_construction(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark: ordering, which a `BTreeMap` or a sort pays per comparison.
+///
+/// This is what issue #30 was about: both comparisons used to render their
+/// operands to `String` first, so every probe of a sorted collection
+/// allocated twice.
+fn bench_ordering(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ordering");
+
+    let left =
+        AgentUri::parse("agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn02q")
+            .expect("valid URI");
+    let right =
+        AgentUri::parse("agent://anthropic.com/assistant/chat/llm_chat_01h455vb4pex5vsknk084sn03q")
+            .expect("valid URI");
+
+    group.bench_function("agent_uri_cmp", |b| {
+        b.iter(|| black_box(&left).cmp(black_box(&right)));
+    });
+
+    group.bench_function("agent_id_cmp", |b| {
+        b.iter(|| black_box(left.agent_id()).cmp(black_box(right.agent_id())));
+    });
+
+    // A sort is where the per-comparison cost actually shows up.
+    let corpus: Vec<AgentUri> = (0..64)
+        .map(|i| {
+            AgentUri::parse(&format!(
+                "agent://host{i:02}.example.com/assistant/chat/llm_01h455vb4pex5vsknk084sn02q"
+            ))
+            .expect("valid URI")
+        })
+        .collect();
+
+    group.bench_function("sort_64", |b| {
+        b.iter_batched(
+            || corpus.clone(),
+            |mut uris| {
+                uris.sort();
+                uris
+            },
+            criterion::BatchSize::SmallInput,
+        );
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_parse,
@@ -186,5 +233,6 @@ criterion_group!(
     bench_starts_with,
     bench_builder,
     bench_capability_path_construction,
+    bench_ordering,
 );
 criterion_main!(benches);

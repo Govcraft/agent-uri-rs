@@ -372,9 +372,18 @@ impl PartialOrd for AgentId {
     }
 }
 
+/// Orders by the rendered `prefix_suffix`, which is what
+/// [`Display`](fmt::Display) writes.
+///
+/// The comparison is the one this always made; what is gone is the pair of
+/// `String`s it used to build to make it. `MagicTypeId` keeps its own rendering
+/// and hands out a borrow of it, so nothing has to be rendered again here.
+/// `MagicTypeId`'s own `Ord` is not that comparison — it sorts by suffix first,
+/// which would order agents by creation time rather than by class.
 impl Ord for AgentId {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.to_string().cmp(&other.to_string())
+        let (this, that): (&str, &str) = (self.inner.as_ref(), other.inner.as_ref());
+        this.cmp(that)
     }
 }
 
@@ -641,5 +650,40 @@ mod tests {
         let id2 = AgentId::parse(&display).unwrap();
         assert_eq!(id1.prefix(), id2.prefix());
         assert_eq!(id1.suffix(), id2.suffix());
+    }
+
+    #[test]
+    fn ordering_is_the_order_of_the_rendered_id() {
+        // The comparison no longer renders both sides to make it, so this
+        // pins that it still makes the same one.
+        let ids = [
+            AgentId::parse("a_01h455vb4pex5vsknk084sn02q").unwrap(),
+            AgentId::parse("llm_01h455vb4pex5vsknk084sn02q").unwrap(),
+            AgentId::parse("llm_chat_01h455vb4pex5vsknk084sn02q").unwrap(),
+            AgentId::parse("llm_01h455vb4pex5vsknk084sn03q").unwrap(),
+            AgentId::parse("rule_01h455vb4pex5vsknk084sn02q").unwrap(),
+        ];
+
+        for left in &ids {
+            for right in &ids {
+                assert_eq!(
+                    left.cmp(right),
+                    left.to_string().cmp(&right.to_string()),
+                    "{left} vs {right}"
+                );
+                assert_eq!(left.cmp(right) == Ordering::Equal, left == right);
+            }
+        }
+    }
+
+    #[test]
+    fn ordering_is_not_the_underlying_type_id_ordering() {
+        // `MagicTypeId` sorts by suffix first, which would group agents by
+        // when they were created rather than by what they are.
+        let older_rule = AgentId::parse("rule_01h455vb4pex5vsknk084sn02q").unwrap();
+        let newer_llm = AgentId::parse("llm_01h455vb4pex5vsknk084sn03q").unwrap();
+
+        assert!(newer_llm < older_rule);
+        assert!(older_rule.inner() < newer_llm.inner());
     }
 }
