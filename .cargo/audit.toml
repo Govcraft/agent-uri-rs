@@ -4,8 +4,6 @@
 # Run locally with `task audit`; CI enforces it in the `supply chain` job.
 [advisories]
 ignore = [
-    # time 0.3.45 via rusty_paseto 0.9 — fix tracked in issue #17.
-    "RUSTSEC-2026-0009",
     # paste 1.0.15 unmaintained — build-time proc-macro via if-watch in
     # libp2p-tcp, reached through agent-uri-dht-libp2p.
     "RUSTSEC-2024-0436",
