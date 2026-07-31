@@ -50,6 +50,19 @@ tasks:
     cmds:
       - cargo kani --workspace
 
+  # Fuzzing
+  fuzz:
+    desc: Fuzz every parser entry point for a minute each (needs nightly + cargo-fuzz)
+    dir: agent-uri
+    cmds:
+      - for target in parse_uri parse_trust_root parse_query parse_fragment parse_agent_id; do cargo +nightly fuzz run "$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
+
+  fuzz-build:
+    desc: Build the fuzz targets without running them
+    dir: agent-uri
+    cmds:
+      - cargo +nightly fuzz build
+
   # Memory safety checks
   miri:
     desc: Run Miri memory safety checks
