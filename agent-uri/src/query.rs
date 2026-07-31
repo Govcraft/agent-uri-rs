@@ -361,9 +361,17 @@ impl PartialOrd for QueryParams {
     }
 }
 
+/// Orders by the parameters themselves rather than by their rendering.
+///
+/// Rendering both sides to compare them allocated two `String`s per
+/// comparison, and percent-encoded every value on the way to throwing it away.
+/// The map is already sorted by key, so comparing it directly is the same
+/// walk without the encoding: pairs in key order, first difference wins.
+/// Values that differ only in how they encode are the same value, and now sort
+/// as one.
 impl Ord for QueryParams {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.to_string().cmp(&other.to_string())
+        self.params.cmp(&other.params)
     }
 }
 
@@ -647,5 +655,47 @@ mod tests {
         let params = QueryParams::parse("a=1&b=2").unwrap();
         let items: Vec<_> = params.iter().collect();
         assert_eq!(items, vec![("a", "1"), ("b", "2")]);
+    }
+
+    #[test]
+    fn ordering_agrees_with_equality_and_walks_keys_in_order() {
+        let empty = QueryParams::new();
+        let a = QueryParams::parse("a=1").unwrap();
+        let a_b = QueryParams::parse("a=1&b=2").unwrap();
+        let b = QueryParams::parse("b=1").unwrap();
+        let a_two = QueryParams::parse("a=2").unwrap();
+
+        assert!(empty < a);
+        assert!(a < a_b);
+        assert!(a_b < b);
+        assert!(a < a_two);
+
+        for left in [&empty, &a, &a_b, &b, &a_two] {
+            for right in [&empty, &a, &a_b, &b, &a_two] {
+                assert_eq!(left.cmp(right) == Ordering::Equal, left == right);
+                assert_eq!(left.cmp(right).reverse(), right.cmp(left));
+            }
+        }
+    }
+
+    #[test]
+    fn ordering_is_by_value_and_not_by_the_way_it_renders() {
+        // Rendering escapes `~` as `%7E`, and `%` sorts before every letter,
+        // so comparing renderings put `~` ahead of `z` while the values
+        // themselves go the other way. The values are what a caller set.
+        let tilde = QueryParams::new().with_param("note", "~").unwrap();
+        let zed = QueryParams::new().with_param("note", "z").unwrap();
+
+        assert!(zed < tilde);
+        assert!(tilde.to_string() < zed.to_string());
+    }
+
+    #[test]
+    fn two_spellings_of_one_value_order_as_one() {
+        let written_encoded = QueryParams::parse("note=a%20b").unwrap();
+        let built_directly = QueryParams::new().with_param("note", "a b").unwrap();
+
+        assert_eq!(written_encoded, built_directly);
+        assert_eq!(written_encoded.cmp(&built_directly), Ordering::Equal);
     }
 }

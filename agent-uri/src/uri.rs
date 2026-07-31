@@ -182,10 +182,7 @@ impl AgentUri {
     /// - The scheme is not "agent" (compared case-insensitively)
     /// - Any component (trust root, path, agent ID, query, fragment) is invalid
     pub fn parse(input: &str) -> Result<Self, ParseError> {
-        Self::parse_inner(input).map_err(|kind| ParseError {
-            input: input.to_string(),
-            kind,
-        })
+        Self::parse_inner(input).map_err(|kind| ParseError::new(input, kind))
     }
 
     /// Creates a new agent URI from its components.
@@ -210,13 +207,13 @@ impl AgentUri {
         let len = normalized.len();
 
         if len > MAX_URI_LENGTH {
-            return Err(ParseError {
-                input: normalized,
-                kind: ParseErrorKind::TooLong {
+            return Err(ParseError::new(
+                &normalized,
+                ParseErrorKind::TooLong {
                     max: MAX_URI_LENGTH,
                     actual: len,
                 },
-            });
+            ));
         }
 
         Ok(Self {
@@ -324,10 +321,8 @@ impl AgentUri {
     /// assert_eq!(updated.query().ttl(), Some(300));
     /// ```
     pub fn with_query_str(&self, s: &str) -> Result<Self, ParseError> {
-        let query = QueryParams::parse(s).map_err(|e| ParseError {
-            input: s.to_string(),
-            kind: ParseErrorKind::InvalidQuery(e),
-        })?;
+        let query = QueryParams::parse(s)
+            .map_err(|e| ParseError::new(s, ParseErrorKind::InvalidQuery(e)))?;
         self.with_query(query)
     }
 
@@ -394,10 +389,8 @@ impl AgentUri {
     /// assert_eq!(updated.fragment().map(|f| f.as_str()), Some("summarization"));
     /// ```
     pub fn with_fragment_str(&self, s: &str) -> Result<Self, ParseError> {
-        let fragment = Fragment::parse(s).map_err(|e| ParseError {
-            input: s.to_string(),
-            kind: ParseErrorKind::InvalidFragment(e),
-        })?;
+        let fragment = Fragment::parse(s)
+            .map_err(|e| ParseError::new(s, ParseErrorKind::InvalidFragment(e)))?;
         self.with_fragment(fragment)
     }
 
@@ -632,9 +625,23 @@ impl PartialOrd for AgentUri {
     }
 }
 
+/// Identity ordering: the same three fields [`PartialEq`] compares and [`Hash`]
+/// hashes, in the order they appear in a URI.
+///
+/// This used to render both sides with [`canonical`](AgentUri::canonical) and
+/// compare the strings, which allocated twice per comparison — a `BTreeMap`
+/// keyed by `AgentUri` paid that on every probe. The order is the same except
+/// where one component is a prefix of another, because the rendered form has a
+/// `/` between components and `/` sorts after `.` and after every letter:
+/// string order put `acme.com.br` before `acme.com`, and this puts `acme.com`
+/// first. Ordering by the components is the order the type's own identity
+/// implies; the old one was an artifact of the separator.
 impl Ord for AgentUri {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.canonical().cmp(&other.canonical())
+        self.trust_root
+            .cmp(&other.trust_root)
+            .then_with(|| self.capability_path.cmp(&other.capability_path))
+            .then_with(|| self.agent_id.cmp(&other.agent_id))
     }
 }
 
@@ -663,6 +670,11 @@ impl<'de> serde::Deserialize<'de> for AgentUri {
 mod tests {
     use super::*;
     use crate::error::{FragmentError, TrustRootError};
+
+    /// Parses a URI the test asserts is well formed.
+    fn uri(input: &str) -> AgentUri {
+        AgentUri::parse(input).unwrap_or_else(|e| panic!("{input} should parse: {e}"))
+    }
 
     #[test]
     fn parse_valid_uri() {
@@ -994,5 +1006,89 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn ordering_agrees_with_identity_equality() {
+        // `Ord` and `PartialEq` must not disagree about which URIs are the
+        // same one, and the query and fragment are outside identity for both.
+        let plain = uri("agent://acme.com/chat/llm_01h455vb4pex5vsknk084sn02q");
+        let hinted = uri("agent://acme.com/chat/llm_01h455vb4pex5vsknk084sn02q?ttl=300#part");
+
+        assert_eq!(plain.cmp(&hinted), Ordering::Equal);
+        assert_eq!(plain, hinted);
+    }
+
+    #[test]
+    fn ordering_walks_the_components_in_the_order_a_uri_writes_them() {
+        let by_root = uri("agent://b.com/chat/llm_01h455vb4pex5vsknk084sn02q");
+        let by_path = uri("agent://a.com/zeta/llm_01h455vb4pex5vsknk084sn02q");
+        let by_id = uri("agent://a.com/chat/rule_01h455vb4pex5vsknk084sn02q");
+        let first = uri("agent://a.com/chat/llm_01h455vb4pex5vsknk084sn02q");
+
+        // The trust root decides before the path, and the path before the ID.
+        assert!(first < by_id);
+        assert!(by_id < by_path);
+        assert!(by_path < by_root);
+    }
+
+    #[test]
+    fn ordering_is_by_component_and_not_by_the_rendered_string() {
+        // The two differ exactly here: rendered, `acme.com` is followed by
+        // `/`, and `/` sorts after the `.` that continues `acme.com.br`, so
+        // comparing the strings put the longer name first. Comparing trust
+        // roots puts the shorter one first, which is what a reader sorting a
+        // list of hosts expects.
+        let shorter = uri("agent://acme.com/chat/llm_01h455vb4pex5vsknk084sn02q");
+        let longer = uri("agent://acme.com.br/chat/llm_01h455vb4pex5vsknk084sn02q");
+
+        assert!(shorter < longer);
+        assert!(longer.canonical() < shorter.canonical());
+    }
+
+    #[test]
+    fn ordering_is_a_total_order() {
+        let uris = [
+            uri("agent://a.com/chat/llm_01h455vb4pex5vsknk084sn02q"),
+            uri("agent://a.com.br/chat/llm_01h455vb4pex5vsknk084sn02q"),
+            uri("agent://a.com/chat/rule_01h455vb4pex5vsknk084sn02q"),
+            uri("agent://b.com/zeta/deep/human_01h455vb4pex5vsknk084sn02q"),
+        ];
+
+        for left in &uris {
+            for right in &uris {
+                assert_eq!(
+                    left.cmp(right).reverse(),
+                    right.cmp(left),
+                    "{left} vs {right} is not antisymmetric"
+                );
+                assert_eq!(left.cmp(right) == Ordering::Equal, left == right);
+            }
+        }
+    }
+
+    #[test]
+    fn a_rejected_input_too_large_to_be_a_uri_is_not_copied_into_the_error() {
+        // `parse` used to clone whatever it was handed, so rejecting a
+        // megabyte cost a megabyte.
+        let hostile = format!("agent://{}", "a".repeat(2 * 1024 * 1024));
+
+        let Err(error) = AgentUri::parse(&hostile) else {
+            panic!("a two-megabyte input must not parse");
+        };
+
+        assert!(error.input.len() < 1024, "the error kept the whole input");
+        assert!(matches!(error.kind, ParseErrorKind::TooLong { .. }));
+    }
+
+    #[test]
+    fn a_rejected_input_short_enough_to_have_been_a_uri_is_kept_whole() {
+        let input = "agent://acme.com/Chat/llm_01h455vb4pex5vsknk084sn02q";
+
+        let Err(error) = AgentUri::parse(input) else {
+            panic!("an uppercase path segment must not parse");
+        };
+
+        assert_eq!(error.input, input);
     }
 }

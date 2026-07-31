@@ -2,13 +2,61 @@
 
 use std::fmt;
 
+use crate::constants::MAX_URI_LENGTH;
+
+/// How much of a rejected input an error keeps.
+///
+/// Set to the longest URI that could ever have parsed, so an input the parser
+/// might plausibly have accepted is kept whole and only what could not be a
+/// URI at all is cut.
+const MAX_ERROR_INPUT_LENGTH: usize = MAX_URI_LENGTH;
+
 /// Errors that can occur when parsing an agent URI.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
-    /// The input that failed to parse
+    /// The input that failed to parse, cut to the first 512 characters and
+    /// marked with `…` if there was more.
+    ///
+    /// A parser reads what it is given, and what it is given may be a
+    /// megabyte. Keeping all of it hands a caller who logs or collects errors
+    /// a full copy of an input that was rejected precisely for being
+    /// unusable — the rejection itself becomes the cost. Anything within the
+    /// length a URI may have is kept verbatim, so this is only ever a cut of
+    /// something that could not have parsed at any length; when the length was
+    /// the complaint, [`ParseErrorKind::TooLong`] carries what it actually was.
     pub input: String,
     /// The specific error that occurred
     pub kind: ParseErrorKind,
+}
+
+impl ParseError {
+    /// Builds an error, keeping only as much of the input as is worth keeping.
+    pub(crate) fn new(input: &str, kind: ParseErrorKind) -> Self {
+        Self {
+            input: truncate_input(input),
+            kind,
+        }
+    }
+}
+
+/// Appended to a cut input so a reader can tell a cut string from a short one.
+const TRUNCATION_MARKER: char = '…';
+
+/// Keeps the first [`MAX_ERROR_INPUT_LENGTH`] characters of `input`.
+///
+/// Characters, not bytes. Cutting at a byte offset panics in the middle of a
+/// character, which is the mistake this crate keeps having to unmake (issues
+/// #33 and #89), and it is not a mistake worth making inside the type whose
+/// whole job is reporting that something was wrong.
+fn truncate_input(input: &str) -> String {
+    let mut chars = input.chars();
+    let mut kept: String = chars.by_ref().take(MAX_ERROR_INPUT_LENGTH).collect();
+
+    if chars.next().is_some() {
+        kept.push(TRUNCATION_MARKER);
+    }
+
+    kept
 }
 
 /// Specific parsing error types.
@@ -536,5 +584,93 @@ impl std::error::Error for BuilderError {
             Self::InvalidUri(e) => Some(e),
             Self::UriTooLong { .. } => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_input_a_uri_could_have_been_is_kept_whole() {
+        // Truncation must never reach an input the parser might plausibly
+        // have accepted, or the error stops describing what was rejected.
+        let input = format!("agent://{}", "a".repeat(MAX_ERROR_INPUT_LENGTH - 8));
+        assert_eq!(input.chars().count(), MAX_ERROR_INPUT_LENGTH);
+
+        let error = ParseError::new(&input, ParseErrorKind::Empty);
+
+        assert_eq!(error.input, input);
+        assert!(!error.input.ends_with(TRUNCATION_MARKER));
+    }
+
+    #[test]
+    fn a_hostile_input_is_not_copied_into_the_error() {
+        // The whole point: rejecting a megabyte must not cost a megabyte.
+        let input = "a".repeat(4 * 1024 * 1024);
+
+        let error = ParseError::new(
+            &input,
+            ParseErrorKind::TooLong {
+                max: MAX_URI_LENGTH,
+                actual: input.len(),
+            },
+        );
+
+        assert_eq!(error.input.chars().count(), MAX_ERROR_INPUT_LENGTH + 1);
+        assert!(error.input.ends_with(TRUNCATION_MARKER));
+
+        // What was cut is not lost, because the length was the complaint and
+        // the complaint carries it.
+        let ParseErrorKind::TooLong { actual, .. } = error.kind else {
+            panic!("wrong kind");
+        };
+        assert_eq!(actual, 4 * 1024 * 1024);
+    }
+
+    #[test]
+    fn truncation_counts_characters_and_not_bytes() {
+        // Cutting at a byte offset lands inside a character and panics. Each
+        // of these is four bytes, so a byte-counting cut would slice one in
+        // half well before the character limit.
+        let input = "\u{1f300}".repeat(MAX_ERROR_INPUT_LENGTH * 2);
+        assert!(input.len() > MAX_ERROR_INPUT_LENGTH * 4);
+
+        let error = ParseError::new(&input, ParseErrorKind::Empty);
+
+        assert_eq!(error.input.chars().count(), MAX_ERROR_INPUT_LENGTH + 1);
+        assert!(
+            error
+                .input
+                .chars()
+                .take(MAX_ERROR_INPUT_LENGTH)
+                .all(|c| c == '\u{1f300}'),
+            "a character was cut in half"
+        );
+    }
+
+    #[test]
+    fn an_input_one_character_over_the_limit_is_marked() {
+        let input = "a".repeat(MAX_ERROR_INPUT_LENGTH + 1);
+
+        let error = ParseError::new(&input, ParseErrorKind::Empty);
+
+        assert!(error.input.ends_with(TRUNCATION_MARKER));
+        assert_eq!(
+            error.input.chars().filter(|c| *c == 'a').count(),
+            MAX_ERROR_INPUT_LENGTH
+        );
+    }
+
+    #[test]
+    fn a_truncated_input_still_renders() {
+        // `Display` interpolates the input, so a cut that produced invalid
+        // UTF-8 would surface here rather than in the field.
+        let error = ParseError::new(
+            &"\u{1f300}".repeat(MAX_ERROR_INPUT_LENGTH + 4),
+            ParseErrorKind::Empty,
+        );
+
+        assert!(error.to_string().contains(TRUNCATION_MARKER));
     }
 }
