@@ -13,6 +13,11 @@ members = [
 [workspace.package]
 edition = "2024"
 license = "MIT OR Apache-2.0"
+# Every crate here ships from this repository, so the keys that build a crate's
+# crates.io and docs.rs pages belong once, at the top. A crate that spells them
+# out itself is a crate that will drift.
+repository = "https://github.com/Govcraft/agent-uri-rs"
+homepage = "https://github.com/Govcraft/agent-uri-rs"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
