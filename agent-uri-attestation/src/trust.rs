@@ -69,7 +69,7 @@
 //! assert_eq!(store.key_count(), 1);
 //! ```
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use chrono::{DateTime, Duration, Utc};
 
@@ -248,6 +248,16 @@ impl From<VerifyingKey> for TrustedKey {
 /// bounds the Ed25519 operations an unverifiable token can buy. Keep retired
 /// keys out of it.
 ///
+/// # Order is part of the contract
+///
+/// Roots are held in a [`BTreeMap`], so [`Self::iter`] walks them in a fixed
+/// order rather than a hash order that changes from one store to the next. That
+/// is what lets a verifier report the same rejection for the same token every
+/// time: with several keys each failing differently, "which failure gets
+/// reported" must not come down to where a string happened to land in a table.
+/// The cost is a handful of string comparisons per lookup, on stores that hold
+/// a handful of roots.
+///
 /// # Example
 ///
 /// ```
@@ -265,7 +275,7 @@ impl From<VerifyingKey> for TrustedKey {
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct TrustStore {
-    roots: HashMap<String, Vec<TrustedKey>>,
+    roots: BTreeMap<String, Vec<TrustedKey>>,
 }
 
 impl TrustStore {
@@ -377,7 +387,12 @@ impl TrustStore {
         self.roots.is_empty()
     }
 
-    /// Every `(trust root, key)` pair held, in unspecified order.
+    /// Every `(trust root, key)` pair held, roots in lexicographic order and
+    /// each root's keys in the order they were added.
+    ///
+    /// The order is fixed, not merely stable within one store: two stores built
+    /// from the same keys iterate identically. Verification depends on that —
+    /// see the type's documentation.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &TrustedKey)> {
         self.roots
             .iter()
@@ -620,5 +635,49 @@ mod tests {
 
         assert_eq!(ids, ["a", "b", "c"]);
         assert_eq!(store.iter().count(), 3);
+    }
+
+    #[test]
+    fn iteration_order_is_fixed_rather_than_merely_stable() {
+        // Two stores holding the same roots must walk them identically, even
+        // when they were filled in opposite orders. Verification reports the
+        // first error at the highest specificity it saw, so a hash-ordered
+        // store would make the reported error vary between processes.
+        let roots = ["zulu.example", "alpha.example", "mike.example"];
+
+        let mut forward = TrustStore::new();
+        for root in roots {
+            forward.add(root, TrustedKey::new(key()));
+        }
+
+        let mut backward = TrustStore::new();
+        for root in roots.iter().rev() {
+            backward.add(*root, TrustedKey::new(key()));
+        }
+
+        let order = |store: &TrustStore| -> Vec<String> {
+            store.iter().map(|(root, _)| root.to_string()).collect()
+        };
+
+        assert_eq!(
+            order(&forward),
+            ["alpha.example", "mike.example", "zulu.example"]
+        );
+        assert_eq!(order(&forward), order(&backward));
+    }
+
+    #[test]
+    fn a_roots_own_keys_stay_in_the_order_they_were_added() {
+        // Within a root the order is insertion, not sorted: a rotation adds the
+        // incoming key after the outgoing one, and the outgoing key should keep
+        // being tried first for as long as it is still published.
+        let mut store = TrustStore::new();
+        for id in ["outgoing", "incoming", "next"] {
+            store.add("acme.com", TrustedKey::new(key()).with_id(id));
+        }
+
+        let ids: Vec<&str> = store.iter().filter_map(|(_, key)| key.id()).collect();
+
+        assert_eq!(ids, ["outgoing", "incoming", "next"]);
     }
 }
