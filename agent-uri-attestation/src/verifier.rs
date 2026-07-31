@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use agent_uri::AgentUri;
 use chrono::Utc;
-use rusty_paseto::core::{Paseto, PasetoError};
+use rusty_paseto::Error as PasetoUnifiedError;
+use rusty_paseto::core::Paseto;
 use rusty_paseto::prelude::*;
 
 use agent_uri::CapabilityPath;
@@ -459,18 +460,32 @@ impl Verifier {
 /// Everything not explicitly structural is treated as a signature failure, so a
 /// new cipher-side variant fails closed rather than being reported as a
 /// malformed token.
-fn classify_paseto_error(error: &PasetoError) -> AttestationError {
+///
+/// The argument is taken as anything convertible into `rusty_paseto`'s unified
+/// [`Error`](PasetoUnifiedError) rather than as the concrete per-layer error
+/// [`Paseto::try_verify`] returns, because that per-layer type is deprecated and
+/// due for removal. Classifying the unified error keeps this function pointed at
+/// the type that survives, and that type is `#[non_exhaustive]`, so the closed
+/// default below is required rather than merely prudent.
+fn classify_paseto_error(error: impl Into<PasetoUnifiedError>) -> AttestationError {
+    let error: PasetoUnifiedError = error.into();
+
     match error {
-        PasetoError::IncorrectSize
-        | PasetoError::WrongHeader
-        | PasetoError::FooterInvalid
-        | PasetoError::PayloadBase64Decode { .. }
-        | PasetoError::Utf8Error { .. }
-        | PasetoError::FromUtf8Error { .. }
-        | PasetoError::TryFromSlice { .. } => AttestationError::InvalidTokenFormat {
+        PasetoUnifiedError::InvalidTokenStructure
+        | PasetoUnifiedError::InvalidHeader
+        | PasetoUnifiedError::FooterMismatch
+        | PasetoUnifiedError::Base64Decode(_)
+        | PasetoUnifiedError::Utf8(_)
+        | PasetoUnifiedError::FromUtf8(_)
+        // Size caps `rusty_paseto` enforces before it decodes anything. This
+        // crate's own, far smaller cap runs first (see `check_token_length`),
+        // so reaching these means the token was structurally rejected without
+        // a signature ever being checked.
+        | PasetoUnifiedError::TokenTooLarge
+        | PasetoUnifiedError::FooterTooLarge => AttestationError::InvalidTokenFormat {
             reason: error.to_string(),
         },
-        PasetoError::InvalidKey => AttestationError::InvalidKeyFormat {
+        PasetoUnifiedError::InvalidKey => AttestationError::InvalidKeyFormat {
             reason: error.to_string(),
         },
         _ => AttestationError::InvalidSignature,
@@ -505,7 +520,7 @@ fn try_verify_with_key(
 
     // Stage 1: authenticate. Returns the verified payload, and validates no claims.
     let payload = Paseto::<V4, Public>::try_verify(token, &paseto_key, None, None)
-        .map_err(|e| classify_paseto_error(&e))?;
+        .map_err(classify_paseto_error)?;
 
     let json_value: serde_json::Value =
         serde_json::from_str(&payload).map_err(|e| AttestationError::InvalidClaims {
