@@ -68,6 +68,54 @@
 //! | URI binding | `agent_uri` claim verified against expected |
 //! | Tamper detection | Ed25519 signature verification |
 //! | Withdrawal before expiry | [`RevocationCheck`], by `jti` or by signing key |
+//! | Key rotation without an outage | [`TrustStore`] holds several keys per root, each with its own window |
+//!
+//! # Key rotation
+//!
+//! A trust root's key is not permanent, and replacing it must not break every
+//! token still in flight. A [`Verifier`] therefore holds a [`TrustStore`], in
+//! which each root maps to a *list* of [`TrustedKey`]s rather than to one key,
+//! and each key carries an optional `not_before` and `not_after`.
+//!
+//! ```
+//! use agent_uri_attestation::{AcceptAll, SigningKey, TrustedKey, Verifier};
+//! use chrono::{Duration, Utc};
+//!
+//! # let outgoing = SigningKey::generate().verifying_key();
+//! # let incoming = SigningKey::generate().verifying_key();
+//! let mut verifier = Verifier::new().with_revocation(AcceptAll);
+//!
+//! // The outgoing key stays usable long enough to cover the longest token
+//! // already issued under it; the default TTL makes that one hour.
+//! verifier.add_trusted_key(
+//!     "acme.com",
+//!     TrustedKey::new(outgoing).with_id("key-2026").not_after(Utc::now() + Duration::hours(1)),
+//! );
+//! verifier.add_trusted_key("acme.com", TrustedKey::new(incoming).with_id("key-2027"));
+//!
+//! // Afterwards, retire it.
+//! verifier.remove_trusted_key("acme.com", "key-2026");
+//! ```
+//!
+//! A key's window is judged at *verification* time, not against the token's
+//! `iat`. The forgiving alternative would make `not_after` advisory: a root
+//! that withdrew a key at noon would keep honouring what that key signed at
+//! 11:59 for as long as those tokens lived. What that costs is the overlap
+//! above.
+//!
+//! [`Verifier::add_trusted_root`] is unchanged and still replaces every key a
+//! root had, which is what a deployment that pins a single key wants.
+//!
+//! # Breaking changes in 0.7.0
+//!
+//! [`AttestationError`] gains [`KeyNotYetValid`](AttestationError::KeyNotYetValid)
+//! and [`KeyExpired`](AttestationError::KeyExpired), which an exhaustive `match`
+//! on the enum must now handle. Both mean the same thing from the token's side:
+//! its signature is genuine and the key is one the trust root published, but
+//! that key is outside the window published for it.
+//!
+//! Nothing else changes. A verifier built the way 0.6 built one holds a single
+//! key with no window, and behaves exactly as it did.
 //!
 //! # Breaking changes in 0.6.0
 //!
@@ -186,6 +234,7 @@ mod keys;
 #[cfg(kani)]
 mod proofs;
 pub mod revocation;
+pub mod trust;
 mod verification;
 mod verifier;
 
@@ -195,6 +244,7 @@ pub use error::AttestationError;
 pub use issuer::Issuer;
 pub use keys::{Signature, SigningKey, VerifyingKey};
 pub use revocation::{AcceptAll, Denylist, RevocationCheck};
+pub use trust::{KeyValidity, TrustStore, TrustedKey};
 pub use verification::{
     capability_covers, check_capability_coverage, check_expiration, check_expiration_with_leeway,
     check_not_before, check_token_length, check_validity_window, validate_audience,
@@ -212,8 +262,9 @@ pub use verifier::Verifier;
 pub mod prelude {
     pub use crate::{
         AcceptAll, AttestationClaims, AttestationClaimsBuilder, AttestationError, Denylist, Issuer,
-        MAX_TOKEN_LENGTH, RevocationCheck, Signature, SigningKey, Verifier, VerifyingKey,
-        capability_covers, check_capability_coverage, check_expiration, check_token_length,
-        check_validity_window, validate_issuer, validate_subject,
+        KeyValidity, MAX_TOKEN_LENGTH, RevocationCheck, Signature, SigningKey, TrustStore,
+        TrustedKey, Verifier, VerifyingKey, capability_covers, check_capability_coverage,
+        check_expiration, check_token_length, check_validity_window, validate_issuer,
+        validate_subject,
     };
 }

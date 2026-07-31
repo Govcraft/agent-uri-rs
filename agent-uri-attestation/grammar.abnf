@@ -245,7 +245,10 @@ LOWER               = %x61-7A              ; a-z
 ;    securely (encrypted at rest, TLS in transit).
 ;
 ; 8. Key rotation: Trust roots SHOULD support multiple active keys to enable
-;    rotation without invalidating all outstanding tokens.
+;    rotation without invalidating all outstanding tokens. A verifier MUST
+;    refuse a token signed by a key outside the validity period its trust root
+;    published, judged at verification time rather than at the token's `iat`;
+;    see SPECIFICATION.md section 7.2.
 
 ; ============================================================================
 ; EXAMPLES

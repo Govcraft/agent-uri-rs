@@ -102,6 +102,34 @@ pub enum AttestationError {
         /// The trust root whose key was revoked
         issuer: String,
     },
+    /// The key that signed this token is not yet inside its publication window.
+    ///
+    /// The signature is good: this key really did sign this token, and the
+    /// trust root really does publish it. It is simply not usable yet, which
+    /// during a rotation means the token was minted by a signer running ahead
+    /// of the schedule its root published.
+    KeyNotYetValid {
+        /// The trust root whose key it is
+        issuer: String,
+        /// The key's identifier, if it has one
+        kid: Option<String>,
+        /// When the key becomes usable
+        not_before: String,
+    },
+    /// The key that signed this token is past its publication window.
+    ///
+    /// The signature is good, and the key is one the trust root published, but
+    /// the root scheduled it to stop being usable and that instant has passed.
+    /// A rotation whose overlap was shorter than the token's lifetime produces
+    /// this; so does a token minted by a signer that was never told to rotate.
+    KeyExpired {
+        /// The trust root whose key it is
+        issuer: String,
+        /// The key's identifier, if it has one
+        kid: Option<String>,
+        /// When the key stopped being usable
+        not_after: String,
+    },
     /// URI in token does not match expected URI.
     UriMismatch {
         /// URI in the token
@@ -142,6 +170,18 @@ pub enum AttestationError {
     },
 }
 
+/// Message for [`AttestationError::InvalidSignature`].
+///
+/// Held here rather than inline because it takes no arguments, and because an
+/// arm that is four lines of string literal buries the twenty arms around it.
+const INVALID_SIGNATURE: &str =
+    "token signature verification failed; token may have been tampered with";
+
+/// Message for [`AttestationError::RevocationUnavailable`], for the same reason.
+const REVOCATION_UNAVAILABLE: &str = "this verifier has no revocation source, so it cannot accept any token; supply one with \
+     verifier.with_revocation(), using Denylist for a real list or AcceptAll to declare that \
+     this deployment does not revoke";
+
 impl fmt::Display for AttestationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -149,17 +189,16 @@ impl fmt::Display for AttestationError {
                 write!(f, "missing required field '{field}' in attestation claims")
             }
             Self::InvalidTtl => write!(f, "TTL duration is invalid or out of range"),
-            Self::TokenExpired { expired_at } => write!(
-                f,
-                "token expired at {expired_at}; request a new attestation"
-            ),
+            Self::TokenExpired { expired_at } => {
+                write!(
+                    f,
+                    "token expired at {expired_at}; request a new attestation"
+                )
+            }
             Self::TokenNotYetValid { valid_from } => {
                 write!(f, "token not yet valid; valid from {valid_from}")
             }
-            Self::InvalidSignature => write!(
-                f,
-                "token signature verification failed; token may have been tampered with"
-            ),
+            Self::InvalidSignature => f.write_str(INVALID_SIGNATURE),
             Self::InvalidTokenFormat { reason } => write!(f, "invalid token format: {reason}"),
             Self::TokenTooLong { max, actual } => write!(
                 f,
@@ -186,21 +225,28 @@ impl fmt::Display for AttestationError {
                 f,
                 "issuer '{issuer}' is not in trusted roots; add it with verifier.add_trusted_root()"
             ),
-            Self::RevocationUnavailable => write!(
-                f,
-                "this verifier has no revocation source, so it cannot accept any token; \
-                 supply one with verifier.with_revocation(), using Denylist for a real list \
-                 or AcceptAll to declare that this deployment does not revoke"
-            ),
-            Self::TokenRevoked { jti } => write!(
-                f,
-                "token '{jti}' has been revoked by its issuer; request a new attestation"
-            ),
+            Self::RevocationUnavailable => f.write_str(REVOCATION_UNAVAILABLE),
+            Self::TokenRevoked { jti } => {
+                write!(
+                    f,
+                    "token '{jti}' has been revoked by its issuer; get a new one"
+                )
+            }
             Self::KeyRevoked { issuer } => write!(
                 f,
                 "the signing key for trust root '{issuer}' has been revoked, so every token \
                  it signed is refused; obtain the trust root's current key"
             ),
+            Self::KeyNotYetValid {
+                issuer,
+                kid,
+                not_before,
+            } => write_key_window(f, issuer, kid.as_deref(), "is not usable until", not_before),
+            Self::KeyExpired {
+                issuer,
+                kid,
+                not_after,
+            } => write_key_window(f, issuer, kid.as_deref(), "was retired at", not_after),
             Self::UriMismatch {
                 token_uri,
                 expected_uri,
@@ -236,6 +282,30 @@ impl fmt::Display for AttestationError {
             ),
         }
     }
+}
+
+/// Reports a signing key that is outside the window its trust root published.
+///
+/// Both ends of a key's window fail the same way and for the same reason, so
+/// they say the same thing, differing only in `boundary` (what the instant is)
+/// and `at` (when it is). Writing them once keeps the pair from drifting into
+/// two accounts of one situation.
+///
+/// A `kid` is optional in this crate's trust store, so an unnamed key still has
+/// to read as a phrase mid-sentence rather than as an empty gap.
+fn write_key_window(
+    f: &mut fmt::Formatter<'_>,
+    issuer: &str,
+    kid: Option<&str>,
+    boundary: &str,
+    at: &str,
+) -> fmt::Result {
+    let named = kid.map_or_else(|| "(unnamed)".to_string(), |kid| format!("'{kid}'"));
+    write!(
+        f,
+        "the key {named} that signed this token is published by trust root '{issuer}' but \
+         {boundary} {at}; obtain an attestation signed by a key that is current"
+    )
 }
 
 impl std::error::Error for AttestationError {}

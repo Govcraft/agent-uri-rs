@@ -51,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-attestation"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "agent-uri",
  "base64",
@@ -69,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-dht"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -103,7 +103,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-dht-libp2p"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",
@@ -120,7 +120,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-eval"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",

@@ -1,6 +1,5 @@
 //! Token verifier for validating attestations.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,6 +15,7 @@ use crate::claims::AttestationClaims;
 use crate::error::AttestationError;
 use crate::keys::VerifyingKey;
 use crate::revocation::RevocationCheck;
+use crate::trust::{KeyValidity, TrustStore, TrustedKey};
 use crate::verification;
 
 /// Verifies attestation tokens for agent URIs.
@@ -51,7 +51,7 @@ use crate::verification;
 /// ```
 #[derive(Debug, Clone)]
 pub struct Verifier {
-    trusted_roots: HashMap<String, VerifyingKey>,
+    trust: TrustStore,
     leeway: Duration,
     revocation: Option<Arc<dyn RevocationCheck>>,
 }
@@ -59,7 +59,7 @@ pub struct Verifier {
 impl Default for Verifier {
     fn default() -> Self {
         Self {
-            trusted_roots: HashMap::new(),
+            trust: TrustStore::new(),
             leeway: Self::DEFAULT_LEEWAY,
             revocation: None,
         }
@@ -165,26 +165,119 @@ impl Verifier {
         chrono::Duration::from_std(self.leeway).unwrap_or(chrono::Duration::MAX)
     }
 
-    /// Adds a trusted root and its public key.
+    /// Trusts a root with exactly this key, discarding any it already held.
+    ///
+    /// The single-key operation, and the one to reach for when a deployment
+    /// pins one key per root. Rotation needs two keys trusted at once, which is
+    /// [`Self::add_trusted_key`]; using this method for it would retire the
+    /// outgoing key the instant the incoming one arrived and reject every token
+    /// still in flight.
     ///
     /// # Arguments
     ///
     /// * `trust_root` - The trust root identifier (e.g., "acme.com")
     /// * `public_key` - The Ed25519 public key for this trust root
     pub fn add_trusted_root(&mut self, trust_root: impl Into<String>, public_key: VerifyingKey) {
-        self.trusted_roots.insert(trust_root.into(), public_key);
+        self.trust.set(trust_root, public_key);
+    }
+
+    /// Trusts one more key for a root, keeping the keys already held for it.
+    ///
+    /// This is what a rotation uses. Publish the incoming key alongside the
+    /// outgoing one, let the outgoing one's `not_after` cover the longest token
+    /// still in flight, and remove it afterwards with
+    /// [`Self::remove_trusted_key`].
+    ///
+    /// Adding is idempotent by `kid`, so re-reading a key document updates
+    /// windows rather than accumulating duplicates.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_uri_attestation::{SigningKey, TrustedKey, Verifier};
+    /// use chrono::{Duration, Utc};
+    ///
+    /// let outgoing = SigningKey::generate().verifying_key();
+    /// let incoming = SigningKey::generate().verifying_key();
+    ///
+    /// let mut verifier = Verifier::new();
+    /// verifier.add_trusted_key(
+    ///     "acme.com",
+    ///     TrustedKey::new(outgoing).with_id("key-2026").not_after(Utc::now() + Duration::hours(1)),
+    /// );
+    /// verifier.add_trusted_key("acme.com", TrustedKey::new(incoming).with_id("key-2027"));
+    ///
+    /// assert_eq!(verifier.trusted_key_count(), 2);
+    /// assert_eq!(verifier.trusted_root_count(), 1);
+    /// ```
+    pub fn add_trusted_key(&mut self, trust_root: impl Into<String>, key: impl Into<TrustedKey>) {
+        self.trust.add(trust_root, key);
+    }
+
+    /// Stops trusting a root entirely, returning how many keys were dropped.
+    ///
+    /// Returns 0 if the root was not trusted.
+    ///
+    /// Removal is not revocation. It stops *this* verifier honouring the root;
+    /// every other verifier holding a copy of the key carries on until told
+    /// otherwise, which is what [`RevocationCheck`](crate::RevocationCheck) is
+    /// for.
+    pub fn remove_trusted_root(&mut self, trust_root: &str) -> usize {
+        self.trust.remove_root(trust_root)
+    }
+
+    /// Stops trusting one key of a root, by its `kid`.
+    ///
+    /// Returns true if a key was removed. A root left with no keys stops being
+    /// trusted at all.
+    pub fn remove_trusted_key(&mut self, trust_root: &str, kid: &str) -> bool {
+        self.trust.remove_key(trust_root, kid)
     }
 
     /// Returns true if the given trust root is registered.
+    ///
+    /// Says only that keys are held for it. A root whose every key has passed
+    /// its `not_after` is still registered and verifies nothing; ask
+    /// [`TrustStore::has_active_key`] for that.
     #[must_use]
     pub fn has_trusted_root(&self, trust_root: &str) -> bool {
-        self.trusted_roots.contains_key(trust_root)
+        self.trust.contains_root(trust_root)
     }
 
     /// Returns the number of registered trusted roots.
     #[must_use]
     pub fn trusted_root_count(&self) -> usize {
-        self.trusted_roots.len()
+        self.trust.root_count()
+    }
+
+    /// Returns the number of keys held across every trusted root.
+    ///
+    /// This, rather than the root count, is what bounds the signature checks an
+    /// unverifiable token costs.
+    #[must_use]
+    pub fn trusted_key_count(&self) -> usize {
+        self.trust.key_count()
+    }
+
+    /// The keys this verifier trusts.
+    #[must_use]
+    pub fn trust_store(&self) -> &TrustStore {
+        &self.trust
+    }
+
+    /// Replaces the keys this verifier trusts.
+    ///
+    /// The bulk operation, for a caller that assembles a store from a fetched
+    /// key document and installs it whole.
+    pub fn set_trust_store(&mut self, trust: TrustStore) {
+        self.trust = trust;
+    }
+
+    /// [`Self::set_trust_store`], as a builder step.
+    #[must_use]
+    pub fn with_trust_store(mut self, trust: TrustStore) -> Self {
+        self.trust = trust;
+        self
     }
 
     /// Verifies an attestation token and returns its claims.
@@ -255,7 +348,7 @@ impl Verifier {
         // to be enforced before anything is decoded.
         verification::check_token_length(token)?;
 
-        if self.trusted_roots.is_empty() {
+        if self.trust.is_empty() {
             return Err(AttestationError::UntrustedIssuer {
                 issuer: "unknown".to_string(),
             });
@@ -272,22 +365,23 @@ impl Verifier {
             return Err(AttestationError::RevocationUnavailable);
         };
 
-        // Try each trusted key until one works
-        let (issuer, claims) = self.extract_and_verify(token)?;
-
-        // Validate issuer is trusted (already verified by finding the key)
-        let Some(signing_key) = self.trusted_roots.get(&issuer) else {
-            return Err(AttestationError::UntrustedIssuer { issuer });
-        };
+        // Try each trusted key until one works, and reject anything signed by a
+        // key that is outside the window its trust root published for it.
+        let (issuer, trusted, claims) = self.extract_and_verify(token)?;
 
         // Revocation, on both axes, and only now: `jti` and `iss` come out of
         // the token, so believing either before the signature was checked would
         // be taking the attacker's word for which token this is. An attacker
         // who could revoke by supplying claims could also un-revoke by
         // supplying different ones.
-        if revocation.is_key_revoked(signing_key) {
+        //
+        // The key checked is the one that actually signed this token, not
+        // whichever key the root happens to be rotating to: with several keys
+        // trusted at once, revoking one must refuse exactly the tokens it
+        // signed and leave its siblings working.
+        if revocation.is_key_revoked(trusted.key()) {
             return Err(AttestationError::KeyRevoked {
-                issuer: issuer.clone(),
+                issuer: issuer.to_string(),
             });
         }
         if revocation.is_token_revoked(&claims.jti) {
@@ -487,28 +581,65 @@ impl Verifier {
     }
 
     /// Internal method to extract issuer and verify signature.
+    ///
+    /// A token names its issuer in a claim, and a claim is worthless until the
+    /// signature covering it has been checked, so the key cannot be looked up
+    /// by name — it has to be found by trying keys until one verifies.
+    ///
+    /// Active keys are tried first, and only if none of them verifies is the
+    /// token tried against the keys that are outside their windows. That
+    /// ordering is what makes the second pass safe: it can never accept a token
+    /// an active key would have accepted, and it exists solely so that a token
+    /// signed by a retired key is reported as *retired* rather than as an
+    /// indistinguishable bad signature. Total cost is still one verification
+    /// per key held.
     fn extract_and_verify(
         &self,
         token: &str,
-    ) -> Result<(String, AttestationClaims), AttestationError> {
-        // Try each trusted key until one works
+    ) -> Result<(&str, &TrustedKey, AttestationClaims), AttestationError> {
+        let now = Utc::now();
+        let leeway = self.leeway_chrono();
         let mut last_error = None;
 
-        for (trust_root, verifying_key) in &self.trusted_roots {
-            match try_verify_with_key(token, verifying_key, self.leeway_chrono()) {
-                Ok(claims) => {
-                    // Verify the issuer matches the key we used
-                    if claims.iss == *trust_root {
-                        return Ok((trust_root.clone(), claims));
-                    }
-                    // Issuer mismatch - this key signed it but claims different issuer
-                    last_error = Some(AttestationError::TrustRootMismatch {
-                        token_root: claims.iss.clone(),
-                        expected_root: trust_root.clone(),
-                    });
+        for trying_active_keys in [true, false] {
+            for (trust_root, trusted) in self.trust.iter() {
+                let validity = trusted.validity_at(now, leeway);
+                if validity.is_active() != trying_active_keys {
+                    continue;
                 }
-                Err(e) => {
-                    last_error = Some(e);
+
+                match try_verify_with_key(token, trusted.key(), leeway) {
+                    Ok(claims) => {
+                        // The key signed it, but does the token claim the root
+                        // this key is held under?
+                        if claims.iss != *trust_root {
+                            last_error = Some(AttestationError::TrustRootMismatch {
+                                token_root: claims.iss.clone(),
+                                expected_root: trust_root.to_string(),
+                            });
+                            continue;
+                        }
+                        return match validity {
+                            KeyValidity::Active => Ok((trust_root, trusted, claims)),
+                            KeyValidity::NotYetValid { not_before } => {
+                                Err(AttestationError::KeyNotYetValid {
+                                    issuer: trust_root.to_string(),
+                                    kid: trusted.id().map(ToString::to_string),
+                                    not_before: not_before.to_rfc3339(),
+                                })
+                            }
+                            KeyValidity::Expired { not_after } => {
+                                Err(AttestationError::KeyExpired {
+                                    issuer: trust_root.to_string(),
+                                    kid: trusted.id().map(ToString::to_string),
+                                    not_after: not_after.to_rfc3339(),
+                                })
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        last_error = Some(e);
+                    }
                 }
             }
         }
@@ -1022,6 +1153,243 @@ mod tests {
         assert_eq!(verifier.trusted_root_count(), 1);
         assert!(verifier.has_trusted_root("acme.com"));
         assert!(!verifier.has_trusted_root("other.com"));
+    }
+
+    // -- Key rotation -------------------------------------------------------
+    //
+    // These sit below the `issue_raw` / `claims_valid_for` helpers they use;
+    // Rust does not mind, and keeping them together reads better than moving
+    // the helpers up past the tests that came first.
+
+    /// A token that is inside its own validity window, signed by `signing_key`.
+    fn live_token(signing_key: &SigningKey) -> String {
+        let now = Utc::now();
+        issue_raw(
+            signing_key,
+            &claims_valid_for(
+                now - chrono::Duration::minutes(1),
+                now + chrono::Duration::hours(1),
+            ),
+        )
+    }
+
+    #[test]
+    fn a_root_can_hold_two_keys_and_tokens_from_both_verify() {
+        // The whole point of rotation: for as long as the overlap lasts, a
+        // token signed by either key is honoured, so nothing in flight breaks
+        // at the changeover.
+        let outgoing = SigningKey::generate();
+        let incoming = SigningKey::generate();
+
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(outgoing.verifying_key()).with_id("key-2026"),
+        );
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(incoming.verifying_key()).with_id("key-2027"),
+        );
+
+        assert_eq!(verifier.trusted_root_count(), 1);
+        assert_eq!(verifier.trusted_key_count(), 2);
+        assert!(verifier.verify(&live_token(&outgoing)).is_ok());
+        assert!(verifier.verify(&live_token(&incoming)).is_ok());
+    }
+
+    #[test]
+    fn add_trusted_root_still_replaces_rather_than_accumulates() {
+        // Contract inherited from when a root held exactly one key. A caller
+        // reaching for this method to *change* a key must not be left silently
+        // trusting the old one as well.
+        let old = SigningKey::generate();
+        let new = SigningKey::generate();
+
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
+        verifier.add_trusted_root("acme.com", old.verifying_key());
+        verifier.add_trusted_root("acme.com", new.verifying_key());
+
+        assert_eq!(verifier.trusted_key_count(), 1);
+        assert!(verifier.verify(&live_token(&new)).is_ok());
+        assert_eq!(
+            verifier.verify(&live_token(&old)),
+            Err(AttestationError::InvalidSignature)
+        );
+    }
+
+    #[test]
+    fn a_key_past_its_window_is_refused_even_though_it_signed_the_token() {
+        // The window is judged at verification time, not at the token's `iat`.
+        // This token was minted while the key was still current and is inside
+        // its own validity window; the key has since been retired, and that is
+        // enough. Judging by `iat` instead would make `not_after` advisory.
+        let retired = SigningKey::generate();
+        let token = live_token(&retired);
+
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
+        let not_after = Utc::now() - chrono::Duration::minutes(30);
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(retired.verifying_key())
+                .with_id("key-2026")
+                .not_after(not_after),
+        );
+
+        let error = verifier
+            .verify(&token)
+            .expect_err("a retired key must not verify");
+
+        assert!(
+            matches!(
+                &error,
+                AttestationError::KeyExpired { issuer, kid, .. }
+                    if issuer == "acme.com" && kid.as_deref() == Some("key-2026")
+            ),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_key_before_its_window_is_refused_and_says_when_it_starts() {
+        let early = SigningKey::generate();
+        let token = live_token(&early);
+
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(early.verifying_key())
+                .with_id("key-2028")
+                .not_before(Utc::now() + chrono::Duration::days(365)),
+        );
+
+        let error = verifier
+            .verify(&token)
+            .expect_err("a key that has not started must not verify");
+
+        assert!(
+            matches!(
+                &error,
+                AttestationError::KeyNotYetValid { issuer, kid, .. }
+                    if issuer == "acme.com" && kid.as_deref() == Some("key-2028")
+            ),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_retired_key_does_not_shadow_the_active_one_beside_it() {
+        // Both keys are held; the token was signed by the current one. The
+        // retired sibling must not turn a good token into a rejection.
+        let retired = SigningKey::generate();
+        let current = SigningKey::generate();
+
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(retired.verifying_key())
+                .with_id("old")
+                .not_after(Utc::now() - chrono::Duration::hours(1)),
+        );
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(current.verifying_key()).with_id("new"),
+        );
+
+        assert!(verifier.verify(&live_token(&current)).is_ok());
+    }
+
+    #[test]
+    fn removing_a_key_stops_the_tokens_it_signed() {
+        let outgoing = SigningKey::generate();
+        let incoming = SigningKey::generate();
+
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(outgoing.verifying_key()).with_id("key-2026"),
+        );
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(incoming.verifying_key()).with_id("key-2027"),
+        );
+
+        assert!(verifier.remove_trusted_key("acme.com", "key-2026"));
+
+        assert_eq!(
+            verifier.verify(&live_token(&outgoing)),
+            Err(AttestationError::InvalidSignature)
+        );
+        assert!(
+            verifier.verify(&live_token(&incoming)).is_ok(),
+            "removing one key must leave its siblings working"
+        );
+    }
+
+    #[test]
+    fn removing_a_root_stops_every_key_under_it() {
+        let first = SigningKey::generate();
+        let second = SigningKey::generate();
+
+        let mut verifier = Verifier::new().with_revocation(AcceptAll);
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(first.verifying_key()).with_id("a"),
+        );
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(second.verifying_key()).with_id("b"),
+        );
+
+        assert_eq!(verifier.remove_trusted_root("acme.com"), 2);
+        assert!(!verifier.has_trusted_root("acme.com"));
+        assert_eq!(
+            verifier.verify(&live_token(&first)),
+            Err(AttestationError::UntrustedIssuer {
+                issuer: "unknown".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn revoking_one_of_a_roots_keys_leaves_the_other_working() {
+        // Revocation is checked against the key that actually signed the
+        // token. With one key per root that distinction was invisible; with
+        // two it decides whether revoking the compromised half of a rotation
+        // takes the good half down with it.
+        let compromised = SigningKey::generate();
+        let sound = SigningKey::generate();
+
+        let mut verifier = Verifier::new()
+            .with_revocation(Denylist::new().revoke_key(&compromised.verifying_key()));
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(compromised.verifying_key()).with_id("leaked"),
+        );
+        verifier.add_trusted_key(
+            "acme.com",
+            TrustedKey::new(sound.verifying_key()).with_id("sound"),
+        );
+
+        assert_eq!(
+            verifier.verify(&live_token(&compromised)),
+            Err(AttestationError::KeyRevoked {
+                issuer: "acme.com".to_string()
+            })
+        );
+        assert!(verifier.verify(&live_token(&sound)).is_ok());
+    }
+
+    #[test]
+    fn a_trust_store_can_be_installed_whole() {
+        let key = SigningKey::generate();
+        let store = TrustStore::new().with("acme.com", TrustedKey::new(key.verifying_key()));
+
+        let verifier = Verifier::new()
+            .with_revocation(AcceptAll)
+            .with_trust_store(store);
+
+        assert_eq!(verifier.trust_store().key_count(), 1);
+        assert!(verifier.verify(&live_token(&key)).is_ok());
     }
 
     /// Corrupts a token's payload so that its decoded bytes definitely change.
