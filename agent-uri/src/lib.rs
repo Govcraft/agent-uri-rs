@@ -31,6 +31,11 @@
 //! use agent_uri::AgentId;
 //! let id = AgentId::new("llm_chat");
 //! println!("New agent: {}", id);
+//!
+//! // `new` sanitizes a prefix the grammar refuses. Where the prefix did not
+//! // come from your own source, use `try_new`, which reports it instead.
+//! assert_eq!(AgentId::new("LLM Chat!").prefix().as_str(), "llmchat");
+//! assert!(AgentId::try_new("LLM Chat!").is_err());
 //! ```
 //!
 //! # Builder Pattern

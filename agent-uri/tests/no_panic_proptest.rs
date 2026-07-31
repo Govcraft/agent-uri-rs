@@ -225,6 +225,25 @@ proptest! {
         }
     }
 
+    /// `AgentId::new` takes a prefix and sanitizes rather than refuses, which
+    /// only holds up if sanitizing is total: every string, however hostile, has
+    /// to leave a prefix the grammar accepts. Anything else is the panic of
+    /// issue #28 relocated into an `unreachable!`.
+    #[test]
+    fn agent_id_new_never_panics(prefix in hostile_input()) {
+        let minted = AgentId::new(&prefix);
+
+        // The prefix it settled on is one the crate itself will read back.
+        prop_assert!(AgentId::parse(&minted.to_string()).is_ok());
+        prop_assert!(AgentId::try_new(minted.prefix().as_str()).is_ok());
+
+        // Sanitizing is the identity on anything already valid: `new` may
+        // rewrite a prefix, but never one that was correct to begin with.
+        if let Ok(strict) = AgentId::try_new(&prefix) {
+            prop_assert_eq!(minted.prefix(), strict.prefix());
+        }
+    }
+
     /// Two hostile inputs that both parse must compare and order without
     /// panicking, and must do so consistently.
     #[test]

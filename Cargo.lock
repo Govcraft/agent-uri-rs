@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "criterion 0.5.1",
  "mti",
