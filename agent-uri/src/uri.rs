@@ -50,6 +50,70 @@ use crate::trust_root::TrustRoot;
 /// assert_eq!(uri.query().version(), Some("2.0"));
 /// assert_eq!(uri.fragment().map(|f| f.as_str()), Some("summarization"));
 /// ```
+///
+/// # Identity
+///
+/// **Two `AgentUri` values are equal when they name the same agent, which is a
+/// weaker condition than being the same string.** Equality, ordering, and
+/// hashing compare the trust root, the capability path, and the agent ID —
+/// the canonical form. The query and the fragment are excluded: a query
+/// carries resolution hints and a fragment names a sub-capability, and neither
+/// changes which agent is being addressed. This is [Section 5.2 of the
+/// specification][spec], and it is what makes `?version=2.0` a request about an
+/// agent rather than a different agent.
+///
+/// A value that is not part of identity is still part of the string.
+/// [`Display`](std::fmt::Display), [`as_str`](Self::as_str), and serde all
+/// preserve the query and the fragment exactly as parsed. Only
+/// [`canonical`](Self::canonical) drops them.
+///
+/// ```
+/// use agent_uri::AgentUri;
+///
+/// let plain = AgentUri::parse(
+///     "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q"
+/// ).unwrap();
+/// let hinted = AgentUri::parse(
+///     "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q?ttl=300#invoice"
+/// ).unwrap();
+///
+/// // Equal as identities...
+/// assert_eq!(plain, hinted);
+/// assert_eq!(plain.canonical(), hinted.canonical());
+///
+/// // ...and not as strings.
+/// assert_ne!(plain.as_str(), hinted.as_str());
+/// assert_eq!(hinted.query().ttl(), Some(300));
+/// assert_eq!(hinted.fragment().map(|f| f.as_str()), Some("invoice"));
+/// ```
+///
+/// ## What this means for collections
+///
+/// A `HashSet` or `HashMap` keyed by `AgentUri` deduplicates by identity, so
+/// inserting a decorated URI where an undecorated one is already present keeps
+/// the first and discards the second — including its query and fragment. That
+/// is the intent for caches, registries, and DHT keys, where one agent must
+/// have one entry. It is a defect if the query is data you meant to keep, so
+/// key those by [`as_str`](Self::as_str) instead.
+///
+/// ```
+/// use std::collections::HashSet;
+/// use agent_uri::AgentUri;
+///
+/// let plain = AgentUri::parse(
+///     "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q"
+/// ).unwrap();
+/// let hinted = AgentUri::parse(
+///     "agent://acme.com/workflow/approval/rule_01h455vb4pex5vsknk084sn02q?ttl=300"
+/// ).unwrap();
+///
+/// let mut agents = HashSet::new();
+/// assert!(agents.insert(plain));
+/// assert!(!agents.insert(hinted)); // same agent, so not a second entry
+/// assert_eq!(agents.len(), 1);
+/// ```
+///
+/// [spec]: https://github.com/Govcraft/agent-uri-rs/blob/main/SPECIFICATION.md#52-comparison-algorithm
 #[derive(Debug, Clone)]
 pub struct AgentUri {
     trust_root: TrustRoot,
@@ -61,6 +125,11 @@ pub struct AgentUri {
     normalized: String,
 }
 
+/// Identity equality: see the `Identity` section on [`AgentUri`].
+///
+/// The three fields compared here are the three fields [`Hash`] hashes and the
+/// three fields [`Ord`] orders by. All three impls sit together so that a
+/// change to one is a visible omission in the others.
 impl PartialEq for AgentUri {
     fn eq(&self, other: &Self) -> bool {
         self.trust_root == other.trust_root
@@ -70,6 +139,17 @@ impl PartialEq for AgentUri {
 }
 
 impl Eq for AgentUri {}
+
+/// Hashes exactly what [`PartialEq`] compares, as the `Hash`/`Eq` contract
+/// requires: equal URIs hash equally, so a decorated URI and its plain form
+/// land in the same bucket rather than in two.
+impl std::hash::Hash for AgentUri {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.trust_root.hash(state);
+        self.capability_path.hash(state);
+        self.agent_id.hash(state);
+    }
+}
 
 impl AgentUri {
     /// Parses an agent URI from a string.
@@ -787,6 +867,73 @@ mod tests {
 
         assert_eq!(base, decorated);
         assert_eq!(base.cmp(&decorated), Ordering::Equal);
+        assert_eq!(hash_of(&base), hash_of(&decorated));
+    }
+
+    fn hash_of(uri: &AgentUri) -> u64 {
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        uri.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn equal_uris_hash_equally_and_key_one_entry() {
+        use std::collections::HashSet;
+
+        let base =
+            AgentUri::parse("agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q").unwrap();
+        let decorated =
+            AgentUri::parse("agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q?ttl=300")
+                .unwrap();
+
+        let mut set = HashSet::new();
+        assert!(set.insert(base.clone()));
+        assert!(!set.insert(decorated));
+        assert!(set.contains(&base));
+        assert_eq!(set.len(), 1);
+    }
+
+    #[test]
+    fn different_agents_do_not_share_a_hash_bucket_entry() {
+        use std::collections::HashSet;
+
+        let one =
+            AgentUri::parse("agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q").unwrap();
+        let other =
+            AgentUri::parse("agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02r").unwrap();
+        let elsewhere =
+            AgentUri::parse("agent://other.com/workflow/rule_01h455vb4pex5vsknk084sn02q").unwrap();
+
+        assert_ne!(one, other);
+        assert_ne!(one, elsewhere);
+
+        let set: HashSet<_> = [one, other, elsewhere].into_iter().collect();
+        assert_eq!(set.len(), 3);
+    }
+
+    #[test]
+    fn hashing_ignores_exactly_what_equality_ignores() {
+        // If a field is added to one impl and not the other, the Hash/Eq
+        // contract breaks silently. This checks the pair rather than either.
+        let base =
+            AgentUri::parse("agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q").unwrap();
+
+        for variant in [
+            "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q?ttl=300",
+            "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q#invoice",
+            "agent://acme.com/workflow/rule_01h455vb4pex5vsknk084sn02q?v=1&ttl=9#x",
+            "agent://ACME.COM/workflow/rule_01h455vb4pex5vsknk084sn02q",
+        ] {
+            let variant = AgentUri::parse(variant).unwrap();
+            assert_eq!(base, variant, "{variant} should be the same identity");
+            assert_eq!(
+                hash_of(&base),
+                hash_of(&variant),
+                "{variant} is equal, so it must hash equally"
+            );
+        }
     }
 
     #[test]
