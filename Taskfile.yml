@@ -51,17 +51,33 @@ tasks:
       - cargo kani --workspace
 
   # Fuzzing
+  #
+  # libFuzzer writes what it finds to the *first* corpus directory it is given,
+  # so the working corpus (gitignored) is named first and the checked-in seeds
+  # second, where they are read and never written.
   fuzz:
-    desc: Fuzz every parser entry point for a minute each (needs nightly + cargo-fuzz)
+    desc: Fuzz every parser entry point and the verifier for a minute each (needs nightly + cargo-fuzz)
+    cmds:
+      - task: fuzz-parsers
+      - task: fuzz-verifier
+
+  fuzz-parsers:
+    desc: Fuzz every parser entry point for a minute each
     dir: agent-uri
     cmds:
-      - for target in parse_uri parse_trust_root parse_query parse_fragment parse_agent_id; do cargo +nightly fuzz run "$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
+      - for target in parse_uri parse_trust_root parse_query parse_fragment parse_agent_id; do cargo +nightly fuzz run "$target" "fuzz/corpus/$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
+
+  fuzz-verifier:
+    desc: Fuzz the attestation verifier for a minute per target
+    dir: agent-uri-attestation
+    cmds:
+      - for target in verify_token verify_signed_claims; do cargo +nightly fuzz run "$target" "fuzz/corpus/$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
 
   fuzz-build:
     desc: Build the fuzz targets without running them
-    dir: agent-uri
     cmds:
-      - cargo +nightly fuzz build
+      - cargo +nightly fuzz build --fuzz-dir agent-uri/fuzz
+      - cargo +nightly fuzz build --fuzz-dir agent-uri-attestation/fuzz
 
   # Memory safety checks
   miri:
