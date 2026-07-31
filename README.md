@@ -21,6 +21,10 @@ Add to your `Cargo.toml`:
 agent-uri = "0.6"
 ```
 
+Every crate here builds on Rust **1.91** or newer, declared as
+`rust-version` and checked by CI against that exact toolchain. Raising it is a
+minor release.
+
 Parse an existing URI:
 
 ```rust
@@ -361,6 +365,7 @@ suite, and doctests. Beyond that:
 | `task kani` | Kani model-checking proofs |
 | `task miri` | Miri, for undefined behavior |
 | `task bench` | Criterion benchmarks |
+| `task msrv` | Builds on the oldest supported toolchain, read from the manifest |
 
 The parser takes untrusted input, so a panic in it is a denial of service in
 every service that parses a URI. Two harnesses guard that: adversarial property

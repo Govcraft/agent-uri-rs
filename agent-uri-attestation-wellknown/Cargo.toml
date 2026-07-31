@@ -2,6 +2,7 @@
 name = "agent-uri-attestation-wellknown"
 version = "0.2.0"
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "Well-known key discovery for agent-uri attestation (specification 7.2)"
 repository.workspace = true

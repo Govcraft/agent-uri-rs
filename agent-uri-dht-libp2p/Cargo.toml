@@ -2,6 +2,7 @@
 name = "agent-uri-dht-libp2p"
 version = "0.5.0"
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "Kademlia DHT backend for agent:// discovery, over libp2p-kad"
 repository.workspace = true

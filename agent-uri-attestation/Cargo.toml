@@ -2,6 +2,7 @@
 name = "agent-uri-attestation"
 version = "0.8.0"
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "PASETO v4.public attestation for agent-uri"
 repository.workspace = true
