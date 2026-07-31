@@ -1,0 +1,20 @@
+[package]
+name = "agent-uri-attestation-wellknown"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Well-known key discovery for agent-uri attestation (specification 7.2)"
+keywords = ["agent", "uri", "attestation", "discovery", "ed25519"]
+categories = ["authentication", "cryptography", "web-programming"]
+
+[dependencies]
+agent-uri = { version = "0.5.6", path = "../agent-uri" }
+agent-uri-attestation = { version = "0.7.0", path = "../agent-uri-attestation" }
+chrono = "0.4.45"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider", "http2", "charset"] }
+rustls = { version = "0.23.43", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+webpki-roots = "1.0.9"
+
+[dev-dependencies]
+serde_json = "1.0.151"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net"] }

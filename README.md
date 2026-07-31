@@ -70,20 +70,21 @@ The typestate builder catches missing components at compile time, not runtime.
 │  construct URIs   │ │ verify identity   │ │ by capability     │
 └───────────────────┘ └───────────────────┘ └───────────────────┘
          ▲                     │                     │
-         │                     │                     ▼
-         │                     │         ┌───────────────────┐
-         │                     │         │ agent-uri-dht-    │
-         │                     │         │ libp2p            │
-         │                     │         │                   │
-         │                     │         │ the same, over a  │
-         │                     │         │ Kademlia overlay  │
-         │                     │         └───────────────────┘
+         │                     ▼                     ▼
+         │         ┌───────────────────┐ ┌───────────────────┐
+         │         │ agent-uri-        │ │ agent-uri-dht-    │
+         │         │ attestation-      │ │ libp2p            │
+         │         │ wellknown         │ │                   │
+         │         │                   │ │ the same, over a  │
+         │         │ fetch a root's    │ │ Kademlia overlay  │
+         │         │ published keys    │ │                   │
+         │         └───────────────────┘ └───────────────────┘
          │                     │                     │
          └─────────────────────┴─────────────────────┘
                          depends on
 ```
 
-Use `agent-uri` alone for parsing and validation. Add `agent-uri-attestation` when you need cryptographic proof of identity. Add `agent-uri-dht` when you need to discover agents by capability, and `agent-uri-dht-libp2p` when that discovery has to cross a network rather than a process.
+Use `agent-uri` alone for parsing and validation. Add `agent-uri-attestation` when you need cryptographic proof of identity, and `agent-uri-attestation-wellknown` when the keys to check it against should be fetched from the trust root rather than configured by hand. Add `agent-uri-dht` when you need to discover agents by capability, and `agent-uri-dht-libp2p` when that discovery has to cross a network rather than a process.
 
 ## Crates
 
@@ -179,6 +180,32 @@ verifier.remove_trusted_key("acme.com", "key-2026");
 ```
 
 A key's window is checked against the current time, not against the token's `iat`, so a retired key stops working the moment it retires rather than lingering for as long as its last tokens live.
+
+### agent-uri-attestation-wellknown
+
+**Gets a trust root's keys from the trust root.**
+
+```toml
+[dependencies]
+agent-uri-attestation-wellknown = "0.1"
+```
+
+```rust,no_run
+use agent_uri_attestation_wellknown::KeyDiscovery;
+
+# async fn example(token: &str) -> Result<(), Box<dyn std::error::Error>> {
+let discovery = KeyDiscovery::new();
+
+// No key was exchanged with acme.com beforehand.
+let verifier = discovery.verifier_for("acme.com").await?;
+let claims = verifier.verify(token)?;
+# Ok(())
+# }
+```
+
+Specification §7.2 has every trust root publish its keys at `https://{trust-root}/.well-known/agent-keys.json`. This crate fetches that document, caches it for a token lifetime, and turns it into a verifier holding the root's current keys and its revocation list. It is a separate crate because an HTTP client with a TLS stack is a large dependency and the attestation crate is useful without one; reading the document is in `agent-uri-attestation` as `KeyDocument`, and needs no network.
+
+Discovery establishes which keys an authority stands behind. It does not establish that the authority deserves to be trusted, which is a deployment decision and always was.
 
 ### agent-uri-dht
 
