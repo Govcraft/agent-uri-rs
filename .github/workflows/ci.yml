@@ -215,6 +215,12 @@ jobs:
   # which takes no symbolic input at all — until the runner died under it,
   # having proved two of the nineteen (issue #117). Split, an expensive
   # harness costs only its own job, and the report names it.
+  #
+  # What the split then showed: nine of the thirteen attestation harnesses
+  # prove in minutes, and all six agent-uri harnesses do not converge — four of
+  # them by exhausting the runner in about six minutes, which is to say before
+  # any job timeout can fire. Until they are bounded, read a red job here as an
+  # unproved property rather than a refuted one.
   kani:
     name: kani (${{ matrix.harness }})
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -392,10 +398,17 @@ jobs:
       # "agent://". libFuzzer writes what it finds to the *first* corpus
       # directory, so the working corpus is named first and the checked-in seeds
       # second, where they are read and never written.
+      #
+      # `--target` is not redundant. cargo-fuzz defaults to the triple it was
+      # itself built for, and the binary install-action ships is linked against
+      # musl, so without this it builds for x86_64-unknown-linux-musl and stops
+      # at "sanitizer is incompatible with statically linked libc". Naming the
+      # host triple keeps that a property of how the tool was packaged rather
+      # than of what gets fuzzed.
       - name: Fuzz ${{ matrix.target }}
         working-directory: ${{ matrix.crate }}
         run: |
-          cargo fuzz run ${{ matrix.target }} \
+          cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} \
             fuzz/corpus/${{ matrix.target }} fuzz/seeds/${{ matrix.target }} \
             -- -max_total_time=300 -rss_limit_mb=4096
       - name: Upload crash artifacts
