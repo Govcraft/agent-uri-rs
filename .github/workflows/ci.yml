@@ -93,7 +93,9 @@ jobs:
         with:
           key: test
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
       - name: Run tests
         run: cargo nextest run --workspace --all-features
       # Nextest does not execute doctests.
@@ -180,9 +182,13 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-deny
-        uses: taiki-e/install-action@cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
       - name: Install cargo-audit
-        uses: taiki-e/install-action@cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
       # Advisories, licenses, duplicate versions, and crate sources.
       # Policy and its documented exceptions live in deny.toml.
       - name: cargo-deny
@@ -200,10 +206,65 @@ jobs:
   #
   # Weekly and on demand, not per-PR: a model checker exhausts a state space,
   # and that takes minutes per harness.
+  #
+  # One harness per job, rather than `cargo kani -p agent-uri
+  # -p agent-uri-attestation` in one. A single command reports whichever
+  # harness it reached first and abandons the rest, and the cost of a bounded
+  # model check is not predictable from reading the harness: the first run of
+  # this job spent twenty-two minutes inside `builder_missing_issuer_errors` —
+  # which takes no symbolic input at all — until the runner died under it,
+  # having proved two of the nineteen (issue #117). Split, an expensive
+  # harness costs only its own job, and the report names it.
   kani:
-    name: kani
+    name: kani (${{ matrix.harness }})
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # A bound the model checker cannot talk its way past. Without one, a
+    # harness that will not converge runs until the runner is killed, and the
+    # failure it reports is about the runner rather than about the proof.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: agent-uri
+            harness: kani_impls::proof_parse_roundtrip
+          - crate: agent-uri
+            harness: kani_impls::proof_canonical_strips_query_fragment
+          - crate: agent-uri
+            harness: kani_impls::proof_starts_with_reflexive
+          - crate: agent-uri
+            harness: kani_impls::proof_starts_with_transitive
+          - crate: agent-uri
+            harness: kani_impls::proof_from_segments_equivalent_to_parse
+          - crate: agent-uri
+            harness: kani_impls::proof_try_from_strs_equivalent
+          - crate: agent-uri-attestation
+            harness: proofs::issuer_proofs::validate_issuer_never_panics
+          - crate: agent-uri-attestation
+            harness: proofs::issuer_proofs::matching_issuers_succeed
+          - crate: agent-uri-attestation
+            harness: proofs::issuer_proofs::issuer_validation_symmetry
+          - crate: agent-uri-attestation
+            harness: proofs::subject_proofs::validate_subject_never_panics
+          - crate: agent-uri-attestation
+            harness: proofs::subject_proofs::matching_subjects_succeed
+          - crate: agent-uri-attestation
+            harness: proofs::subject_proofs::subject_validation_deterministic
+          - crate: agent-uri-attestation
+            harness: proofs::capability_proofs::empty_capabilities_never_panic
+          - crate: agent-uri-attestation
+            harness: proofs::capability_proofs::exact_match_is_covered
+          - crate: agent-uri-attestation
+            harness: proofs::capability_proofs::capability_covers_deterministic
+          - crate: agent-uri-attestation
+            harness: proofs::capability_proofs::prefix_covers_child
+          - crate: agent-uri-attestation
+            harness: proofs::claims_proofs::builder_missing_uri_errors
+          - crate: agent-uri-attestation
+            harness: proofs::claims_proofs::builder_missing_issuer_errors
+          - crate: agent-uri-attestation
+            harness: proofs::claims_proofs::builder_construction_never_panics
     env:
       # Pinned so a run is reproducible and a Kani release cannot turn a green
       # week red on its own. Bump deliberately.
@@ -216,24 +277,30 @@ jobs:
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
-          key: kani
-      # `cargo kani setup` downloads a toolchain and a solver into ~/.kani.
-      # Swatinem's cache does not reach outside the cargo directories, so this
-      # is cached separately, keyed on the version that produced it.
+          key: kani-${{ matrix.crate }}
+      # `cargo kani setup` downloads a toolchain and a solver into ~/.kani, and
+      # `cargo install` puts the driver in ~/.cargo/bin. Swatinem's cache
+      # reaches neither, so both are cached here, keyed on the version that
+      # produced them. Every job in the matrix would otherwise build the
+      # verifier from source to run one proof.
       - name: Cache the Kani toolchain
         uses: actions/cache@v4
         with:
-          path: ~/.kani
+          path: |
+            ~/.kani
+            ~/.cargo/bin/kani
+            ~/.cargo/bin/cargo-kani
           key: kani-toolchain-${{ env.KANI_VERSION }}
+      # Both commands are no-ops once the cache is warm: `cargo install`
+      # reports the version already installed, and `cargo kani setup` keeps
+      # what it finds. Running them unconditionally means a cache that
+      # restores wrong is repaired rather than fatal.
       - name: Install Kani
         run: |
           cargo install --locked "kani-verifier@${KANI_VERSION}"
           cargo kani setup
-      # Only the two crates that carry harnesses. `--workspace` would put the
-      # model checker to work compiling the CLI, the evaluation harness, and
-      # libp2p to prove nothing.
-      - name: Run the proofs
-        run: cargo kani -p agent-uri -p agent-uri-attestation
+      - name: Prove ${{ matrix.harness }}
+        run: cargo kani -p ${{ matrix.crate }} --harness ${{ matrix.harness }}
 
   # Miri interprets the code and reports undefined behaviour: an out-of-bounds
   # read, a dangling reference, a violated aliasing rule. This workspace is
@@ -311,8 +378,15 @@ jobs:
         with:
           key: fuzz-${{ matrix.target }}
           workspaces: ${{ matrix.crate }}/fuzz
+      # Named through `tool:` rather than through an `@cargo-fuzz` ref. The
+      # per-tool refs are branches, and an abandoned one installs nothing while
+      # still reporting success: `@cargo-fuzz` sat at a 2024 commit that leaves
+      # the tool unset, so every target here failed with "no such command:
+      # fuzz" after a green install step (issue #117).
       - name: Install cargo-fuzz
-        uses: taiki-e/install-action@cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
       # Seeds start the run from inputs that already reach past the scheme, so
       # the budget is spent on the parser rather than on rediscovering
       # "agent://". libFuzzer writes what it finds to the *first* corpus

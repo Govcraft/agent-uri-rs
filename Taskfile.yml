@@ -54,8 +54,24 @@ tasks:
       #   cargo install --locked kani-verifier && cargo kani setup
       #
       # Only the two crates that carry harnesses; the CI `kani` job runs the
-      # same set weekly.
+      # same set weekly, one harness per job.
+      #
+      # Run this one on a machine you are willing to lose. The cost of a
+      # bounded model check is not predictable from reading the harness, and
+      # at least one here does not converge: on a CI runner it consumed the
+      # machine after twenty-two minutes (issue #117). Locally that arrives as
+      # the OOM killer taking whatever else is running. To check a single
+      # harness instead, which is the safe way to work:
+      #
+      #   task kani:harness -- proofs::issuer_proofs::matching_issuers_succeed
       - cargo kani -p agent-uri -p agent-uri-attestation
+
+  kani:harness:
+    desc: Run one Kani proof harness by name
+    cmds:
+      # Kani resolves the harness itself, so the crate does not have to be
+      # named. A filter that matches nothing is an error rather than a pass.
+      - cargo kani -p agent-uri -p agent-uri-attestation --harness {{.CLI_ARGS}}
 
   # Fuzzing
   #
