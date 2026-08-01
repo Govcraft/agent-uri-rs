@@ -78,6 +78,11 @@ tasks:
   # libFuzzer writes what it finds to the *first* corpus directory it is given,
   # so the working corpus (gitignored) is named first and the checked-in seeds
   # second, where they are read and never written.
+  #
+  # Being gitignored, the corpus directory is absent on a fresh clone, and
+  # libFuzzer refuses to start against a directory that is not there. Each task
+  # creates its own, which is why this went unnoticed until CI ran it on a
+  # checkout that had never fuzzed before (issue #117).
   fuzz:
     desc: Fuzz every parser entry point and the verifier for a minute each (needs nightly + cargo-fuzz)
     cmds:
@@ -88,13 +93,13 @@ tasks:
     desc: Fuzz every parser entry point for a minute each
     dir: agent-uri
     cmds:
-      - for target in parse_uri parse_trust_root parse_query parse_fragment parse_agent_id; do cargo +nightly fuzz run "$target" "fuzz/corpus/$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
+      - for target in parse_uri parse_trust_root parse_query parse_fragment parse_agent_id; do mkdir -p "fuzz/corpus/$target"; cargo +nightly fuzz run "$target" "fuzz/corpus/$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
 
   fuzz-verifier:
     desc: Fuzz the attestation verifier for a minute per target
     dir: agent-uri-attestation
     cmds:
-      - for target in verify_token verify_signed_claims; do cargo +nightly fuzz run "$target" "fuzz/corpus/$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
+      - for target in verify_token verify_signed_claims; do mkdir -p "fuzz/corpus/$target"; cargo +nightly fuzz run "$target" "fuzz/corpus/$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
 
   fuzz-build:
     desc: Build the fuzz targets without running them

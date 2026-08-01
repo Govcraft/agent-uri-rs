@@ -405,9 +405,15 @@ jobs:
       # at "sanitizer is incompatible with statically linked libc". Naming the
       # host triple keeps that a property of how the tool was packaged rather
       # than of what gets fuzzed.
+      #
+      # The corpus directory is gitignored, being a build artifact that grows,
+      # so a fresh checkout does not have one and libFuzzer refuses to start
+      # against a directory that is not there. A developer who has fuzzed
+      # locally already has it, which is what kept this hidden.
       - name: Fuzz ${{ matrix.target }}
         working-directory: ${{ matrix.crate }}
         run: |
+          mkdir -p fuzz/corpus/${{ matrix.target }}
           cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} \
             fuzz/corpus/${{ matrix.target }} fuzz/seeds/${{ matrix.target }} \
             -- -max_total_time=300 -rss_limit_mb=4096
