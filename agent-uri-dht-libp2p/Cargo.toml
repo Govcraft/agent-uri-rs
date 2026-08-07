@@ -14,7 +14,7 @@ categories = ["network-programming"]
 
 [dependencies]
 agent-uri = { version = "0.6", path = "../agent-uri" }
-agent-uri-attestation = { version = "0.8", path = "../agent-uri-attestation" }
+agent-uri-attestation = { version = "0.9", path = "../agent-uri-attestation" }
 agent-uri-dht = { version = "0.12", path = "../agent-uri-dht", features = ["serde"] }
 async-trait = "0.1.91"
 futures = "0.3.33"

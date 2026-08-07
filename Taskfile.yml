@@ -78,7 +78,7 @@ tasks:
     desc: Fuzz the attestation verifier for a minute per target
     dir: agent-uri-attestation
     cmds:
-      - for target in verify_token verify_signed_claims; do cargo +nightly fuzz run "$target" "fuzz/corpus/$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
+      - for target in verify_token verify_signed_claims parse_key_document; do cargo +nightly fuzz run "$target" "fuzz/corpus/$target" "fuzz/seeds/$target" -- -max_total_time=60 -rss_limit_mb=4096 || exit 1; done
 
   fuzz-build:
     desc: Build the fuzz targets without running them

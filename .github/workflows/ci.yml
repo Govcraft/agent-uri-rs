@@ -300,6 +300,8 @@ jobs:
             target: verify_token
           - crate: agent-uri-attestation
             target: verify_signed_claims
+          - crate: agent-uri-attestation
+            target: parse_key_document
     steps:
       - name: Checkout
         uses: actions/checkout@v4

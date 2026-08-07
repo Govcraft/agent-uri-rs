@@ -35,6 +35,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "parse_key_document"
+path = "fuzz_targets/parse_key_document.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "verify_signed_claims"
 path = "fuzz_targets/verify_signed_claims.rs"
 test = false

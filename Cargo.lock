@@ -51,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-attestation"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "agent-uri",
  "base64",
@@ -68,7 +68,7 @@ dependencies = [
 
 [[package]]
 name = "agent-uri-attestation-wellknown"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "agent-uri",
  "agent-uri-attestation",

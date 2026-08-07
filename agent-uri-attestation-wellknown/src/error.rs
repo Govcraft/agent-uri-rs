@@ -55,12 +55,54 @@ pub enum DiscoveryError {
     /// The document arrived but does not say what a key document must.
     ///
     /// Includes a document that names a different trust root than the one
-    /// whose endpoint served it.
+    /// whose endpoint served it, and a signed document whose signature does not
+    /// check out against the keys pinned for that root.
     Document {
         /// The trust root being asked
         trust_root: String,
         /// What reading it found wrong
         source: AttestationError,
+    },
+    /// A root this verifier pins a key for served the bare, unsigned document.
+    ///
+    /// Pinning a root key is a statement that this deployment will not take
+    /// that root's word from the publication channel alone. Accepting the bare
+    /// form here would undo it, and would do so on the say-so of whoever served
+    /// the document — which is exactly the party the pin exists to distrust.
+    Unsigned {
+        /// The trust root being asked
+        trust_root: String,
+    },
+    /// A signed document is older than one already accepted from that root.
+    ///
+    /// Its signature is genuine: the root really did publish it, once. What
+    /// makes it a refusal is that it is behind, which is how an attacker
+    /// holding the publication host undoes a revocation without forging
+    /// anything.
+    VersionRegression {
+        /// The trust root being asked
+        trust_root: String,
+        /// The newest version this verifier has accepted
+        held: u64,
+        /// The version the endpoint served
+        offered: u64,
+    },
+    /// The record of what has already been accepted could not be consulted.
+    ///
+    /// A lock this process poisoned by panicking while holding it. Reported
+    /// rather than worked around, because a rollback check that did not happen
+    /// is not one that passed.
+    VersionUnavailable {
+        /// The trust root being asked
+        trust_root: String,
+    },
+    /// A pinned root key is not a key.
+    ///
+    /// Describes the deployment's configuration, not anything a trust root
+    /// served; no request was made.
+    InvalidRootKey {
+        /// Why the key could not be read
+        reason: String,
     },
 }
 
@@ -91,6 +133,29 @@ impl fmt::Display for DiscoveryError {
                     f,
                     "the key document of '{trust_root}' is unusable: {source}"
                 )
+            }
+            Self::Unsigned { trust_root } => write!(
+                f,
+                "a root key is pinned for '{trust_root}', so its key document must be the signed \
+                 form of specification 7.2, but the endpoint served the bare form"
+            ),
+            Self::VersionRegression {
+                trust_root,
+                held,
+                offered,
+            } => write!(
+                f,
+                "the key document of '{trust_root}' is version {offered}, behind the version \
+                 {held} already accepted; a document that goes backwards is a replay, whoever \
+                 signed it"
+            ),
+            Self::VersionUnavailable { trust_root } => write!(
+                f,
+                "the record of which key documents have already been accepted from '{trust_root}' \
+                 could not be read, so this one cannot be checked against it"
+            ),
+            Self::InvalidRootKey { reason } => {
+                write!(f, "the pinned root key cannot be read: {reason}")
             }
         }
     }

@@ -138,6 +138,21 @@ pub enum AttestationError {
         /// When the key stopped being usable
         not_after: String,
     },
+    /// A signed key document is past the `expires` its signature covers.
+    ///
+    /// The signature is good and the root really did publish this document.
+    /// It said how long it stood for, and that instant has passed — which is
+    /// what stops an attacker who controls the publication host from replaying
+    /// a genuinely signed document forever.
+    DocumentExpired {
+        /// When the document stopped being evidence
+        expires: String,
+    },
+    /// A key document was served in the signed form with no signature in it.
+    ///
+    /// Nothing has been checked and nothing can be: the envelope is the shape
+    /// of a signed document without the one thing that makes it one.
+    DocumentUnsigned,
     /// URI in token does not match expected URI.
     UriMismatch {
         /// URI in the token
@@ -184,6 +199,10 @@ pub enum AttestationError {
 /// arm that is four lines of string literal buries the twenty arms around it.
 const INVALID_SIGNATURE: &str =
     "token signature verification failed; token may have been tampered with";
+
+/// Message for [`AttestationError::DocumentUnsigned`], for the same reason.
+const DOCUMENT_UNSIGNED: &str = "the key document is in the signed form of specification 7.2 but carries no signature, so \
+     there is nothing to check it against";
 
 /// Message for [`AttestationError::RevocationUnavailable`], for the same reason.
 const REVOCATION_UNAVAILABLE: &str = "this verifier has no revocation source, so it cannot accept any token; supply one with \
@@ -255,6 +274,8 @@ impl fmt::Display for AttestationError {
                 kid,
                 not_after,
             } => write_key_window(f, issuer, kid.as_deref(), "was retired at", not_after),
+            Self::DocumentExpired { expires } => write_document_expired(f, expires),
+            Self::DocumentUnsigned => f.write_str(DOCUMENT_UNSIGNED),
             Self::UriMismatch {
                 token_uri,
                 expected_uri,
@@ -290,6 +311,18 @@ impl fmt::Display for AttestationError {
             ),
         }
     }
+}
+
+/// Reports a key document whose stated lifetime has run out.
+///
+/// Held here for the same reason as [`write_key_window`]: an arm that is four
+/// lines of string literal buries the twenty arms around it.
+fn write_document_expired(f: &mut fmt::Formatter<'_>, expires: &str) -> fmt::Result {
+    write!(
+        f,
+        "this key document expired at {expires}; the trust root publishes a fresh one, and a \
+         document past its expiry is not evidence of which keys are current"
+    )
 }
 
 /// Reports a signing key that is outside the window its trust root published.

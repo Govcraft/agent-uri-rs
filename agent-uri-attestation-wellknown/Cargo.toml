@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-attestation-wellknown"
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -14,7 +14,7 @@ categories = ["authentication", "cryptography", "web-programming"]
 
 [dependencies]
 agent-uri = { version = "0.6", path = "../agent-uri" }
-agent-uri-attestation = { version = "0.8", path = "../agent-uri-attestation" }
+agent-uri-attestation = { version = "0.9", path = "../agent-uri-attestation" }
 chrono = "0.4.45"
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider", "http2", "charset"] }
 rustls = { version = "0.23.43", default-features = false, features = ["ring", "logging", "std", "tls12"] }

@@ -129,7 +129,7 @@ Agent IDs use [TypeID](https://github.com/jetify-com/typeid) format: a semantic 
 
 ```toml
 [dependencies]
-agent-uri-attestation = "0.8"
+agent-uri-attestation = "0.9"
 ```
 
 ```rust
@@ -191,7 +191,7 @@ A key's window is checked against the current time, not against the token's `iat
 
 ```toml
 [dependencies]
-agent-uri-attestation-wellknown = "0.2"
+agent-uri-attestation-wellknown = "0.3"
 ```
 
 ```rust,no_run
@@ -209,7 +209,7 @@ let claims = verifier.verify(token)?;
 
 Specification §7.2 has every trust root publish its keys at `https://{trust-root}/.well-known/agent-keys.json`. This crate fetches that document, caches it for a token lifetime, and turns it into a verifier holding the root's current keys and its revocation list. It is a separate crate because an HTTP client with a TLS stack is a large dependency and the attestation crate is useful without one; reading the document is in `agent-uri-attestation` as `KeyDocument`, and needs no network.
 
-Discovery establishes which keys an authority stands behind. It does not establish that the authority deserves to be trusted, which is a deployment decision and always was.
+Discovery establishes which keys an authority stands behind. It does not establish that the authority deserves to be trusted, which is a deployment decision and always was. Nor, on its own, that the authority *wrote* the document: every check authenticates the channel, and an attacker who can write to the web host satisfies all of them (§8.12). A deployment that pins the root key a trust root signs its document with — `KeyDiscovery::pin_root` — requires §7.2's signed form from that root, refuses a replayed older version, and refuses an expired document.
 
 ### agent-uri-dht
 
