@@ -120,6 +120,68 @@
 //! client with a TLS stack is a large dependency and this one is useful
 //! without it.
 //!
+//! ## When the endpoint itself is the attacker
+//!
+//! Everything about a fetched document authenticates the *channel*: HTTPS, no
+//! redirects, and the document naming the root whose endpoint served it. All of
+//! it is satisfied by someone who can write to the web host, which is why
+//! section 8.12 treats publication-host compromise as its own threat and
+//! section 7.2 offers a signed form of the document against it.
+//!
+//! [`SignedKeyDocument`] reads that form. The document is wrapped in a
+//! signature by a **root key** the trust root holds offline and a verifier pins
+//! out of band, so publication becomes a file copy and the host never holds
+//! material whose theft mints trust:
+//!
+//! ```
+//! use agent_uri_attestation::{
+//!     DocumentSigner, DocumentVersion, KeyDocument, KeyDocumentPayload, ServedDocument,
+//!     SignedKeyDocument, SigningKey,
+//! };
+//! use chrono::{Duration, Utc};
+//!
+//! # let key = SigningKey::generate().verifying_key().to_base64();
+//! # let json = format!(r#"{{"trust_root": "acme.com", "keys": [{{
+//! #     "kid": "key-2026-01", "algorithm": "Ed25519", "public_key": "{key}",
+//! #     "not_before": "2026-01-01T00:00:00Z", "not_after": "2027-01-01T00:00:00Z"
+//! # }}]}}"#);
+//! # let document = KeyDocument::parse(&json)?;
+//! // Publishing side, on a machine that is not the web server.
+//! let root_key = SigningKey::generate();
+//! let served = KeyDocumentPayload::new(
+//!     document,
+//!     DocumentVersion::FIRST,
+//!     Utc::now() + Duration::days(7),
+//! )
+//! .to_signed_json(&[DocumentSigner::new(&root_key).named("root-2026")])?;
+//!
+//! // Verifying side, holding the pinned root key.
+//! let verified = SignedKeyDocument::parse(&served)?.verify(&[root_key.verifying_key()])?;
+//! let store = verified.document().trust_store()?;
+//! # Ok::<(), agent_uri_attestation::AttestationError>(())
+//! ```
+//!
+//! A verifier that pins nothing keeps working against either form:
+//! [`ServedDocument`] tells them apart and hands over the payload on the terms
+//! of the bare one. Requiring the signed form, refusing a replayed older
+//! version, and refusing an expired document are policy, and policy needs the
+//! state of what has already been accepted — which is
+//! `agent-uri-attestation-wellknown`'s job.
+//!
+//! # New in 0.9.0
+//!
+//! The signed key document of specification section 7.2, and with it
+//! [`SignedKeyDocument`], [`KeyDocumentPayload`], [`ServedDocument`],
+//! [`DocumentSigner`], [`DocumentVersion`], and [`DocumentSignature`].
+//! [`AttestationError`] gains [`DocumentExpired`](AttestationError::DocumentExpired)
+//! and [`DocumentUnsigned`](AttestationError::DocumentUnsigned), which an
+//! exhaustive `match` already had to have a `_` arm for.
+//!
+//! Nothing changes for a caller that does not use it. The bare document is
+//! still what [`KeyDocument::parse`] reads and still what section 7.2 makes the
+//! default; signing it is a decision a trust root makes, and pinning the key
+//! that signs it is a decision each deployment makes separately.
+//!
 //! # Breaking changes in 0.8.0
 //!
 //! [`AttestationError`] is `#[non_exhaustive]`, so an exhaustive `match` on it
@@ -261,6 +323,7 @@ mod keys;
 #[cfg(kani)]
 mod proofs;
 pub mod revocation;
+pub mod signed_document;
 pub mod trust;
 mod verification;
 mod verifier;
@@ -272,6 +335,11 @@ pub use issuer::Issuer;
 pub use key_document::{KeyDocument, PublishedKey, RevokedKey};
 pub use keys::{Signature, SigningKey, VerifyingKey};
 pub use revocation::{AcceptAll, Denylist, RevocationCheck};
+pub use signed_document::{
+    DEFAULT_DOCUMENT_LEEWAY, DOCUMENT_SIGNING_PREFIX, DocumentSignature, DocumentSigner,
+    DocumentVersion, KeyDocumentPayload, MAX_SIGNATURES, ServedDocument, SignedKeyDocument,
+    check_document_expiry,
+};
 pub use trust::{KeyValidity, TrustStore, TrustedKey};
 pub use verification::{
     capability_covers, check_capability_coverage, check_expiration, check_expiration_with_leeway,

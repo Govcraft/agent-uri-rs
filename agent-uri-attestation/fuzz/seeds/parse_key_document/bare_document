@@ -1,0 +1,1 @@
+{"trust_root":"acme.com","keys":[{"kid":"key-2026","algorithm":"Ed25519","public_key":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=","not_before":"2026-01-01T00:00:00Z","not_after":"2027-01-01T00:00:00Z"}],"revoked_keys":[]}

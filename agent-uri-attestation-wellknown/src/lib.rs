@@ -65,6 +65,53 @@
 //! signs with, and nothing about whether to believe anything it says. Deciding
 //! which roots matter is the deployment's job and always was.
 //!
+//! # Pinning a root key
+//!
+//! Nor does it establish that the *trust root* wrote the document. Every check
+//! in the list above authenticates where the bytes came from, and every one of
+//! them is satisfied by an attacker who can write to the web host: they serve
+//! from the legitimate domain under a legitimate certificate, and the
+//! `revoked_keys` list a verifier would consult to learn better is the list
+//! they are serving. Specification section 8.12 is that threat; section 7.2's
+//! signed document form is the answer, and [`PinnedRootKeys`] is how this crate
+//! asks for it.
+//!
+//! ```no_run
+//! use agent_uri_attestation_wellknown::{KeyDiscovery, PinnedRootKeys};
+//!
+//! # async fn example(token: &str) -> Result<(), Box<dyn std::error::Error>> {
+//! // The root key arrives out of band, the same way the decision to care about
+//! // acme.com at all did.
+//! let discovery = KeyDiscovery::new()
+//!     .pin_root("acme.com", PinnedRootKeys::from_base64("<the root key>")?);
+//!
+//! let verifier = discovery.verifier_for("acme.com").await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! From then on, for that root:
+//!
+//! - the bare form is **refused**. A fallback an attacker can trigger by
+//!   deleting a signature is not a defence;
+//! - the document must carry a valid signature by one of the pinned keys, so a
+//!   root key can rotate by publishing signed with both for the overlap;
+//! - a document past its own `expires` is refused, and one already cached stops
+//!   being served at that instant rather than at the end of the TTL;
+//! - a document whose `version` is behind the newest already accepted is
+//!   refused. That floor outlives the cache and is not cleared by
+//!   [`KeyDiscovery::forget`], because a rollback protection an attacker can
+//!   reset by making one fetch fail protects nothing.
+//!
+//! Together those bound a compromised host to serving documents the root really
+//! signed, only until they expire, and never one older than what this process
+//! has already seen. What remains is denial of service, which fails closed.
+//!
+//! A root nobody pins keeps working exactly as before, in **either** form: the
+//! payload of a signed document is used without checking the signature, on the
+//! terms of the bare form. That is what lets a trust root adopt signing without
+//! breaking the verifiers that have not pinned it.
+//!
 //! # Staleness
 //!
 //! A cached document is served for [`DEFAULT_TTL`] before it is fetched again,
@@ -76,7 +123,18 @@
 //!
 //! A failed refresh keeps whatever was cached before. A root that is briefly
 //! unreachable should not cost a verifier the keys it already had, and the
-//! entry ages out on its own if the outage lasts.
+//! entry ages out on its own if the outage lasts. A signed document ages out at
+//! its own `expires` as well, whichever comes first.
+//!
+//! # New in 0.3.0
+//!
+//! [`PinnedRootKeys`] and [`KeyDiscovery::pin_root`], described above.
+//! [`DiscoveryError`] gains [`Unsigned`](DiscoveryError::Unsigned),
+//! [`VersionRegression`](DiscoveryError::VersionRegression),
+//! [`VersionUnavailable`](DiscoveryError::VersionUnavailable), and
+//! [`InvalidRootKey`](DiscoveryError::InvalidRootKey); the enum is
+//! `#[non_exhaustive]`, so a `match` on it already had a `_` arm. A client that
+//! pins nothing behaves as it did.
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]
@@ -84,6 +142,8 @@
 
 mod discovery;
 mod error;
+mod pinning;
 
 pub use discovery::{DEFAULT_TIMEOUT, DEFAULT_TTL, KeyDiscovery, WELL_KNOWN_PATH, empty_verifier};
 pub use error::DiscoveryError;
+pub use pinning::PinnedRootKeys;

@@ -168,16 +168,27 @@ impl KeyDocument {
                 reason: format!("key document is not the JSON of specification 7.2: {e}"),
             })?;
 
-        if document.keys.len() > MAX_KEYS {
+        document.check_limits()?;
+
+        Ok(document)
+    }
+
+    /// Refuses a document that publishes more keys than a verifier will hold.
+    ///
+    /// Separate from [`Self::parse`] because the signed form of section 7.2
+    /// reaches these same fields by a different route — deserialized as part of
+    /// a larger payload rather than parsed from a whole body — and a cap that
+    /// only one of the two routes applied would not be a cap.
+    pub(crate) fn check_limits(&self) -> Result<(), AttestationError> {
+        if self.keys.len() > MAX_KEYS {
             return Err(AttestationError::InvalidClaims {
                 reason: format!(
                     "key document publishes {} keys, over the maximum of {MAX_KEYS}",
-                    document.keys.len()
+                    self.keys.len()
                 ),
             });
         }
-
-        Ok(document)
+        Ok(())
     }
 
     /// The trust root this document says it belongs to.

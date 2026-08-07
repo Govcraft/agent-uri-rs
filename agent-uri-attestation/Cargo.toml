@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-attestation"
-version = "0.8.0"
+version = "0.9.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -23,7 +23,7 @@ agent-uri = { version = "0.6", path = "../agent-uri", features = ["serde"] }
 rusty_paseto = { version = "0.10", default-features = false, features = ["v4_public", "batteries_included"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { version = "1.0.151", features = ["raw_value"] }
 chrono = { version = "0.4", features = ["serde"] }
 # Pinned to 0.8, and not upgradable independently. `SigningKey::generate` hands
 # the RNG to ed25519-dalek 2.x, which takes a `rand_core` 0.6 `CryptoRng`; rand

@@ -27,7 +27,7 @@ features = ["serde"]
 
 [dependencies]
 agent-uri = { version = "0.6", path = "../agent-uri" }
-agent-uri-attestation = { version = "0.8", path = "../agent-uri-attestation" }
+agent-uri-attestation = { version = "0.9", path = "../agent-uri-attestation" }
 async-trait = "0.1.91"
 sha2 = "0.10"
 

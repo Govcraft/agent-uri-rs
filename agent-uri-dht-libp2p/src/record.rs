@@ -570,7 +570,7 @@ mod tests {
 
     #[test]
     fn a_page_holds_the_pointer_count_the_spec_publishes() {
-        // SPECIFICATION.md Appendix C.3 publishes ~220 pointers per 16 KiB page
+        // SPECIFICATION.md Appendix C.4 publishes ~220 pointers per 16 KiB page
         // at typical URI lengths, and that figure is what §6.2 requirement 6's
         // case for sharding rests on. An encoding change that halved it would
         // leave the spec quoting a number nothing produces.

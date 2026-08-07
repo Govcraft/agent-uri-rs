@@ -1,8 +1,8 @@
 # Agent URI Scheme Specification
 
-**Version:** 0.8.3
+**Version:** 0.9.0
 **Status:** Draft
-**Last Updated:** 2026-07-31
+**Last Updated:** 2026-08-07
 **Authors:** Roland R. Rodriguez, Jr. <rrrodzilla@proton.me>
 
 ## Abstract
@@ -959,6 +959,100 @@ reach the verifier. A compromised key needs both: removal from what the root
 publishes, and an entry on the revocation list for every verifier still holding
 a stale copy of the key document.
 
+**Signed documents (OPTIONAL):**
+
+Everything above authenticates the *channel* a document arrives over. Nothing
+in the document itself distinguishes one the trust root authored from one an
+attacker with write access to the web host put at the same path
+([Section 8.12](#812-publication-host-compromise)). A trust root MAY therefore
+serve, at the same endpoint, a signed form of the document instead of the bare
+form:
+
+```json
+{
+  "signed": {
+    "trust_root": "acme.com",
+    "version": 4,
+    "expires": "2026-08-14T00:00:00Z",
+    "keys": [ ... ],
+    "revoked_keys": [ ... ]
+  },
+  "signatures": [{
+    "root_kid": "root-2026",
+    "signature": "<base64-encoded Ed25519 signature, 64 bytes>"
+  }]
+}
+```
+
+The `signed` member carries the entire response format defined above, plus two
+REQUIRED fields: `version`, an unsigned integer the root increments on every
+publication, and `expires`, an RFC 3339 instant after which the document is no
+longer evidence of anything. The signature is computed over the octet string
+
+```
+"agent-uri-key-document-v1\n" || <signed>
+```
+
+where `<signed>` is the exact octets of the `signed` member's value as they
+appear in the served document, from its opening `{` to its matching `}`
+inclusive. There is no canonicalization: the document is signed as serialized
+and verified as received, so two parties never have to agree on how to
+re-encode JSON, only on the bytes that were sent. The prefix is a domain
+separator, so a signature minted over a key document cannot be presented as a
+signature over anything else these keys sign.
+
+**Requirements for signed documents:**
+
+1. The signing key is a **root key**, held offline. It MUST NOT appear in
+   `keys`, and it is not the key that signs attestation tokens: its only
+   purpose is to make publication a file copy rather than an act requiring
+   signing material on the web host. A signature checked against a key the
+   same document publishes proves nothing, because whoever wrote the file
+   wrote the key.
+2. Verifiers learn the root key out of band and pin it, as a deployment
+   decision — the same decision, extended by one field, as the one this
+   section already requires about which trust roots matter at all.
+3. A verifier holding a pinned root key for a trust root MUST require the
+   signed form from that root, MUST verify that at least one entry in
+   `signatures` is a valid signature by a pinned key, MUST reject a document
+   whose `expires` has passed (clock-skew tolerance MAY apply, as in
+   requirement 6 above), and MUST reject a document whose `version` is lower
+   than the highest it has accepted from that root and still remembers.
+   Together the three checks bound what a compromised host can do with old
+   bytes: it can replay only documents the root actually signed, only until
+   they expire, and never one older than what the verifier has already seen.
+4. A verifier holding no pinned key for a root MAY accept either form. The
+   payload of a signed document it cannot check is evidence on exactly the
+   terms of the bare form: the TLS channel that served it. Such a verifier
+   does not enforce `expires` or `version` either — unauthenticated, those
+   fields are whatever the endpoint says, and honouring them would let an
+   unverified document set this verifier's state. This is what lets a root
+   adopt signing without breaking verifiers that have not pinned it.
+5. `signatures` MAY carry more than one entry, and a verifier MAY pin more
+   than one root key, so that a root key can itself rotate with overlap:
+   publish signed by old and new for the overlap window, then drop the old.
+6. `expires` SHOULD be days rather than months from publication, and the root
+   SHOULD republish (with `version` incremented) well before it passes. The
+   window in which a compromised host can replay a stale document is at most
+   `expires` minus the verifier's clock, so the freshness of revocation news
+   for pinning verifiers is bounded by the republication cadence.
+7. `root_kid` is advisory: it tells an operator which of a root's keys
+   produced a signature, and a verifier MUST NOT use it to select the key it
+   checks against, because it is written by whoever wrote the document.
+   Verifiers try each pinned key instead — which is why both the number of
+   pinned keys and the number of `signatures` entries a verifier will check
+   MUST be bounded, for the reason requirement 8 above bounds everything
+   else: each entry costs one verification per pinned key. An entry that is
+   not a readable signature is not a valid one; verifiers SHOULD pass over
+   it rather than refuse the document, so that one malformed entry cannot
+   cost every verifier a document a pinned key really did sign.
+
+The bare form remains the default, and this mechanism is deliberately
+OPTIONAL: for a deployment whose trust root operates its own publication
+infrastructure, an offline-key ceremony may cost more than the host-compromise
+risk it retires. [Section 8.12](#812-publication-host-compromise) states what
+is and is not accepted by each choice.
+
 ### 7.3 Capability Binding
 
 Every attested capability MUST first be constrained to the subject identity:
@@ -1292,6 +1386,68 @@ rejected rather than stripped ([Section 4.1](#41-trust-root)), so a
 root-anchored `example.com.` is not a second spelling of `example.com` but an
 invalid trust root; this removes an equivalence question at the cost of
 rejecting a form that DNS accepts.
+
+### 8.12 Publication Host Compromise
+
+**Threat:** An attacker with write access to whatever serves
+`https://{trust-root}/.well-known/agent-keys.json` replaces the key document
+with one listing keys the attacker holds, and empties `revoked_keys`. For a
+bare (unsigned) document, this is equivalent to holding the trust root's
+signing key: every attestation the attacker mints thereafter verifies, for the
+whole namespace, against keys the verifiers fetched themselves.
+
+This is a distinct threat from [Section 8.2](#82-trust-root-key-compromise)
+and [Section 8.3](#83-trust-root-spoofing), and neither section's mitigations
+reach it. Section 8.2's defenses assume the publication channel outlives the
+compromise, and here it does not: the `revoked_keys` list is served by the
+attacker, rotation is announced by the attacker, and the signing key the HSM
+protects was never taken. Section 8.3 defends against an attacker *claiming* a
+domain they do not control; its mitigation — DNS and TLS authenticate the
+domain — is exactly what a host compromise satisfies, because the attacker
+serves from the legitimate domain under a legitimate certificate. Every
+channel check a verifier performs ([Section 7.2](#72-key-publication)
+requirements 1, 7, and 8) passes, because every one of them authenticates
+where the bytes came from, and the bytes came from the right place.
+
+**Mitigation:** The signed document form of
+[Section 7.2](#72-key-publication). The root key that signs the document is
+held offline and pinned by verifiers out of band, so the web host never holds
+material whose theft mints trust. Publication becomes a file copy. For a
+pinning verifier, host compromise then degrades from namespace takeover to:
+
+1. **Denial of service.** The attacker can serve garbage or nothing. A
+   verifier that cannot obtain an acceptable document has no keys, and
+   [Section 7.4](#74-verification-flow) fails closed.
+2. **Replay of a stale signed document**, bounded three ways: the document
+   must be one the root really signed, its `expires` must not have passed,
+   and its `version` must not regress what the verifier has already
+   accepted. The residual is a document that is old but not yet expired,
+   whose worst payload is a key revoked since it was signed — and a key is
+   only usable within its own published `not_before`/`not_after` window
+   regardless of which document delivered it.
+
+**Residual Risk:** A deployment using the bare form retains the full threat:
+its verifiers' trust in the namespace is exactly as strong as the write
+access controls on the publication host, and a compromised application server
+is as fatal as a compromised front proxy. That is a defensible position for a
+root that operates its own infrastructure and would rather harden one host
+than run a key ceremony, but it is a position, and operators should take it
+knowingly rather than by default.
+
+For pinning verifiers, the residual is the replay window above, plus
+bootstrap: the pinned root key must arrive out of band, and a verifier that
+pins the wrong key has decided to trust the wrong root with extra steps.
+Freshness of revocation news is additionally bounded by however long a
+verifier caches a fetched document — an attacker who can only block the
+endpoint cannot extend that window, since a document is not served from cache
+past its lifetime and a failed fetch yields no keys rather than old ones, but
+the cache lifetime is part of the revocation latency budget and should be
+sized as such.
+
+Signing the document does not detect a compromise, it only blunts one.
+Detection — publishing documents to an append-only transparency log, or
+fetching from more than one network vantage and comparing — is complementary
+and unspecified here.
 
 ---
 
@@ -1728,7 +1884,21 @@ Covered: YES (second capability covers)
 | audience | 1 | 128 | Optional |
 | Timestamp | — | 30 | ISO 8601 with milliseconds |
 
-### C.3 DHT Components
+### C.3 Key Document Components
+
+| Component | Max | Notes |
+|-----------|-----|-------|
+| Document body | 65536 bytes | Either form; §7.2 requirement 8. The signed envelope counts whole |
+| keys | 16 | Room for an unusual rotation schedule; each costs a verification per failed token |
+| signatures | 8 | Signed form; §7.2 signed-document requirement 7. Room for a root-key rotation |
+| version | u64 | Signed form; monotonic per publication |
+
+These maxima are the reference implementation's, recorded here so that a
+document accepted by one implementation is not refused by another as a matter
+of bounds. The byte and count caps are what §7.2's "MUST bound" requirements
+look like with numbers in them.
+
+### C.4 DHT Components
 
 | Component | Size | Notes |
 |-----------|------|-------|
@@ -1753,6 +1923,7 @@ sharding removes it, because only sharding adds keys.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.9.0 | 2026-08-07 | §7.2 given an OPTIONAL signed form of the key document: the response format wrapped in a signature by an offline root key, carrying a monotonic `version` and an `expires`, signed over the received octets with a domain separator rather than over any canonicalization; verifier obligations stated for a pinned root (require the signed form, check one pinned signature, refuse an expired document, refuse a version behind one already accepted) and the bare form kept working for verifiers that pin nothing; publication-host compromise added as §8.12, which none of §8.2's or §8.3's mitigations reach |
 | 0.8.3 | 2026-07-31 | §4.3 clarified: the `type_modifier_modifier` pattern stated to be a naming convention rather than syntax, consecutive underscores confirmed well formed as in the TypeID specification, and an implementation exposing the class and modifiers separately required not to report a modifier for the empty run between them |
 | 0.8.2 | 2026-07-31 | §7.2 given the shape of a `revoked_keys` entry, which was named but never defined, and required to carry key material rather than only a name; the verifier-side obligations discovery implies added: refuse a document naming another trust root, do not follow redirects away from the endpoint, bound what is read, and treat an unreachable endpoint as an absence of keys; what a fetched document does and does not establish stated outright |
 | 0.8.1 | 2026-07-31 | §7.2 given the verifier-side obligation its published validity periods implied: a key outside its window MUST be refused, judged at verification time rather than against the token's `iat`, with the rotation overlap that keeps in-flight tokens working stated as a schedule; §7.4 step 3 amended to carry the same check, and the distinction between a published schedule and unplanned revocation made explicit |
