@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_uri::AgentUri;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use rusty_paseto::Error as PasetoUnifiedError;
 use rusty_paseto::core::Paseto;
 use rusty_paseto::prelude::*;
@@ -317,7 +317,72 @@ impl Verifier {
     /// - `InvalidTokenFormat` - Token is malformed
     /// - `InvalidClaims` - Claims cannot be parsed
     pub fn verify(&self, token: &str) -> Result<AttestationClaims, AttestationError> {
-        self.verify_with_audience_context(token, None)
+        self.verify_at(token, Utc::now())
+    }
+
+    /// Verifies an attestation token as of the instant `now`, not the real clock.
+    ///
+    /// Runs every check [`Self::verify`] runs, in the same order, signature
+    /// first. Only the two clock-dependent checks move: the token's validity
+    /// window (`iat` and `exp`, each with [`Self::leeway`]) and the window of
+    /// the trust-root key that signed it are both judged at `now` rather than
+    /// [`Utc::now`]. [`Self::verify`] is exactly `verify_at(token, Utc::now())`.
+    ///
+    /// This answers "was this token valid at instant T", which the real clock
+    /// cannot: a caller re-checking a token it accepted earlier, such as one
+    /// replaying a log of decisions made against the clock of their own time,
+    /// or one running on a simulated clock. Revocation is not a function of
+    /// time and is checked against the verifier's current revocation source.
+    ///
+    /// `now` is trusted input. A past instant re-admits a token that has since
+    /// expired, so it must come from something the caller trusts, never from
+    /// the token or whoever presents it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::verify`], with the validity checks
+    /// (`TokenExpired`, `TokenNotYetValid`, `KeyExpired`, `KeyNotYetValid`)
+    /// judged at `now`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_uri::AgentUri;
+    /// use agent_uri_attestation::{
+    ///     AcceptAll, AttestationClaims, AttestationError, Issuer, SigningKey, Verifier,
+    /// };
+    /// use chrono::{Duration, Utc};
+    /// use std::time::Duration as StdDuration;
+    ///
+    /// let signing_key = SigningKey::generate();
+    /// let issuer = Issuer::new("acme.com", signing_key.clone(), StdDuration::from_secs(60));
+    /// let uri = AgentUri::parse("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap();
+    ///
+    /// // A token issued a day ago that lived for one minute.
+    /// let issued = Utc::now() - Duration::days(1);
+    /// let claims = AttestationClaims::builder()
+    ///     .agent_uri(uri.canonical())
+    ///     .agent_key(&SigningKey::generate().verifying_key())
+    ///     .issuer("acme.com")
+    ///     .ttl(StdDuration::from_secs(60))
+    ///     .build_at(issued)
+    ///     .unwrap();
+    /// let token = issuer.issue_claims(&claims).unwrap();
+    ///
+    /// let mut verifier = Verifier::new().with_revocation(AcceptAll);
+    /// verifier.add_trusted_root("acme.com", signing_key.verifying_key());
+    ///
+    /// // Expired by the real clock...
+    /// assert!(matches!(verifier.verify(&token), Err(AttestationError::TokenExpired { .. })));
+    /// // ...and valid at the instant it was used.
+    /// assert!(verifier.verify_at(&token, issued + Duration::seconds(30)).is_ok());
+    /// ```
+    pub fn verify_at(
+        &self,
+        token: &str,
+        now: DateTime<Utc>,
+    ) -> Result<AttestationClaims, AttestationError> {
+        self.verify_with_audience_context(token, None, now)
     }
 
     /// Verifies a token for a specific verifier audience.
@@ -335,13 +400,30 @@ impl Verifier {
         token: &str,
         verifier_audience: &str,
     ) -> Result<AttestationClaims, AttestationError> {
-        self.verify_with_audience_context(token, Some(verifier_audience))
+        self.verify_for_audience_at(token, verifier_audience, Utc::now())
+    }
+
+    /// [`Self::verify_for_audience`] as of the instant `now`; see
+    /// [`Self::verify_at`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::verify_for_audience`], with the
+    /// validity checks judged at `now`.
+    pub fn verify_for_audience_at(
+        &self,
+        token: &str,
+        verifier_audience: &str,
+        now: DateTime<Utc>,
+    ) -> Result<AttestationClaims, AttestationError> {
+        self.verify_with_audience_context(token, Some(verifier_audience), now)
     }
 
     fn verify_with_audience_context(
         &self,
         token: &str,
         verifier_audience: Option<&str>,
+        now: DateTime<Utc>,
     ) -> Result<AttestationClaims, AttestationError> {
         // Length first: every later step is attacker-funded work (one Ed25519
         // verification per trusted root over the whole payload), so the cap has
@@ -367,7 +449,7 @@ impl Verifier {
 
         // Try each trusted key until one works, and reject anything signed by a
         // key that is outside the window its trust root published for it.
-        let (issuer, trusted, claims) = self.extract_and_verify(token)?;
+        let (issuer, trusted, claims) = self.extract_and_verify(token, now)?;
 
         // Revocation, on both axes, and only now: `jti` and `iss` come out of
         // the token, so believing either before the signature was checked would
@@ -428,11 +510,26 @@ impl Verifier {
         token: &str,
         expected_uri: &AgentUri,
     ) -> Result<AttestationClaims, AttestationError> {
-        // `verify` already binds `iss` to the `agent_uri` claim's trust root, so
-        // an authenticated token's authority is guaranteed to equal its own
+        self.verify_for_uri_at(token, expected_uri, Utc::now())
+    }
+
+    /// [`Self::verify_for_uri`] as of the instant `now`; see [`Self::verify_at`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::verify_for_uri`], with the validity
+    /// checks judged at `now`.
+    pub fn verify_for_uri_at(
+        &self,
+        token: &str,
+        expected_uri: &AgentUri,
+        now: DateTime<Utc>,
+    ) -> Result<AttestationClaims, AttestationError> {
+        // `verify_at` already binds `iss` to the `agent_uri` claim's trust root,
+        // so an authenticated token's authority is guaranteed to equal its own
         // issuer here. Comparing the full `agent_uri` to `expected_uri` is the
         // only remaining, load-bearing check.
-        let claims = self.verify(token)?;
+        let claims = self.verify_at(token, now)?;
 
         let expected_str = expected_uri.canonical();
         let token_uri = AgentUri::parse(&claims.agent_uri).map_err(|error| {
@@ -462,7 +559,24 @@ impl Verifier {
         expected_uri: &AgentUri,
         verifier_audience: &str,
     ) -> Result<AttestationClaims, AttestationError> {
-        let claims = self.verify_for_audience(token, verifier_audience)?;
+        self.verify_for_uri_and_audience_at(token, expected_uri, verifier_audience, Utc::now())
+    }
+
+    /// [`Self::verify_for_uri_and_audience`] as of the instant `now`; see
+    /// [`Self::verify_at`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::verify_for_uri_and_audience`], with
+    /// the validity checks judged at `now`.
+    pub fn verify_for_uri_and_audience_at(
+        &self,
+        token: &str,
+        expected_uri: &AgentUri,
+        verifier_audience: &str,
+        now: DateTime<Utc>,
+    ) -> Result<AttestationClaims, AttestationError> {
+        let claims = self.verify_for_audience_at(token, verifier_audience, now)?;
         let token_uri = AgentUri::parse(&claims.agent_uri).map_err(|error| {
             AttestationError::InvalidClaims {
                 reason: format!("invalid agent_uri claim: {error}"),
@@ -540,6 +654,23 @@ impl Verifier {
         uri: &AgentUri,
         required_capability: &CapabilityPath,
     ) -> Result<AttestationClaims, AttestationError> {
+        self.verify_for_capability_at(token, uri, required_capability, Utc::now())
+    }
+
+    /// [`Self::verify_for_capability`] as of the instant `now`; see
+    /// [`Self::verify_at`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::verify_for_capability`], with the
+    /// validity checks judged at `now`.
+    pub fn verify_for_capability_at(
+        &self,
+        token: &str,
+        uri: &AgentUri,
+        required_capability: &CapabilityPath,
+        now: DateTime<Utc>,
+    ) -> Result<AttestationClaims, AttestationError> {
         if !required_capability.starts_with(uri.capability_path()) {
             return Err(AttestationError::CapabilityOutsideIdentity {
                 identity_path: uri.capability_path().as_str().to_string(),
@@ -548,7 +679,7 @@ impl Verifier {
         }
 
         // First verify the token and URI match
-        let claims = self.verify_for_uri(token, uri)?;
+        let claims = self.verify_for_uri_at(token, uri, now)?;
 
         // Then check capability coverage using pure function
         verification::check_capability_coverage(&claims.capabilities, required_capability)?;
@@ -569,13 +700,37 @@ impl Verifier {
         required_capability: &CapabilityPath,
         verifier_audience: &str,
     ) -> Result<AttestationClaims, AttestationError> {
+        self.verify_for_capability_and_audience_at(
+            token,
+            uri,
+            required_capability,
+            verifier_audience,
+            Utc::now(),
+        )
+    }
+
+    /// [`Self::verify_for_capability_and_audience`] as of the instant `now`;
+    /// see [`Self::verify_at`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::verify_for_capability_and_audience`],
+    /// with the validity checks judged at `now`.
+    pub fn verify_for_capability_and_audience_at(
+        &self,
+        token: &str,
+        uri: &AgentUri,
+        required_capability: &CapabilityPath,
+        verifier_audience: &str,
+        now: DateTime<Utc>,
+    ) -> Result<AttestationClaims, AttestationError> {
         if !required_capability.starts_with(uri.capability_path()) {
             return Err(AttestationError::CapabilityOutsideIdentity {
                 identity_path: uri.capability_path().as_str().to_string(),
                 capability: required_capability.as_str().to_string(),
             });
         }
-        let claims = self.verify_for_uri_and_audience(token, uri, verifier_audience)?;
+        let claims = self.verify_for_uri_and_audience_at(token, uri, verifier_audience, now)?;
         verification::check_capability_coverage(&claims.capabilities, required_capability)?;
         Ok(claims)
     }
@@ -593,11 +748,15 @@ impl Verifier {
     /// signed by a retired key is reported as *retired* rather than as an
     /// indistinguishable bad signature. Total cost is still one verification
     /// per key held.
+    ///
+    /// Both windows, each key's and the token's, are judged at the one instant
+    /// `now`, so a token and the key that signed it are never weighed against
+    /// two different clocks.
     fn extract_and_verify(
         &self,
         token: &str,
+        now: DateTime<Utc>,
     ) -> Result<(&str, &TrustedKey, AttestationClaims), AttestationError> {
-        let now = Utc::now();
         let leeway = self.leeway_chrono();
         let mut best_error: Option<AttestationError> = None;
 
@@ -608,7 +767,7 @@ impl Verifier {
                     continue;
                 }
 
-                match try_verify_with_key(token, trusted.key(), leeway) {
+                match try_verify_with_key(token, trusted.key(), now, leeway) {
                     Ok(claims) => {
                         // The key signed it, but does the token claim the root
                         // this key is held under?
@@ -751,7 +910,7 @@ fn classify_paseto_error(error: impl Into<PasetoUnifiedError>) -> AttestationErr
 ///    it back. Until this succeeds the payload is attacker-controlled, so no
 ///    claim in it may be believed, let alone reported.
 /// 2. **Claims.** Only then are the (now authenticated) claims parsed and their
-///    validity window checked, via the pure
+///    validity window checked at `now`, the caller's instant, via the pure
 ///    [`verification::check_validity_window`].
 ///
 /// That second stage is why `TokenExpired` can name the instant a token lapsed:
@@ -762,6 +921,7 @@ fn classify_paseto_error(error: impl Into<PasetoUnifiedError>) -> AttestationErr
 fn try_verify_with_key(
     token: &str,
     verifying_key: &VerifyingKey,
+    now: DateTime<Utc>,
     leeway: chrono::Duration,
 ) -> Result<AttestationClaims, AttestationError> {
     let key_bytes = verifying_key.to_bytes();
@@ -778,9 +938,10 @@ fn try_verify_with_key(
         })?;
 
     // Stage 2: the payload is authenticated, so its claims can now be believed,
-    // and its validity window enforced with the real instants it carries.
+    // and its validity window enforced, at the caller's instant, with the real
+    // instants it carries.
     let claims = extract_claims(&json_value)?;
-    verification::check_validity_window(claims.iat, claims.exp, Utc::now(), leeway)?;
+    verification::check_validity_window(claims.iat, claims.exp, now, leeway)?;
 
     Ok(claims)
 }

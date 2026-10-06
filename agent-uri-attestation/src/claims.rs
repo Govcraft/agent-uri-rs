@@ -347,12 +347,64 @@ impl AttestationClaimsBuilder {
         self
     }
 
-    /// Builds the claims.
+    /// Builds the claims, issued now.
+    ///
+    /// `iat` is the real clock's [`Utc::now`] and `exp` is `iat` plus the TTL:
+    /// [`Self::build_at`] at the real clock. The clock is read only once every
+    /// field has been validated.
     ///
     /// # Errors
     ///
     /// Returns `AttestationError::MissingField` if required fields are not set.
     pub fn build(self) -> Result<AttestationClaims, AttestationError> {
+        self.build_with_clock(Utc::now)
+    }
+
+    /// Builds the claims as if issued at the instant `now`.
+    ///
+    /// `iat` is `now` and `exp` is `now` plus the TTL, so the validity window
+    /// sits on whatever clock the caller runs: a simulated one, or the past or
+    /// future instant a test needs. Pair it with
+    /// [`Verifier::verify_at`](crate::Verifier::verify_at) to check the token
+    /// against the same clock. A `jti` the builder generates is still a fresh
+    /// `UUIDv7` from the real clock: it names the token and does not date it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::build`], and
+    /// `AttestationError::InvalidTtl` when `now` plus the TTL falls outside the
+    /// range a timestamp can represent (an arbitrary `now` makes that
+    /// reachable, so it is reported rather than left to panic).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_uri_attestation::{AttestationClaims, SigningKey};
+    /// use chrono::{Duration, TimeZone, Utc};
+    /// use std::time::Duration as StdDuration;
+    ///
+    /// let issued = Utc.with_ymd_and_hms(2030, 1, 1, 0, 0, 0).unwrap();
+    /// let claims = AttestationClaims::builder()
+    ///     .agent_uri("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q")
+    ///     .agent_key(&SigningKey::generate().verifying_key())
+    ///     .issuer("acme.com")
+    ///     .ttl(StdDuration::from_secs(3600))
+    ///     .build_at(issued)
+    ///     .unwrap();
+    ///
+    /// assert_eq!(claims.iat, issued);
+    /// assert_eq!(claims.exp, issued + Duration::hours(1));
+    /// ```
+    pub fn build_at(self, now: DateTime<Utc>) -> Result<AttestationClaims, AttestationError> {
+        self.build_with_clock(|| now)
+    }
+
+    /// Validates the fields, then stamps the window from `clock`. The clock is
+    /// consulted last, so a builder that fails validation never reads it.
+    fn build_with_clock(
+        self,
+        clock: impl FnOnce() -> DateTime<Utc>,
+    ) -> Result<AttestationClaims, AttestationError> {
         let agent_uri = self
             .agent_uri
             .ok_or(AttestationError::MissingField { field: "agent_uri" })?;
@@ -375,9 +427,12 @@ impl AttestationClaimsBuilder {
         };
         crate::verification::validate_capability_scope(&agent_uri, &capabilities)?;
 
-        let now = Utc::now();
-        let exp =
-            now + chrono::Duration::from_std(self.ttl).map_err(|_| AttestationError::InvalidTtl)?;
+        let now = clock();
+        let exp = now
+            .checked_add_signed(
+                chrono::Duration::from_std(self.ttl).map_err(|_| AttestationError::InvalidTtl)?,
+            )
+            .ok_or(AttestationError::InvalidTtl)?;
 
         Ok(AttestationClaims {
             jti: self.jti.unwrap_or_else(new_jti),
