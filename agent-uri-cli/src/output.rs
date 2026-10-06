@@ -242,7 +242,7 @@ mod tests {
 
         let (out, err) = streams(output);
         assert_eq!(out, "data\n");
-        assert!(err.is_empty());
+        assert_eq!(err, "");
     }
 
     #[test]
@@ -252,7 +252,7 @@ mod tests {
 
         let (out, err) = streams(output);
         assert_eq!(out, "{\"value\":\"data\"}\n");
-        assert!(err.is_empty());
+        assert_eq!(err, "");
         assert!(serde_json::from_str::<serde_json::Value>(&out).is_ok());
     }
 
@@ -278,7 +278,7 @@ mod tests {
         output.verdict_good("VERIFIED");
 
         let (out, err) = streams(output);
-        assert!(out.is_empty());
+        assert_eq!(out, "");
         assert!(err.is_empty(), "machine output must not be narrated");
     }
 
@@ -307,7 +307,7 @@ mod tests {
         ));
 
         let (out, err) = streams(output);
-        assert!(out.is_empty());
+        assert_eq!(out, "");
 
         let parsed: serde_json::Value = serde_json::from_str(&err).unwrap();
         assert_eq!(parsed["error"]["kind"], "token_expired");

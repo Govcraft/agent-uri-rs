@@ -139,7 +139,7 @@ mod tests {
         let mut expirations = Expirations::default();
         expirations.set("agent://example.com/a/one", at(60));
 
-        assert!(expirations.take_due(now()).is_empty());
+        assert_eq!(expirations.take_due(now()), Vec::<String>::new());
         assert_eq!(expirations.tracked(), 1);
     }
 
@@ -203,7 +203,7 @@ mod tests {
         expirations.set("agent://example.com/a/one", at(-1));
         expirations.set("agent://example.com/a/one", at(60));
 
-        assert!(expirations.take_due(now()).is_empty());
+        assert_eq!(expirations.take_due(now()), Vec::<String>::new());
         assert_eq!(expirations.tracked(), 1);
     }
 
@@ -228,7 +228,7 @@ mod tests {
         expirations.set("agent://example.com/a/one", at(-1));
         expirations.forget("agent://example.com/a/one");
 
-        assert!(expirations.take_due(now()).is_empty());
+        assert_eq!(expirations.take_due(now()), Vec::<String>::new());
     }
 
     #[test]
@@ -241,7 +241,7 @@ mod tests {
         expirations.forget("agent://example.com/a/one");
         expirations.set("agent://example.com/a/one", at(3600));
 
-        assert!(expirations.take_due(now()).is_empty());
+        assert_eq!(expirations.take_due(now()), Vec::<String>::new());
         assert_eq!(expirations.tracked(), 1);
     }
 
@@ -267,7 +267,7 @@ mod tests {
         expirations.set("agent://example.com/a/one", at(-1));
         expirations.clear();
 
-        assert!(expirations.take_due(now()).is_empty());
+        assert_eq!(expirations.take_due(now()), Vec::<String>::new());
         assert_eq!(expirations.queued(), 0);
         assert_eq!(expirations.tracked(), 0);
     }

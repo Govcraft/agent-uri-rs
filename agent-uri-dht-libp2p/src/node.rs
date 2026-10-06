@@ -181,6 +181,9 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(node.listen_addresses().await.unwrap().is_empty());
+        assert_eq!(
+            node.listen_addresses().await.unwrap(),
+            Vec::<libp2p::Multiaddr>::new()
+        );
     }
 }

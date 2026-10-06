@@ -325,7 +325,7 @@ mod tests {
         assert!(report.summary.expressiveness_passed);
         assert!(report.summary.discovery_passed);
         assert!(report.summary.all_passed);
-        assert!(report.summary.failed_criteria.is_empty());
+        assert_eq!(report.summary.failed_criteria, Vec::<String>::new());
     }
 
     #[test]

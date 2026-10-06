@@ -2430,7 +2430,7 @@ mod tests {
 
         match verifier_trusting(&signing_key).verify(&token) {
             Err(AttestationError::TokenNotYetValid { valid_from }) => {
-                assert!(!valid_from.is_empty());
+                assert_ne!(valid_from, "");
             }
             other => panic!("Expected TokenNotYetValid, got {other:?}"),
         }
