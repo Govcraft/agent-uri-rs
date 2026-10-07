@@ -969,6 +969,12 @@ mod tests {
             .into_items()
     }
 
+    /// The canonical URIs of `found`, so an assertion on them prints what
+    /// was found.
+    fn uris(found: &[Registration]) -> Vec<String> {
+        found.iter().map(|r| r.agent_uri().canonical()).collect()
+    }
+
     fn exact(trust_root: &str, path: &str) -> Query {
         Query::exact(
             TrustRoot::parse(trust_root).unwrap(),
@@ -1032,7 +1038,7 @@ mod tests {
 
         let results = lookup(&dht, &exact("anthropic.com", "assistant/chat"));
 
-        assert!(results.is_empty());
+        assert_eq!(uris(&results), Vec::<String>::new());
     }
 
     #[test]
@@ -1556,7 +1562,10 @@ mod tests {
 
         assert_eq!(held(&dht), 0, "the record is still indexed by URI");
         assert_eq!(dht.stats().unique_keys(), 0, "an ancestor key outlived it");
-        assert!(lookup(&dht, &prefix("anthropic.com", "assistant")).is_empty());
+        assert_eq!(
+            uris(&lookup(&dht, &prefix("anthropic.com", "assistant"))),
+            Vec::<String>::new()
+        );
     }
 
     #[test]

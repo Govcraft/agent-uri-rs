@@ -258,7 +258,7 @@ mod tests {
         let path = CapabilityPath::parse("assistant/chat").unwrap();
 
         let results = trie.get_exact(&path);
-        assert!(results.is_empty());
+        assert_eq!(results, Vec::<&String>::new());
     }
 
     #[test]
@@ -313,7 +313,7 @@ mod tests {
         let path = CapabilityPath::parse("nonexistent").unwrap();
 
         let results = trie.get_prefix(&path);
-        assert!(results.is_empty());
+        assert_eq!(results, Vec::<&String>::new());
     }
 
     #[test]

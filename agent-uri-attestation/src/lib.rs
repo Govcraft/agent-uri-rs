@@ -120,6 +120,29 @@
 //! client with a TLS stack is a large dependency and this one is useful
 //! without it.
 //!
+//! # Verifying at a supplied instant (0.8.1)
+//!
+//! Every verify entry point has an `_at` twin that judges the clock-dependent
+//! checks at an instant the caller supplies instead of the real clock:
+//! [`Verifier::verify_at`], [`Verifier::verify_for_audience_at`],
+//! [`Verifier::verify_for_uri_at`], [`Verifier::verify_for_uri_and_audience_at`],
+//! [`Verifier::verify_for_capability_at`] and
+//! [`Verifier::verify_for_capability_and_audience_at`]. They run the same checks
+//! in the same order, signature first, and each existing function is now
+//! exactly its `_at` twin called with [`chrono::Utc::now`].
+//! [`AttestationClaimsBuilder::build_at`] likewise stamps `iat` and `exp` from a
+//! supplied instant, and [`AttestationClaimsBuilder::build`] delegates to it.
+//!
+//! This answers "was this token valid at instant T", which a caller replaying
+//! decisions it already made (re-checking a logged token at the instant it was
+//! accepted) or running on a simulated clock cannot ask of the real clock. The
+//! instant is trusted input: a past one re-admits a token that has since
+//! expired, so it must come from the caller, never from the token.
+//!
+//! The change is additive. One behavior moved: an expiry that overflows the
+//! representable range (reachable now that `build_at` takes any instant) is
+//! reported as [`AttestationError::InvalidTtl`] instead of panicking.
+//!
 //! # Breaking changes in 0.8.0
 //!
 //! [`AttestationError`] is `#[non_exhaustive]`, so an exhaustive `match` on it
@@ -246,6 +269,14 @@
 //! run different clocks, both comparisons carry
 //! [`Verifier::DEFAULT_LEEWAY`] of tolerance, adjustable per verifier with
 //! [`Verifier::with_leeway`] or [`Verifier::set_leeway`].
+//!
+//! A trusted key's window ([`TrustedKey::not_before`],
+//! [`TrustedKey::not_after`]) is judged at the same instant as the token's, with
+//! the same leeway. That instant is the real clock for [`Verifier::verify`] and
+//! its siblings, and the caller's for their `_at` twins
+//! ([`Verifier::verify_at`] and the rest), so a token and the key that signed it
+//! are never weighed against two different clocks. Revocation is not a function
+//! of time and is always checked against the verifier's current source.
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]

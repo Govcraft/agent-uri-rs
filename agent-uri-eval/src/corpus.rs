@@ -468,7 +468,7 @@ mod tests {
         }) = result
         {
             assert_eq!(source, "unknown");
-            assert!(!valid_sources.is_empty());
+            assert_ne!(valid_sources, Vec::<String>::new());
         }
     }
 
@@ -586,7 +586,7 @@ mod tests {
         let path = create_test_file(dir.path(), "empty.json", content);
 
         let tools = load_corpus_file(&path).unwrap();
-        assert!(tools.is_empty());
+        assert_eq!(tools, Vec::<ToolDef>::new());
     }
 
     #[test]
@@ -659,7 +659,7 @@ mod tests {
     fn loaded_corpus_new_is_empty() {
         let corpus = LoadedCorpus::new();
 
-        assert!(corpus.tools.is_empty());
+        assert_eq!(corpus.tools, Vec::<ToolDef>::new());
         assert!(corpus.source_counts.is_empty());
         assert_eq!(corpus.files_loaded, 0);
         assert!(!corpus.has_warnings());

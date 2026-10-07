@@ -243,7 +243,7 @@ mod tests {
     fn parse_simple_class() {
         let prefix = AgentPrefix::parse("llm").unwrap();
         assert_eq!(prefix.type_class().as_str(), "llm");
-        assert!(prefix.modifiers().is_empty());
+        assert_eq!(prefix.modifiers(), Vec::<String>::new());
     }
 
     #[test]
@@ -267,7 +267,7 @@ mod tests {
         let prefix = AgentPrefix::parse("a").unwrap();
 
         assert_eq!(prefix.type_class().as_str(), "a");
-        assert!(prefix.modifiers().is_empty());
+        assert_eq!(prefix.modifiers(), Vec::<String>::new());
     }
 
     #[test]

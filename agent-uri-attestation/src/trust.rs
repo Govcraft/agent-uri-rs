@@ -619,7 +619,7 @@ mod tests {
     fn an_absent_root_has_no_keys_and_no_active_key() {
         let store = TrustStore::new();
 
-        assert!(store.keys_for("acme.com").is_empty());
+        assert_eq!(store.keys_for("acme.com"), []);
         assert!(!store.has_active_key("acme.com", at(11), Duration::zero()));
     }
 

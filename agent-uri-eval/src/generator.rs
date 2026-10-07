@@ -234,7 +234,7 @@ mod tests {
         let mut generator = PathGenerator::new(42, TreeConfig::default());
         let paths = generator.generate(100);
 
-        assert!(!paths.is_empty());
+        assert_ne!(paths, Vec::<CapabilityPath>::new());
         for path in &paths {
             assert!(path.depth() >= 1);
             assert!(path.depth() <= 5);
@@ -269,7 +269,7 @@ mod tests {
         let mut generator = PathGenerator::with_seed(42);
         let paths = generator.generate_hierarchical(100);
 
-        assert!(!paths.is_empty());
+        assert_ne!(paths, Vec::<CapabilityPath>::new());
 
         // Should have some shared prefixes
         let first_segments: Vec<_> = paths.iter().map(|p| p.segments()[0].as_str()).collect();

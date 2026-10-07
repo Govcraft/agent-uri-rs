@@ -378,7 +378,7 @@ mod tests {
         let hist = Histogram::from_values(&values, 5);
 
         assert_eq!(hist.total, 0);
-        assert!(hist.bins.is_empty());
+        assert_eq!(hist.bins, Vec::<f64>::new());
     }
 
     #[test]
