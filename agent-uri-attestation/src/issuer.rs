@@ -3,7 +3,9 @@
 use std::time::Duration;
 
 use agent_uri::AgentUri;
+use rusty_paseto::core::Payload;
 use rusty_paseto::prelude::*;
+use serde::Serialize;
 use zeroize::Zeroizing;
 
 use crate::claims::{AttestationClaims, AttestationClaimsBuilder};
@@ -167,6 +169,10 @@ impl Issuer {
     ///
     /// This is useful when you need full control over the claims structure.
     ///
+    /// The token carries `claims` and nothing else: minting reads no clock,
+    /// and Ed25519 signing draws no randomness, so the same claims signed
+    /// with the same key give the same token, byte for byte.
+    ///
     /// # Errors
     ///
     /// Returns `AttestationError` if token creation fails, including
@@ -177,6 +183,7 @@ impl Issuer {
         // A token whose agent key does not decode is one the verifier will
         // reject, so refuse to mint it here where the caller can still fix it.
         VerifyingKey::from_base64(&claims.agent_key)?;
+        let payload = claims_payload(claims)?;
 
         // Signing needs the private half in a shape `rusty_paseto` accepts,
         // which means copying it out of the key that owns it. Both copies are
@@ -196,66 +203,12 @@ impl Issuer {
         let key_wrapper = Key::<64>::from(&*key_bytes);
         let paseto_key = PasetoAsymmetricPrivateKey::<V4, Public>::from(&key_wrapper);
 
-        // Format timestamps for PASETO
-        let exp_str = claims.exp.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-        let iat_str = claims.iat.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-
-        // Prepare claims
-        let exp_claim = ExpirationClaim::try_from(exp_str.as_str()).map_err(|e| {
-            AttestationError::InvalidClaims {
-                reason: format!("invalid expiration: {e}"),
-            }
-        })?;
-        let iat_claim = IssuedAtClaim::try_from(iat_str.as_str()).map_err(|e| {
-            AttestationError::InvalidClaims {
-                reason: format!("invalid issued at: {e}"),
-            }
-        })?;
-        let iss_claim = IssuerClaim::from(claims.iss.as_str());
-        let jti_claim = TokenIdentifierClaim::from(claims.jti.as_str());
-        let agent_key_claim = CustomClaim::try_from(("agent_key", claims.agent_key.as_str()))
-            .map_err(|e| AttestationError::InvalidClaims {
-                reason: format!("invalid agent_key claim: {e}"),
+        let token = Paseto::<V4, Public>::builder()
+            .set_payload(Payload::from(payload.as_str()))
+            .try_sign(&paseto_key)
+            .map_err(|e| AttestationError::InvalidTokenFormat {
+                reason: e.to_string(),
             })?;
-        let agent_uri_claim = CustomClaim::try_from(("agent_uri", claims.agent_uri.as_str()))
-            .map_err(|e| AttestationError::InvalidClaims {
-                reason: format!("invalid agent_uri claim: {e}"),
-            })?;
-
-        // Serialize capabilities as JSON array
-        let capabilities_json = serde_json::to_value(&claims.capabilities).map_err(|e| {
-            AttestationError::InvalidClaims {
-                reason: format!("invalid capabilities: {e}"),
-            }
-        })?;
-        let capabilities_claim = CustomClaim::try_from(("capabilities", capabilities_json))
-            .map_err(|e| AttestationError::InvalidClaims {
-                reason: format!("invalid capabilities claim: {e}"),
-            })?;
-
-        // Build the token with standard and custom claims
-        let mut builder = PasetoBuilder::<V4, Public>::default();
-        builder
-            .set_claim(exp_claim)
-            .set_claim(iat_claim)
-            .set_claim(iss_claim)
-            .set_claim(jti_claim)
-            .set_claim(agent_uri_claim)
-            .set_claim(agent_key_claim)
-            .set_claim(capabilities_claim);
-
-        // Set optional audience
-        if let Some(aud) = &claims.aud {
-            builder.set_claim(AudienceClaim::from(aud.as_str()));
-        }
-
-        // Build and sign the token
-        let token =
-            builder
-                .build(&paseto_key)
-                .map_err(|e| AttestationError::InvalidTokenFormat {
-                    reason: e.to_string(),
-                })?;
 
         // The verifier rejects oversized tokens outright, so minting one would
         // hand the caller a token that this crate refuses to verify. Fail here
@@ -266,14 +219,155 @@ impl Issuer {
     }
 }
 
+/// How a token writes `iat` and `exp`: RFC 3339 in UTC, to the millisecond.
+const TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3fZ";
+
+/// The payload a token carries for `claims`, field for field.
+///
+/// The fields are written in this order whatever features `serde_json` is
+/// built with. It is the lexicographic order earlier releases wrote them in,
+/// so a payload differs from theirs only by the `nbf` those releases stamped
+/// from the minting host's clock. The verifier never read `nbf`: `iat` is the
+/// not-before instant.
+#[derive(Serialize)]
+struct ClaimsPayload<'a> {
+    agent_key: &'a str,
+    agent_uri: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    aud: Option<&'a str>,
+    capabilities: &'a [String],
+    exp: String,
+    iat: String,
+    iss: &'a str,
+    jti: &'a str,
+}
+
+/// Writes the payload a token carries for `claims`, from the claims alone.
+///
+/// # Errors
+///
+/// [`AttestationError::InvalidClaims`] when `exp` or `iat` does not render as
+/// an RFC 3339 date-time, as a year past 9999 does not, since the verifier
+/// would refuse the token; [`AttestationError::InvalidTokenFormat`] if the
+/// payload cannot be written.
+fn claims_payload(claims: &AttestationClaims) -> Result<String, AttestationError> {
+    let exp = claims.exp.format(TIMESTAMP_FORMAT).to_string();
+    let iat = claims.iat.format(TIMESTAMP_FORMAT).to_string();
+    ExpirationClaim::try_from(exp.as_str()).map_err(|e| AttestationError::InvalidClaims {
+        reason: format!("invalid expiration: {e}"),
+    })?;
+    IssuedAtClaim::try_from(iat.as_str()).map_err(|e| AttestationError::InvalidClaims {
+        reason: format!("invalid issued at: {e}"),
+    })?;
+
+    serde_json::to_string(&ClaimsPayload {
+        agent_key: &claims.agent_key,
+        agent_uri: &claims.agent_uri,
+        aud: claims.aud.as_deref(),
+        capabilities: &claims.capabilities,
+        exp,
+        iat,
+        iss: &claims.iss,
+        jti: &claims.jti,
+    })
+    .map_err(|e| AttestationError::InvalidTokenFormat {
+        reason: e.to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::fmt::Write as _;
+
+    use chrono::{DateTime, TimeZone, Utc};
 
     use super::*;
 
     fn test_uri() -> AgentUri {
         AgentUri::parse("agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q").unwrap()
+    }
+
+    fn agent_key() -> VerifyingKey {
+        SigningKey::from_bytes(&[7; 32]).unwrap().verifying_key()
+    }
+
+    /// Claims with every field fixed: issued at `iat`, expiring at `exp`.
+    fn fixed_claims(
+        iat: DateTime<Utc>,
+        exp: DateTime<Utc>,
+        audience: Option<&str>,
+    ) -> AttestationClaims {
+        AttestationClaims {
+            jti: "01h455vb4pex5vsknk084sn02q".into(),
+            agent_uri: test_uri().canonical(),
+            agent_key: agent_key().to_base64(),
+            capabilities: vec!["test/read".into(), "test/write".into()],
+            iss: "acme.com".into(),
+            iat,
+            exp,
+            aud: audience.map(Into::into),
+        }
+    }
+
+    fn new_year(year: i32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(year, 1, 1, 0, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn the_payload_is_the_claims_alone_in_a_fixed_order() {
+        let iat = new_year(2030);
+        let exp = iat + chrono::Duration::hours(1);
+
+        assert_eq!(
+            claims_payload(&fixed_claims(iat, exp, Some("api.acme.com"))).unwrap(),
+            format!(
+                concat!(
+                    r#"{{"agent_key":"{}","#,
+                    r#""agent_uri":"agent://acme.com/test/agent_01h455vb4pex5vsknk084sn02q","#,
+                    r#""aud":"api.acme.com","capabilities":["test/read","test/write"],"#,
+                    r#""exp":"2030-01-01T01:00:00.000Z","iat":"2030-01-01T00:00:00.000Z","#,
+                    r#""iss":"acme.com","jti":"01h455vb4pex5vsknk084sn02q"}}"#,
+                ),
+                agent_key().to_base64()
+            )
+        );
+    }
+
+    #[test]
+    fn a_payload_without_an_audience_writes_no_aud() {
+        let iat = new_year(2030);
+        let payload =
+            claims_payload(&fixed_claims(iat, iat + chrono::Duration::hours(1), None)).unwrap();
+
+        assert!(!payload.contains(r#""aud""#), "{payload}");
+        assert!(
+            payload.contains(r#""capabilities":["test/read","test/write"],"exp""#),
+            "{payload}"
+        );
+    }
+
+    #[test]
+    fn a_window_that_is_not_rfc_3339_is_refused_before_signing() {
+        // A year past 9999 renders as `+10000-...`, which is not RFC 3339, so
+        // the verifier could never read the token back.
+        let issuer = Issuer::generate("acme.com", Duration::from_hours(1));
+        for (claims, says) in [
+            (
+                fixed_claims(new_year(2030), new_year(10_000), None),
+                "invalid expiration",
+            ),
+            (
+                fixed_claims(new_year(10_000), new_year(2030), None),
+                "invalid issued at",
+            ),
+        ] {
+            match issuer.issue_claims(&claims) {
+                Err(AttestationError::InvalidClaims { reason }) => {
+                    assert!(reason.starts_with(says), "{reason}");
+                }
+                other => panic!("Expected InvalidClaims, got {other:?}"),
+            }
+        }
     }
 
     #[test]
