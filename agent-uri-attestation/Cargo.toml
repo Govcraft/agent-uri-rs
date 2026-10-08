@@ -1,6 +1,6 @@
 [package]
 name = "agent-uri-attestation"
-version = "0.8.1"
+version = "0.8.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -17,6 +17,20 @@ exclude = ["fuzz"]
 
 [features]
 default = []
+# Draw randomness from the JavaScript host on wasm32-unknown-unknown. That
+# target has no operating system to ask, so the three crates below refuse to
+# compile there until a binary says where randomness comes from. A browser or
+# Node.js build enables this feature; a build for another wasm32 host leaves it
+# off and chooses its own source, as `getrandom` asks of libraries. On every
+# other target the feature changes nothing.
+js = [
+    "dep:getrandom",
+    "getrandom/js",
+    "dep:ring",
+    "ring/wasm32_unknown_unknown_js",
+    "dep:uuid",
+    "uuid/js",
+]
 
 [dependencies]
 agent-uri = { version = "0.6", path = "../agent-uri", features = ["serde"] }
@@ -46,3 +60,16 @@ serde_json = "1.0"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
+# Only the `js` feature enables these, and only on wasm32-unknown-unknown, where
+# minting and verifying draw no randomness but generating a key does
+# (`ed25519-dalek` through `rand_core` 0.6 and `getrandom` 0.2), and so do
+# generating a `jti` (`uuid`) and `rusty_paseto`'s random keys (`ring`).
+#
+# `uuid` asks for 1.19, the version the lockfile holds, so adding it here does
+# not move the lockfile to a `uuid` built on `getrandom` 0.4, a third version
+# that `deny.toml` would have to excuse.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+getrandom = { version = "0.2", optional = true }
+ring = { version = "0.17.14", optional = true }
+uuid = { version = "1.19", optional = true }

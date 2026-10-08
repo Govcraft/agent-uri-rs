@@ -120,6 +120,28 @@
 //! client with a TLS stack is a large dependency and this one is useful
 //! without it.
 //!
+//! # Minting without the clock (0.8.2)
+//!
+//! [`Issuer::issue_claims`] signs a payload written from the claims alone. It
+//! used to start from `rusty_paseto`'s prelude builder, which reads the host
+//! clock when it is made and stamps an `nbf` claim from it. The same claims
+//! minted twice gave two different tokens, and on wasm32-unknown-unknown,
+//! where that clock read panics, so did minting. A token now carries `jti`,
+//! `agent_uri`, `agent_key`, `capabilities`, `iss`, `iat`, `exp` and, when
+//! set, `aud`, written in the order earlier releases wrote them, and the same
+//! claims signed with the same key give the same token, byte for byte.
+//!
+//! Tokens minted by earlier releases still verify. They carry an `nbf` that
+//! the verifier has never read: a token's not-before instant is its `iat`.
+//!
+//! The crate also builds for wasm32-unknown-unknown. That target has no
+//! operating system to draw randomness from, and generating a key or a `jti`
+//! draws it, so a build for a browser or Node.js enables the new `js` feature,
+//! `agent-uri-attestation/js`, which takes it from the JavaScript host's
+//! `crypto.getRandomValues`. A build for another wasm32 host leaves `js` off and
+//! chooses its own source through `getrandom`. On every other target the
+//! feature changes nothing.
+//!
 //! # Verifying at a supplied instant (0.8.1)
 //!
 //! Every verify entry point has an `_at` twin that judges the clock-dependent
