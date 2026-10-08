@@ -134,9 +134,13 @@
 //! Tokens minted by earlier releases still verify. They carry an `nbf` that
 //! the verifier has never read: a token's not-before instant is its `iat`.
 //!
-//! The crate also builds for wasm32-unknown-unknown, where the randomness that
-//! generating a key or a `jti` draws comes from the JavaScript host's
-//! `crypto.getRandomValues`.
+//! The crate also builds for wasm32-unknown-unknown. That target has no
+//! operating system to draw randomness from, and generating a key or a `jti`
+//! draws it, so a build for a browser or Node.js enables the new `js` feature,
+//! `agent-uri-attestation/js`, which takes it from the JavaScript host's
+//! `crypto.getRandomValues`. A build for another wasm32 host leaves `js` off and
+//! chooses its own source through `getrandom`. On every other target the
+//! feature changes nothing.
 //!
 //! # Verifying at a supplied instant (0.8.1)
 //!

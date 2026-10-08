@@ -157,9 +157,11 @@ jobs:
   # Hosts that run in a browser, such as a sandbox replaying recorded runs,
   # mint and verify tokens inside a wasm32-unknown-unknown module. That target
   # has no operating system, so a dependency that cannot compile there fails
-  # this job before it reaches a consumer. Reading `std`'s clock compiles there
-  # and panics only when run, so the guard against minting reading a clock is
-  # `tests/minting.rs`, which runs with the other tests.
+  # this job before it reaches a consumer. The build takes its randomness from
+  # the JavaScript host through the crate's `js` feature, as a browser build
+  # does. Reading `std`'s clock compiles there and panics only when run, so the
+  # guard against minting reading a clock is `tests/minting.rs`, which runs with
+  # the other tests.
   wasm32:
     name: wasm32
     runs-on: ubuntu-latest
@@ -176,7 +178,7 @@ jobs:
           key: wasm32
       # `ring` compiles C for the target with the runner's clang.
       - name: Build agent-uri-attestation for wasm32-unknown-unknown
-        run: cargo build -p agent-uri-attestation --target wasm32-unknown-unknown
+        run: cargo build -p agent-uri-attestation --target wasm32-unknown-unknown --features js
 
   docs:
     name: rustdoc
